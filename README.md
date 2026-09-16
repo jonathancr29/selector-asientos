@@ -67,16 +67,21 @@ lee de vuelta del DOM.
 
 ## La rejilla de la sala
 
-`rejillaDeSala({ ancho, pasillos })` es la única fuente de verdad de las columnas. Devuelve
-`columnas`, la lista plana que consumen las filas, y `bloques`, la misma agrupada, que es lo que
-impide que una mesa quede partida por un pasillo.
+La sala se describe con **bloques de butacas y anchos de pasillo**: `{ bloques: [4, 6, 4],
+pasillos: [1, 2] }` son tres bloques de 4, 6 y 4 butacas, con un pasillo de 1 columna entre el
+primero y el segundo y otro de 2 entre el segundo y el tercero. El ancho de la sala sale de sumarlo
+todo (17 columnas).
+
+`rejillaDeBloques(distribucion)` es la única fuente de verdad de las columnas. Devuelve `columnas`,
+la lista plana que consumen las filas, y `bloques`, la misma agrupada, que es lo que impide que una
+mesa quede partida por un pasillo.
 
 Todas las bandas del plano la consumen, así que la alineación no depende de la coincidencia: no hay
 forma de expresar un plano descuadrado.
 
-El ancho de la sala es **constante**. El pasillo ocupa una columna, igual que en un recinto real: se
-lleva lugares que si no serían butacas. Lo que cambia entre las salas mixtas es el aforo, no la huella
-del plano, y eso es lo que las hace comparables.
+Las plantillas mixtas parten de un ancho **constante** de 14 columnas con pasillos de una columna,
+igual que en un recinto real: el pasillo se lleva lugares que si no serían butacas. Lo que cambia
+entre ellas es el aforo, no la huella del plano, y eso es lo que las hace comparables:
 
 | Sala mixta, `pasillos` | Columnas vacías | Butacas por fila | Aforo del ejemplo |
 |---|---|---|---|
@@ -84,6 +89,28 @@ del plano, y eso es lo que las hace comparables.
 | `izquierda` | 5 | 13 | 89 |
 | `derecha` | 10 | 13 | 89 |
 | `ambos` | 5 y 10 | 12 | 84 |
+
+### Elegir las columnas
+
+En el editor, **Diseño de la sala → Columnas** tiene dos campos:
+
+- **Butacas por bloque:** `4, 6, 4`. Cada número es un bloque; entre bloques va un pasillo.
+- **Anchos de pasillo:** `1, 2`. Uno por cada pasillo. Si se deja vacío, todos miden 1 columna.
+
+Se aplica con **Aplicar** o Enter. Hay de 1 a 10 bloques, de 1 a 40 butacas por bloque, pasillos de
+1 a 10 columnas y un máximo de 60 columnas en total; si algo no vale, se explica (*«con 3 bloques
+hacen falta 2 anchos de pasillo»*).
+
+Las columnas son **las mismas para toda la sala**: todas las bandas de filas las comparten, así que
+siguen alineadas. Al cambiarlas, las butacas se renumeran por fila (el número es su orden, no su
+columna) y las mesas se recolocan:
+
+- **Mismo número de bloques:** cada mesa se queda en su bloque, a la misma distancia de su inicio.
+- **Otro número de bloques:** cada mesa conserva su posición relativa en el ancho de la sala y se
+  ajusta al bloque más cercano, para que no se amontonen ni se queden todas en un bloque.
+
+Si aun así alguna mesa no cabe, el cambio no se aplica y se dice cuál (*«Mesa 1 cae sobre un
+pasillo»*).
 
 Al cambiar de sala la selección se conserva **por identificador, no por posición**: la identidad
 es banda + `fila` + `numero` y es estable; entre salas mixtas solo cambia la columna. Lo que no
@@ -163,6 +190,9 @@ giro (`mira`): 0° el lado norte, 180° el sur, 90° y 270° las cabeceras, más
 marcas de estado (palomita, aspa, raya) se quedan derechas en sillas a 0° o 180°, y giran con la silla
 a 90° o 270°, porque ahí el hueco del icono es vertical y una marca horizontal no cabe.
 
+**Las butacas de fila miran al escenario.** Como el escenario es siempre la primera banda, arriba,
+todas giran 180°: respaldo abajo, mirando hacia arriba.
+
 El giro es de cuartos de vuelta, y no solo horizontal o vertical, porque una mesa de un lado tiene
 cuatro posiciones distintas: sus lugares pueden quedar abajo, a la izquierda, arriba o a la derecha.
 En una mesa de dos lados, 0° y 180° ocupan las mismas celdas; lo que cambia es qué lado es cuál.
@@ -240,16 +270,16 @@ El diseño se guarda **sin base de datos**, como JSON, de dos formas:
   lo vuelve a cargar y lo guarda en el navegador. Sirve para copias de seguridad, para pasar un mapa
   a otro equipo o para versionarlo en git.
 
-Un mapa guarda el **diseño**, no la venta: nombre, pasillos, bandas, mesas con su forma y posición,
+Un mapa guarda el **diseño**, no la venta: nombre, columnas (bloques y pasillos), bandas, mesas con su forma y posición,
 butacas bloqueadas y los contadores de ids. No guarda la ocupación ni la selección.
 
 ```json
 {
   "formato": "selector-asientos/mapa",
-  "version": 1,
+  "version": 2,
   "nombre": "Salón Jardín, boda",
   "guardado": "2026-09-16T18:30:00.000Z",
-  "pasillos": "ambos",
+  "distribucion": { "bloques": [4, 6, 4], "pasillos": [1, 2] },
   "bandas": [
     { "id": "escenario", "tipo": "escenario" },
     { "id": "luneta", "tipo": "filas", "zona": "luneta", "filas": 3 },
@@ -264,7 +294,10 @@ butacas bloqueadas y los contadores de ids. No guarda la ocupación ni la selecc
 }
 ```
 
-**Al importar, el archivo no se da por bueno.** Se comprueban el formato y la versión, cada banda y
+Los mapas de la versión 1 (que guardaban `"pasillos": "ambos"`) se siguen leyendo: se convierten a
+bloques y pasillos al cargarlos.
+
+**Al importar, el archivo no se da por bueno.** Se comprueban el formato y la versión, las columnas, cada banda y
 cada mesa (ids, rangos, giro), se descartan los campos desconocidos y se genera el plano para
 verificar que todas las mesas quepan. Si algo falla, no se carga y se dice qué (*«Mesa 1 choca con
 Mesa 2»*). Los mapas guardados en el navegador que dejen de validar no se cargan y se avisa de

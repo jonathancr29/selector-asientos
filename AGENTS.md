@@ -38,8 +38,11 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 `// ----`.
 
 1. **Constantes:** `PASO` (12 unidades del viewBox por celda), `GLIFO`, `ANCHO_SALA` (14 columnas).
-2. **Rejilla:** `rejillaDeSala({ ancho, pasillos })` devuelve `bloques` y `columnas`. Es la **única
-   fuente de verdad** de las columnas. `repartirMesas` coloca mesas dentro de los bloques.
+2. **Rejilla:** `rejillaDeBloques({ bloques, pasillos })` devuelve `ancho`, `bloques` y `columnas`. Es
+   la **única fuente de verdad** de las columnas. `distribucionDePasillos` convierte las disposiciones
+   con nombre de las plantillas ('ambos'...) y `rejillaDeSala` es el atajo para ellas;
+   `distribucionDeSala` hace el camino inverso. `motivoDistribucion` y `leerDistribucion` validan y
+   leen lo que se escribe en el editor. `repartirMesas` coloca mesas dentro de los bloques.
 3. **Datos y tipos de sala:** `zonas`, `butacas`, `muebles`, `TIPOS_DE_SALA` (pasillos y bandas de
    cada tipo), `altoDeBanda`, `agregarFilas`.
 4. **Mesas:** `geometriaMesa({ largo, cabeceras, unLado, giro })` calcula huella, tablero y lugares,
@@ -50,7 +53,7 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 5. **Editor sin DOM:** `celdasOcupadas`, `motivoNoCabe`, `buscarHueco`, `colocarCerca`, `girarMesa`,
    `anclarTablero`, `cambiarLargo`, `alternarCabeceras`, `alternarUnLado`, `buscarSitioLibre`, `primeraMesaQueNoCabe`. Reciben y devuelven
    configuraciones (`{ id, x, y, largo, cabeceras, unLado, giro }`); nunca modifican la actual.
-   **Bandas:** `planoDesdeSala`, `redimensionarBanda`, `moverBanda`, `eliminarBanda`, `agregarBanda`,
+   **Bandas y columnas:** `planoDesdeSala`, `cambiarDistribucion`, `redimensionarBanda`, `moverBanda`, `eliminarBanda`, `agregarBanda`,
    `cambiarZonaBanda`. Devuelven un plano nuevo o `{ motivo }`.
    **Bloqueos y mapas:** `idsBloqueadosPorBandas`, `alternarBloqueada`, `mapaDesdePlano`,
    `validarMapa`, `definicionDeMapa`, `registrarMapa`, `claveDeMapa`, `nombreDeArchivo`.
@@ -81,9 +84,12 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   `document`, `svg` o similares, las pruebas fallan al evaluarla en Node.
 - **Cada tipo de sala define sus pasillos y sus bandas.** Para una sala nueva, agrega una entrada a
   `TIPOS_DE_SALA`; el selector la muestra solo.
-- **Toda columna sale de `rejillaDeSala`.** Una butaca de fila va a `columnas[numero - 1]`, nunca a
+- **Toda columna sale de `rejillaDeBloques`.** Una butaca de fila va a `columnas[numero - 1]`, nunca a
   la columna `numero`.
 - **Una mesa nunca queda partida por un pasillo**, ni en el reparto automático ni en el editor.
+- **Las columnas son de toda la sala:** `plano.distribucion` (o la del mapa, o la de la plantilla).
+  Nunca por banda: es lo que mantiene las filas alineadas. Al cambiarlas, `cambiarDistribucion`
+  recoloca las mesas y `aplicarBandas` rechaza el cambio si alguna no cabe.
 - **Las mesas pueden ir en cualquier hueco libre de la sala**, no solo en una zona de mesas.
 - **Ningún cambio de bandas deja una mesa que no cabe:** `aplicarBandas` genera, comprueba con
   `primeraMesaQueNoCabe` y, si falla, vuelve al plano anterior.
@@ -113,7 +119,9 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   descartan los campos desconocidos y se comprueba que las mesas quepan. No se confía en el archivo.
 - **Las bloqueadas son una lista de ids** (`plano.bloqueadas`). `bloqueadasAlFinal` de las plantillas
   solo se usa si no hay lista.
-- **Si cambias el formato del mapa**, sube `VERSION_MAPA` y convierte los mapas viejos en lugar de
+- **Formato del mapa, versión 2:** guarda `distribucion`. `validarMapa` convierte la versión 1
+  (`pasillos` con nombre). Si cambias el formato otra vez, sube `VERSION_MAPA` y convierte los mapas
+  viejos en lugar de
   rechazarlos.
 
 ## Trampas conocidas
