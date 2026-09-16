@@ -144,8 +144,10 @@ mesas: la banda solo decide dónde van las automáticas y deja espacio.
 En el modo editor, el panel **Bandas de la sala** lista las bandas con sus controles:
 
 - **− / +:** quita o agrega una fila (bandas de filas) o una fila de alto (zonas de mesas).
-- **Zona:** Luneta o General, con su precio. El nombre por defecto sigue a la zona.
+- **Nombre:** un campo con el nombre propio de la banda. Vacío, toma el de por defecto.
+- **Zona:** Luneta o General, con su precio. El nombre por defecto sigue a la zona; uno propio se queda.
 - **↑ / ↓:** sube o baja la banda. Sus piezas viajan con ella.
+- **Duplicar:** crea una copia justo debajo, con todo lo que tiene dentro (ver más abajo).
 - **Eliminar:** quita la banda y las piezas que empiezan dentro de ella; lo de debajo sube.
 - **Agregar banda de filas / zona de mesas / franja con bandas verticales:** al final de la sala.
 
@@ -155,6 +157,56 @@ explica (*«No se pudo: Mesa 4 choca con la fila A de General»*). Las butacas e
 que desaparecen se avisan igual que al acortar una mesa.
 
 Las bandas sin nombre propio toman el de su zona, numerado si se repite: *General*, *General 2*.
+
+### Nombres, capas y selección de bandas
+
+**Subtítulos.** El nombre de cada banda se dibuja en el plano, también en **Previsualizar**:
+
+- **Bandas de la sala** (filas, zonas de mesas y franjas): en el margen izquierdo, a la altura de su
+  primera fila.
+- **Verticales y bandas dentro de ellas:** en una etiqueta sobre su borde superior. La primera banda
+  de una vertical empieza en el mismo borde y comparte etiqueta con ella (*Vertical 1 · General 2*).
+
+El nombre es solo un subtítulo: **la etiqueta de las butacas sigue siendo la de su zona**. Una banda
+llamada *Palco VIP* en la zona Luneta vende *«Luneta, fila D, butaca 1»*, con la numeración de
+siempre.
+
+**Renombrar.** En el panel, el nombre de cada banda, vertical o franja es un campo: se escribe y se
+aplica con Enter o al salir (Esc deshace lo escrito). Vacío, vuelve al de por defecto. Hasta 40
+caracteres. En el plano, **doble clic en un subtítulo** lleva a ese campo.
+
+**Capas.** Cada banda, vertical y franja es una capa con su color, por su orden en la sala: ámbar,
+violeta, turquesa, rosa, naranja, cian, lima y fucsia (después de ocho se repiten). El panel muestra
+la muestra de color de cada una.
+
+**Seleccionar una banda:**
+
+- **En el plano:** clic en el fondo (no en una pieza) selecciona la banda más concreta de debajo; otro
+  clic en el mismo sitio, la que la contiene (banda → vertical → franja), y después ninguna. Clic
+  fuera de las bandas quita la selección.
+- **En el panel:** tocar cualquier control de una banda la selecciona.
+
+La seleccionada se ve con un **contorno continuo y grueso del color de su capa**, y su fila del panel
+marcada con *● seleccionada* (y `aria-current`), así que no depende solo del color. **Su nombre pasa
+al borde inferior**, en una etiqueta rellena del color de la capa y **por encima de todo** (butacas,
+mesas y piezas), para que no se pierda; mientras, su subtítulo de siempre se oculta (salvo la
+etiqueta que comparte con su vertical). Seleccionar una banda deselecciona la pieza activa, y al revés.
+
+### Duplicar
+
+- **Mesas y bloques de filas:** botón **Duplicar** o **Ctrl+D** (Cmd+D en Mac). La copia lleva id
+  nuevo y la misma forma, giro y zona; se coloca a la derecha del original, si no cabe debajo, y si
+  no en el sitio libre más cercano. Queda activa. El escenario no se duplica.
+- **Bandas, verticales y franjas:** botón **Duplicar** del panel, o **Ctrl+D** con la banda
+  seleccionada. Una banda o franja se copia justo debajo (lo de debajo baja con sus piezas); una
+  vertical, a su derecha. Se copia **todo lo que tiene dentro**: bandas, verticales, mesas y bloques
+  (los que empiezan dentro), a la misma distancia de la copia. La copia queda seleccionada.
+- **Ancho de una vertical copiada:** el mismo que la original si la última vertical puede cedérselo;
+  si no (o si la original es la última), la original se parte por la mitad entre las dos.
+- **Qué se copia:** ids nuevos para todo, nombres propios con *(copia)* en lo duplicado y **las
+  butacas bloqueadas** (una butaca sin visibilidad sigue sin ella en la copia). **La ocupación nunca.**
+- **Numeración:** las filas de la copia siguen la de su zona: si la original era A–B, la copia es C–D.
+- Como con cualquier cambio de bandas, si algo deja de caber, no se aplica y se explica por qué.
 
 ### Bandas verticales
 
@@ -246,6 +298,7 @@ atajo de teclado sobre la mesa enfocada:
 | Alargar o acortar una celda | Alargar / Acortar | + / − |
 | Poner o quitar cabeceras | Cabeceras | C |
 | Lugares en uno o dos lados | Un solo lado | U |
+| Duplicar junto al original | Duplicar | Ctrl+D |
 | Eliminar | Eliminar | Supr |
 | Agregar una mesa nueva | Lados / Cruz / Un lado | — |
 | Agregar un bloque de filas | Bloque de filas | — |
@@ -419,7 +472,7 @@ node --test pruebas.mjs
 
 Cubren la rejilla, el reparto de mesas, el aforo de la tabla anterior, la conciliación de la
 selección al cambiar de sala, los tipos de sala y las bandas, y las reglas del editor: geometría de las mesas, hacia dónde
-mira cada silla, dónde caben, girar, alargar, cabeceras, un solo lado y sitio para mesas nuevas. No hay copia del código: `pruebas.mjs` lee `index.html` y
+mira cada silla, dónde caben, girar, alargar, cabeceras, un solo lado y sitio para mesas nuevas; también duplicar piezas y bandas, renombrar bandas, subtítulos y selección de bandas por clic. No hay copia del código: `pruebas.mjs` lee `index.html` y
 evalúa la parte del script anterior a la marca *«Fin de la parte sin DOM»*, así que el proyecto
 sigue siendo un solo archivo. Requiere Node 18 o posterior.
 

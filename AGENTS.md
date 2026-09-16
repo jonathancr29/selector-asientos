@@ -60,8 +60,10 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    devuelven configuraciones de pieza (mesa `{ id, x, y, largo, cabeceras, unLado, giro }` o bloque
    `{ id, tipo: 'filas', x, y, ancho, filas, zona, giro, nombre? }`); nunca modifican la actual.
    **Bandas y columnas:** `planoDesdeSala`, `cambiarDistribucion`, `redimensionarBanda`, `moverBanda`, `eliminarBanda`, `agregarBanda`,
-   `cambiarZonaBanda`, `agregarVertical`, `cambiarAnchoVertical`, `agregarBandaEnVertical`. Devuelven un
-   plano nuevo o `{ motivo }`.
+   `cambiarZonaBanda`, `agregarVertical`, `cambiarAnchoVertical`, `agregarBandaEnVertical`,
+   `renombrarBanda`, `duplicarBanda` y `duplicarPieza`. Devuelven un plano nuevo o `{ motivo }`.
+   **Capas y subtítulos:** `capasDe` (orden de color), `bandaEnCelda` (selección por clic),
+   `agregarSubtitulos` (muebles `subtitulo`), `copiarBloqueadas` y `sitioParaCopia`.
    **Árbol de bandas:** `disponerBandas` (coloca el árbol y devuelve bandas colocadas, regiones y error),
    `hojasDe`, `ubicar`, `idsDentro`, `copiarBandas`, `columnasDeBanda` y `reanclarPiezas`.
    **Bloqueos y mapas:** `idsBloqueadosPorBandas`, `alternarBloqueada`, `mapaDesdePlano`,
@@ -115,6 +117,14 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   piezas a mano por `y`: el anclaje por región es lo que las hace viajar también en horizontal.
 - **Disposición siempre válida:** `disponerBandas` devuelve `error` si las verticales no caben;
   `aplicarBandas` y `validarMapa` lo comprueban antes de aceptar un cambio.
+- **Duplicar da ids nuevos a todo:** banda, verticales, bandas interiores, mesas y bloques. Las
+  bloqueadas se copian cambiando el prefijo del id (`F1-1-2` → `F2-1-2`); la ocupación nunca. El id
+  de la copia es el valor del contador antes de llamar (`'banda' + plano.siguienteBanda`, `M` +
+  `siguiente`, `F` + `siguienteBloque`): el DOM lo usa para seleccionarla después.
+- **El nombre de una banda es solo un subtítulo:** la etiqueta de las butacas sigue saliendo de su
+  zona. No uses `nombre` para numerar ni para etiquetar butacas.
+- **Una sola selección en el editor:** `bandaActiva` y `mesaActiva` se excluyen (`marcarBandaActiva`
+  y `marcarActiva` limpian la otra). Ambas se vacían al cambiar de modo, herramienta o sala.
 - **El escenario es una pieza, no una banda:** la banda `escenario` solo es la franja inicial. Todo lo
   que depende de «hacia dónde está el escenario» (mira de las filas de banda, qué bloques miran de
   frente, orden de las letras) se calcula desde `escenario` en `generarPlano` y `numerarFilas`.
@@ -169,8 +179,16 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - **Transformaciones que no mueven el tablero** pasan por `anclarTablero`; si añades una, úsalo.
 - **En `planoDesdeSala`, `alto` es un dato solo en las zonas de mesas:** en las demás bandas se
   calcula. Quitarlo de todas rompe las zonas de mesas (pasó; hay prueba).
-- **Nombres de banda:** solo se guardan los puestos a mano en el tipo (Platea). Los demás se calculan
-  al generar, para numerar bien (General, General 2).
+- **Nombres de banda:** solo se guardan los propios (`nombrePropio` en la banda colocada: de la
+  plantilla, como Platea, o puestos a mano). Los demás se calculan al generar, para numerar bien
+  (General, General 2). Quitar `nombrePropio` en `planoDesdeSala` pierde los nombres (hay prueba).
+- **Subtítulos en dos capas:** los del margen van en `#muebles` (bajo las butacas, no las tocan);
+  las etiquetas de borde van en `#subtitulos`, sobre las butacas para leerse, con
+  `pointer-events: none` fuera del editor de piezas para no robar clics a las butacas. El nombre de
+  la banda seleccionada va en `#rotulo-seleccion`, la última capa del plano (sobre las piezas), en
+  su borde inferior y sin eventos de puntero; su subtítulo normal se oculta con `.oculta`.
+- **El doble clic llega después de dos clics:** cada clic en el fondo sube un nivel en la selección
+  de bandas; el `dblclick` de un subtítulo selecciona su banda directamente y lleva a su campo.
 - **`validarMapa` genera un plano para comprobar las mesas**: cambia `butacas`, `muebles` y
   `mesas`. Después hay que volver a generar y dibujar la sala actual (lo hace `importarMapa`).
 - **`localStorage` puede lanzar excepciones** (páginas `data:`, modo privado, cuota llena): todo acceso
@@ -202,6 +220,9 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
      «Restablecer sala», y que la selección se conserve.
    - **Bandas:** − / +, zona, subir y bajar, eliminar, agregar; que no se aplique un cambio que deja
      una mesa sin caber, y que el foco vuelva al mismo control.
+   - **Duplicar y nombres:** Duplicar y Ctrl+D en una mesa, un bloque, una banda, una vertical y una
+     franja; clic en el fondo para seleccionar bandas (y subir de nivel); renombrar en el panel y con
+     doble clic en un subtítulo; que los subtítulos se lean en Previsualizar sin tapar clics.
    - **Mapas:** bloquear y desbloquear butacas; guardar con nombre y recargar; exportar e importar;
      importar un archivo dañado; eliminar. `localStorage` no funciona en páginas `data:`: para
      probar el guardado, sirve la carpeta por HTTP.

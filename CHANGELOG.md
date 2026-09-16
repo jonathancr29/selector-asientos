@@ -4,9 +4,40 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Bandas verticales (fase 3)
+## Sin publicar — Duplicar, nombres y capas de bandas
 
-Rama `claude/bandas-verticales`.
+Rama `claude/duplicar-y-nombres`.
+
+### Añadido
+
+- **Duplicar mesas y bloques de filas:** botón «Duplicar» y Ctrl+D (Cmd+D). La copia, con id nuevo,
+  va a la derecha del original, debajo o al sitio libre más cercano, y queda activa.
+- **Duplicar bandas, verticales y franjas** desde el panel o con Ctrl+D sobre la banda seleccionada:
+  la copia va justo debajo (o a la derecha, si es una vertical) con todo lo de dentro: bandas,
+  mesas y bloques, con ids nuevos. Se copian las butacas bloqueadas, nunca la ocupación; los nombres
+  propios llevan «(copia)».
+- **Subtítulos con el nombre de cada banda** en el plano, también al previsualizar: en el margen las
+  bandas de la sala y en una etiqueta sobre su borde las verticales y sus bandas.
+- **Nombre editable** de bandas, verticales y franjas en el panel (vacío vuelve al de por defecto);
+  doble clic en un subtítulo lleva al campo. La etiqueta de las butacas sigue siendo la de su zona.
+- **Capas con color propio:** cada banda, vertical y franja tiene su color (muestra en el panel). Al
+  seleccionarla, contorno continuo y grueso de ese color, su nombre en una etiqueta rellena en el borde
+  inferior, por encima de todo lo demás, y fila del panel marcada.
+- **Seleccionar bandas en el plano:** clic en el fondo selecciona la banda de debajo; otro clic, la
+  que la contiene. En el panel, tocar un control de una banda la selecciona.
+- Pruebas de duplicar piezas y bandas (colocación, ids, bloqueadas, piezas de dentro, anchos de
+  verticales), renombrar, subtítulos y selección por celda (80 en total).
+
+### Cambiado
+
+- **Cambiar la zona de una banda ya no borra su nombre propio;** el de por defecto sigue a la zona.
+- **Los nombres propios de las bandas** se conservan desde la sala generada (`nombrePropio`), no solo
+  los de la plantilla.
+
+## 2026-09-16 — PR #8: bandas verticales (fase 3)
+
+[PR #8](https://github.com/jonathancr29/selector-asientos/pull/8), fusionado en `main` con el
+commit `0580e38`.
 
 ### Añadido
 
