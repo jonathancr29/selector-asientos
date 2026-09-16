@@ -3,8 +3,8 @@
 Plano de butacas interactivo en SVG, en **un solo archivo HTML**. Sin dependencias, sin paso de
 compilación y sin framework: se abre en el navegador tal cual.
 
-Tres formas de venta conviven en el mismo plano: filas numeradas, mesas con lugares agrupados y
-zonas de acceso general.
+Tres formas de venta pueden convivir en el mismo plano: filas numeradas, mesas con lugares
+agrupados y zonas de acceso general. Hay salas mixtas, solo de filas y solo de mesas.
 
 ## Cómo probarlo
 
@@ -32,7 +32,8 @@ bien en una maqueta y se rompe en cuanto la sala crece. Aquí el plano es **un �
 
 ## Accesibilidad
 
-Cada butaca es un `checkbox` con su etiqueta —*«Fila A, butaca 3»*, *«Mesa 2, lugar 1, ocupada»*—.
+Cada butaca es un `checkbox` con su etiqueta —*«Luneta, fila A, butaca 3»*, *«Mesa 2, lugar 1,
+ocupada»*—.
 Se recorre el plano con las flechas, que se mueven por coordenadas, y se elige con Enter o Espacio.
 El `tabindex` es móvil: hay un solo alto de tabulación para todo el plano, no uno por butaca.
 El total y los avisos están en regiones vivas, así que un lector de pantalla los anuncia al cambiar.
@@ -47,12 +48,16 @@ El plano se genera a partir de una lista plana con una fila por butaca, que es l
 servidor:
 
 ```js
-{ id: 'A1', fila: 'A', numero: 1, x: 1, y: 2, zona: 'luneta', grupo: null, estado: 'libre' }
+{ id: 'luneta-A1', fila: 'A', numero: 1, banda: 'luneta', bandaNombre: 'Luneta',
+  x: 1, y: 2, zona: 'luneta', grupo: null, estado: 'libre' }
 ```
 
 `estado` puede ser `libre`, `ocupada` o `bloqueada`. `grupo` es lo que convierte cuatro butacas
 sueltas en una mesa: el resumen dice *«Mesa 1 · 4 lugares (1, 2, 3, 4)»* en vez de listar
 identificadores sueltos.
+
+El id de una butaca de fila lleva su banda delante (`luneta-A1`), porque cada banda empieza su
+secuencia de filas en A y dos bandas pueden tener una fila A.
 
 **El SVG se genera al mostrar; nunca se almacena un SVG.** Con datos puedes consultar ocupación,
 precio y disponibilidad. Con un blob de SVG no puedes hacer un `WHERE`.
@@ -70,45 +75,156 @@ Todas las bandas del plano la consumen, así que la alineación no depende de la
 forma de expresar un plano descuadrado.
 
 El ancho de la sala es **constante**. El pasillo ocupa una columna, igual que en un recinto real: se
-lleva lugares que si no serían butacas. Lo que cambia entre disposiciones es el aforo, no la huella
+lleva lugares que si no serían butacas. Lo que cambia entre las salas mixtas es el aforo, no la huella
 del plano, y eso es lo que las hace comparables.
 
-| `pasillos` | Columnas vacías | Butacas por fila | Aforo del ejemplo |
+| Sala mixta, `pasillos` | Columnas vacías | Butacas por fila | Aforo del ejemplo |
 |---|---|---|---|
 | `ninguno` | — | 14 | 94 |
 | `izquierda` | 5 | 13 | 89 |
 | `derecha` | 10 | 13 | 89 |
 | `ambos` | 5 y 10 | 12 | 84 |
 
-Al cambiar de disposición la selección se conserva **por identificador, no por posición**: la
-identidad es `fila` + `numero` y es estable; solo cambia la columna. Lo que no sobrevive es una
-butaca que la nueva disposición ya no tiene, porque el pasillo se llevó su lugar, o una que sigue
-existiendo pero ahí no está libre. Esas se sueltan con un aviso que las nombra, en vez de
+Al cambiar de sala la selección se conserva **por identificador, no por posición**: la identidad
+es banda + `fila` + `numero` y es estable; entre salas mixtas solo cambia la columna. Lo que no
+sobrevive es una butaca que la nueva sala ya no tiene, porque el pasillo se llevó su lugar, o una
+que sigue existiendo pero ahí no está libre. Esas se sueltan con un aviso que las nombra, en vez de
 desaparecer en silencio.
+
+## Tipos de sala y bandas
+
+Una sala es una **lista de bandas** horizontales, de arriba abajo, sobre la misma rejilla de
+columnas. Cada banda empieza donde acaba la anterior:
+
+| Banda | Alto | Contenido |
+|---|---|---|
+| `escenario` | 2 filas de rejilla | El escenario. Siempre la primera. |
+| `filas` | `filas` | Filas de butacas de una zona (Luneta o General). Cada banda empieza en la fila A. |
+| `mesas` | `alto` | Espacio libre, con `filasDeMesas` filas de mesas automáticas. |
+
+El selector **Tipo de sala** elige una plantilla. Cada tipo define sus pasillos y sus bandas:
+
+| Tipo | Pasillos | Bandas |
+|---|---|---|
+| Mixta (4 variantes) | dos, izquierda, derecha o ninguno | Escenario, Luneta (3 filas), Zona de mesas (6 mesas), General (2 filas) |
+| Solo filas | dos | Escenario, Platea (7 filas), General (5 filas) |
+| Solo mesas | ninguno | Escenario, Salón (12 mesas) |
+
+Las mesas pueden colocarse **en cualquier hueco libre de la sala**, no solo dentro de una zona de
+mesas: la banda solo decide dónde van las automáticas y deja espacio.
+
+En el modo editor, el panel **Bandas de la sala** lista las bandas con sus controles:
+
+- **− / +:** quita o agrega una fila (bandas de filas) o una fila de alto (zonas de mesas).
+- **Zona:** Luneta o General, con su precio. El nombre por defecto sigue a la zona.
+- **↑ / ↓:** sube o baja la banda. Sus mesas viajan con ella.
+- **Eliminar:** quita la banda y las mesas que empiezan dentro de ella; lo de debajo sube.
+- **Agregar banda de filas / zona de mesas:** al final de la sala.
+
+Al cambiar el alto de una banda, lo que queda debajo se desplaza con ella. Antes de aplicar
+cualquier cambio se comprueba que todas las mesas sigan cabiendo; si alguna no, no se aplica y se
+explica (*«No se pudo: Mesa 4 choca con la fila A de General»*). Las butacas elegidas u ocupadas
+que desaparecen se avisan igual que al acortar una mesa.
+
+Las bandas sin nombre propio toman el de su zona, numerado si se repite: *General*, *General 2*.
 
 ## Modo editor
 
 Dos modos, con los botones de arriba del plano:
 
 - **Previsualizar**: el plano como lo ve quien compra. Se eligen butacas.
-- **Editar plano**: se colocan las mesas. Las butacas no se eligen.
+- **Editar plano**: se colocan, transforman, agregan y eliminan mesas. Las butacas no se eligen.
 
-La sala se trata como una tabla de celdas. Cada mesa ocupa **6 celdas (2 × 3)**: dos lugares
-arriba, la mesa en las dos de en medio y dos lugares abajo. Al arrastrarla, una sombra marca el
-destino encajado en la rejilla: verde si cabe, roja y con contorno discontinuo si no. Al soltar en
-un sitio que no vale, la mesa se queda donde estaba y un aviso dice por qué (*«cae sobre un
-pasillo»*, *«choca con Mesa 3»*, *«choca con la fila G»*).
+### Las mesas
 
-Una mesa cabe si sus 6 celdas están dentro de la sala, libres y fuera de los pasillos: sigue siendo
-imposible partir una mesa con un pasillo. Con teclado, Tab lleva a las mesas y las flechas mueven
-la mesa al **siguiente hueco libre** en esa dirección, saltando pasillos y otras mesas. Esc cancela
-un arrastre.
+La sala se trata como una tabla de celdas: cada lugar ocupa una celda y el tablero ocupa una o
+más. Una mesa se describe con cuatro datos además de su posición:
 
-La posición es un dato (`{ M1: { x, y }, … }`) y el plano se regenera desde ella. Los lugares se
-llaman `M1-1`, `M1-2`… por la mesa, no por la posición, así que mover una mesa conserva la
-selección. Cada disposición de pasillos guarda sus propias posiciones, y «Restablecer mesas»
-devuelve las de esa disposición a su sitio automático. Las posiciones viven en memoria: en una
-aplicación real se guardarían con el plano del recinto, y el servidor volvería a validarlas.
+| Dato | Valores | Efecto |
+|---|---|---|
+| `largo` | 1 a 8 | Celdas de tablero. Cada una lleva un lugar a cada lado largo. |
+| `cabeceras` | sí / no | Un lugar más en cada extremo. |
+| `unLado` | sí / no | Lugares en un solo lado largo, como una barra. |
+| `giro` | 0°, 90°, 180°, 270° | Cuartos de vuelta en sentido horario. |
+
+Los tres estilos de mesa nueva son el mismo modelo con otros valores:
+
+| Estilo | Largo | Cabeceras | Un lado | Huella | Lugares |
+|---|---|---|---|---|---|
+| **Lados** | 2 | no | no | 2 × 3 | 4 |
+| **Cruz** | 1 | sí | no | 3 × 3 | 4 |
+| **Un lado** | 4 | no | sí | 4 × 2 | 4 |
+
+La huella es el rectángulo completo, así que las esquinas vacías de una cruz quedan **reservadas**:
+ninguna otra mesa puede ocuparlas.
+
+**Cada silla mira hacia la mesa.** El icono sin girar tiene el respaldo arriba; cada lugar lleva su
+giro (`mira`): 0° el lado norte, 180° el sur, 90° y 270° las cabeceras, más el giro de la mesa. Las
+marcas de estado (palomita, aspa, raya) se quedan derechas en sillas a 0° o 180°, y giran con la silla
+a 90° o 270°, porque ahí el hueco del icono es vertical y una marca horizontal no cabe.
+
+El giro es de cuartos de vuelta, y no solo horizontal o vertical, porque una mesa de un lado tiene
+cuatro posiciones distintas: sus lugares pueden quedar abajo, a la izquierda, arriba o a la derecha.
+En una mesa de dos lados, 0° y 180° ocupan las mismas celdas; lo que cambia es qué lado es cuál.
+
+### Qué se puede hacer
+
+Al elegir una mesa (clic o Tab), se activan los botones de la barra del editor. Cada acción tiene
+atajo de teclado sobre la mesa enfocada:
+
+| Acción | Botón | Tecla |
+|---|---|---|
+| Mover al siguiente hueco libre | — | Flechas |
+| Girar 90° sobre su centro | Girar 90° | R |
+| Alargar o acortar una celda | Alargar / Acortar | + / − |
+| Poner o quitar cabeceras | Cabeceras | C |
+| Lugares en uno o dos lados | Un solo lado | U |
+| Eliminar | Eliminar | Supr |
+| Agregar una mesa nueva | Lados / Cruz / Un lado | — |
+| Volver a la sala de su tipo | Restablecer sala | — |
+
+Con el ratón, una mesa se arrastra y una sombra marca el destino encajado en la rejilla: verde si
+cabe, roja y con contorno discontinuo si no. Esc cancela un arrastre.
+
+**Reglas:**
+
+- **Cabe o no cabe:** una mesa cabe si toda su huella está dentro de la sala, libre y fuera de los
+  pasillos; sigue siendo imposible partir una mesa con un pasillo. Si una acción no cabe, la mesa no
+  cambia y un aviso dice por qué (*«cae sobre un pasillo»*, *«choca con Mesa 3»*, *«choca con la
+  fila A de General»*).
+- **Sitio cercano:** al girar, alargar, poner cabeceras o volver a dos lados, si la mesa no cabe
+  en su sitio se prueba a una celda de distancia, y el aviso dice a dónde se desplazó.
+- **El tablero no se mueve** al alargar, acortar, cambiar cabeceras o pasar a uno o dos lados: lo
+  que cambia son los lugares alrededor. Al pasar a un solo lado se quedan los del sur.
+- **Girar es reversible:** cuatro giros dejan la mesa exactamente donde estaba.
+- **Mesas nuevas:** se colocan en el primer hueco libre, recorriendo la sala por filas. Entre las
+  mesas automáticas y la banda General hay una franja libre para ellas. Si no queda sitio, se avisa.
+
+### Identidad de los lugares
+
+Los lugares se identifican **por lado**, no por orden: `M2-N1`, `M2-N2` (un lado), `M2-S1`,
+`M2-S2` (el otro) y `M2-C1`, `M2-C2` (cabeceras). Así:
+
+- **Girar o mover** no cambia ningún id, y la selección y las reservas se conservan.
+- **Alargar** solo añade lugares (`N3`, `S3`); los existentes no cambian ni se mueven.
+- **Acortar, quitar cabeceras, pasar a un solo lado o eliminar** hace desaparecer lugares. Se permite, pero se avisa: los
+  elegidos se sueltan nombrándolos y, si alguno estaba ocupado, un aviso lo señala.
+
+Para mostrar, los lugares se numeran «lugar 1, 2, 3…» en sentido horario.
+
+### Datos
+
+Cada tipo de sala guarda su propio plano: `{ bandas: […], mesas: [{ id, x, y, largo, cabeceras,
+unLado, giro }, …], siguiente, siguienteBanda }`. `siguiente` y `siguienteBanda` solo crecen, para
+que una mesa o banda nueva nunca reutilice el id de una eliminada. «Restablecer sala» devuelve el
+tipo a sus bandas y mesas originales.
+Los planos viven en memoria: en una aplicación real se guardarían con el recinto, y el servidor
+volvería a validarlos.
+
+### Posibles mejoras
+
+- **Guardar los planos** en un servidor, en lugar de en memoria.
+- **Desplazar el plano** solo al arrastrar una mesa hasta el borde con zoom.
 
 ## Pruebas
 
@@ -117,8 +233,8 @@ node --test pruebas.mjs
 ```
 
 Cubren la rejilla, el reparto de mesas, el aforo de la tabla anterior, la conciliación de la
-selección al cambiar de disposición y las reglas del editor: dónde cabe una mesa y cómo busca
-hueco el teclado. No hay copia del código: `pruebas.mjs` lee `index.html` y
+selección al cambiar de sala, los tipos de sala y las bandas, y las reglas del editor: geometría de las mesas, hacia dónde
+mira cada silla, dónde caben, girar, alargar, cabeceras, un solo lado y sitio para mesas nuevas. No hay copia del código: `pruebas.mjs` lee `index.html` y
 evalúa la parte del script anterior a la marca *«Fin de la parte sin DOM»*, así que el proyecto
 sigue siendo un solo archivo. Requiere Node 18 o posterior.
 
