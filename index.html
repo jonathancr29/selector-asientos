@@ -51,6 +51,31 @@
   .estado:empty { margin: 0; }
   .modos { display: inline-flex; gap: 4px; }
   .herramientas button[aria-pressed="true"] { background: #1d4ed8; border-color: #3b82f6; color: #fff; }
+  .herramientas button:disabled { opacity: .45; cursor: default; }
+  .herramientas button:disabled:hover { background: #2a2a33; }
+  /* display:flex de .herramientas pisaria el atributo hidden. */
+  .herramientas[hidden] { display: none; }
+  #herramientas-editor { padding: 6px 8px; background: #23232b; border: 1px solid #2c2c36; border-radius: 8px; }
+
+  /* --- Panel de bandas (editor) --- */
+  .bandas { margin: 16px 0 0; padding: 10px 12px; background: #23232b; border: 1px solid #2c2c36; border-radius: 8px; }
+  .bandas[hidden] { display: none; }
+  .bandas h2 { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: #cbd5e1; }
+  .bandas ol { margin: 0 0 8px; padding: 0; list-style: none; }
+  .banda { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 6px 0; border-top: 1px solid #2c2c36; }
+  .banda:first-child { border-top: 0; }
+  .banda-nombre { min-width: 110px; font-size: 13px; color: #e2e8f0; }
+  .banda-detalle { min-width: 120px; font-size: 12px; color: #94a3b8; }
+  .banda button, .banda select {
+    height: 28px; min-width: 30px; padding: 0 8px; font: inherit; font-size: 12px; color: #cbd5e1;
+    background: #2a2a33; border: 1px solid #3a3a46; border-radius: 6px; cursor: pointer;
+  }
+  .banda button:hover { background: #33333e; }
+  .banda button:disabled { opacity: .45; cursor: default; }
+  .banda button:focus-visible, .banda select:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+  /* Limite entre bandas, solo en el editor. */
+  .limite-banda { stroke: #3f4f6b; stroke-width: .5; stroke-dasharray: 2 2; }
+  .mesa-activa { font-size: 12px; color: #cbd5e1; min-width: 150px; }
 
   /* --- El plano ---
      Un solo <svg> con viewBox. De ahi salen tres cosas que una rejilla de <div>
@@ -89,6 +114,8 @@
   .pieza:hover { fill: rgba(147, 197, 253, .1); }
   .pieza:focus { outline: none; }
   .pieza:focus-visible { stroke-dasharray: none; stroke-width: 1.4; }
+  /* La activa: contorno continuo y relleno, distinto del foco (solo contorno mas grueso). */
+  .pieza.activa { stroke-dasharray: none; fill: rgba(147, 197, 253, .14); }
   #plano.moviendo-mesa, #plano.moviendo-mesa .pieza { cursor: grabbing; }
   .levantada { opacity: .3; }
   /* La sombra marca el destino. Verde si cabe; si no, roja y con contorno
@@ -143,15 +170,29 @@
     <button type="button" id="alejar" aria-label="Alejar">−</button>
     <button type="button" id="ajustar">Ajustar</button>
     <span class="separador" aria-hidden="true"></span>
-    <label class="campo" for="disposicion">Pasillos
-      <select id="disposicion">
-        <option value="ambos">Dos, al centro</option>
-        <option value="izquierda">Uno, a la izquierda</option>
-        <option value="derecha">Uno, a la derecha</option>
-        <option value="ninguno">Sin pasillos</option>
-      </select>
+    <!-- Las opciones salen de TIPOS_DE_SALA: el script las crea al cargar. -->
+    <label class="campo" for="tipo-sala">Tipo de sala
+      <select id="tipo-sala"></select>
     </label>
-    <button type="button" id="restablecer" hidden>Restablecer mesas</button>
+  </div>
+  <!-- Solo en modo editor. Los botones de mesa actuan sobre la mesa activa. -->
+  <div class="herramientas" id="herramientas-editor" role="group" aria-label="Editar mesas" hidden>
+    <span class="campo">Agregar mesa</span>
+    <!-- Sin title: algunos lectores lo anuncian en lugar del texto del boton. Los
+         atajos van en aria-keyshortcuts y estan explicados en la pista. -->
+    <button type="button" id="agregar-lados" aria-label="Lados: mesa de largo 2, dos lugares por lado">Lados</button>
+    <button type="button" id="agregar-cruz" aria-label="Cruz: mesa de largo 1, un lugar por lado y cabeceras">Cruz</button>
+    <button type="button" id="agregar-barra" aria-label="Un lado: mesa de largo 4 con lugares en un solo lado">Un lado</button>
+    <span class="separador" aria-hidden="true"></span>
+    <span class="mesa-activa" id="mesa-activa" aria-live="polite">Ninguna mesa seleccionada</span>
+    <button type="button" data-accion="girar" aria-keyshortcuts="R">Girar 90°</button>
+    <button type="button" data-accion="alargar" aria-keyshortcuts="+">Alargar</button>
+    <button type="button" data-accion="acortar" aria-keyshortcuts="-">Acortar</button>
+    <button type="button" data-accion="cabeceras" aria-pressed="false" aria-keyshortcuts="C">Cabeceras</button>
+    <button type="button" data-accion="unlado" aria-pressed="false" aria-keyshortcuts="U">Un solo lado</button>
+    <button type="button" data-accion="eliminar" aria-keyshortcuts="Delete">Eliminar</button>
+    <span class="separador" aria-hidden="true"></span>
+    <button type="button" id="restablecer">Restablecer sala</button>
   </div>
   <p class="pista" id="pista">Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer</p>
   <p class="aforo" id="aforo"></p>
@@ -179,6 +220,16 @@
   <p class="aviso" id="aviso" role="status"></p>
   <p class="estado" id="estado" role="status"></p>
 
+  <!-- Solo en modo editor: la sala como lista de bandas, de arriba abajo. -->
+  <section class="bandas" id="panel-bandas" aria-labelledby="titulo-bandas" hidden>
+    <h2 id="titulo-bandas">Bandas de la sala</h2>
+    <ol id="lista-bandas"></ol>
+    <div class="herramientas">
+      <button type="button" id="agregar-banda-filas">Agregar banda de filas</button>
+      <button type="button" id="agregar-banda-mesas">Agregar zona de mesas</button>
+    </div>
+  </section>
+
   <p class="resumen" aria-live="polite">
     Seleccionadas: <strong id="cuenta">0</strong> · Total <strong id="total">$0.00</strong>
     <span id="vacio">— ninguna butaca seleccionada.</span>
@@ -192,9 +243,9 @@
   </p>
 
   <p class="nota">
-    El selector de pasillos está aquí para comparar disposiciones. En una aplicación real, la
-    disposición de una sala es fija: se elegiría una vez al crear el plano del recinto y quedaría
-    guardada en él, no sería un control para quien compra.
+    El selector de tipo de sala está aquí para comparar recintos: mixtos con distintos pasillos,
+    solo filas o solo mesas. En una aplicación real el recinto es fijo: se elegiría y editaría una
+    vez al crear su plano, y quedaría guardado en él. No sería un control para quien compra.
   </p>
 
 </div>
@@ -280,120 +331,259 @@ const zonas = {
   general: { nombre: 'General', precio: 20000 },
 };
 
-const butacas = [];   // {id, fila, numero, x, y, zona, grupo, estado}
+const butacas = [];   // {id, fila, numero, banda, bandaNombre, x, y, mira, zona, grupo, estado}
 const muebles = [];   // decorado: escenario y mesas. No se vende, solo se dibuja.
+
+// ---------------------------------------------------------------------------
+// Tipos de sala y bandas.
+//
+// Una sala es una lista de bandas horizontales, de arriba abajo, sobre la misma
+// rejilla de columnas:
+//   escenario   2 filas de rejilla, siempre la primera
+//   filas       'filas' filas de butacas; cada banda empieza su secuencia en A
+//   mesas       'alto' filas de rejilla libres, con 'filasDeMesas' automaticas
+// Cada tipo de sala define sus pasillos y sus bandas. Las mesas pueden ir en
+// cualquier hueco libre de la sala, no solo en su banda.
+//
+// Como dos bandas pueden tener una fila A, el id de una butaca de fila lleva la
+// banda delante: luneta-A1, general-A1.
+// ---------------------------------------------------------------------------
+const LETRAS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const FILAS_MAXIMAS = LETRAS.length;
+const ALTO_MAXIMO = 40;
+const ESCENARIO = { id: 'escenario', tipo: 'escenario' };
+
+// Las cuatro salas mixtas son las disposiciones de pasillos de siempre.
+const mixta = (pasillos, nombre) => ({
+  nombre, grupo: 'Mixta', pasillos,
+  bandas: [
+    ESCENARIO,
+    { id: 'luneta', tipo: 'filas', zona: 'luneta', filas: 3, ocupadas: { B: [5, 6], C: [11] } },
+    // Dos filas de mesas automaticas (filas 7 y 11 de la rejilla) y, debajo, una
+    // franja libre donde el editor coloca las mesas nuevas.
+    { id: 'mesas', tipo: 'mesas', alto: 13, filasDeMesas: 2 },
+    { id: 'general', tipo: 'filas', zona: 'general', filas: 2,
+      ocupadas: { A: [1, 2, 3] }, bloqueadasAlFinal: { B: 2 } },
+  ],
+});
+
+const TIPOS_DE_SALA = {
+  'mixta-ambos':     mixta('ambos', 'Dos pasillos, al centro'),
+  'mixta-izquierda': mixta('izquierda', 'Un pasillo, a la izquierda'),
+  'mixta-derecha':   mixta('derecha', 'Un pasillo, a la derecha'),
+  'mixta-ninguno':   mixta('ninguno', 'Sin pasillos'),
+  'solo-filas': {
+    nombre: 'Solo filas · dos pasillos', grupo: 'Otras', pasillos: 'ambos',
+    bandas: [
+      ESCENARIO,
+      { id: 'platea', tipo: 'filas', zona: 'luneta', nombre: 'Platea', filas: 7,
+        ocupadas: { B: [5, 6], D: [7, 8, 9] } },
+      { id: 'general', tipo: 'filas', zona: 'general', filas: 5,
+        ocupadas: { A: [1, 2] }, bloqueadasAlFinal: { E: 2 } },
+    ],
+  },
+  'solo-mesas': {
+    nombre: 'Solo mesas · sin pasillos', grupo: 'Otras', pasillos: 'ninguno',
+    bandas: [
+      ESCENARIO,
+      { id: 'salon', tipo: 'mesas', nombre: 'Salón', alto: 20, filasDeMesas: 4 },
+    ],
+  },
+};
+
+const altoDeBanda = (banda) =>
+  (banda.tipo === 'escenario' ? 2 : banda.tipo === 'filas' ? banda.filas : banda.alto);
 
 // La butaca n de la fila va a columnas[n-1]: nunca a la columna n a secas.
 // Es lo que mantiene todas las bandas en la misma rejilla.
-function agregarFilas({ etiquetas, columnas, y, zona, ocupadas = {} }) {
-  etiquetas.forEach((etiqueta, i) => {
+function agregarFilas(banda, columnas) {
+  const { id, nombre, zona, y, filas, ocupadas = {}, bloqueadasAlFinal = {} } = banda;
+  for (let i = 0; i < filas; i++) {
+    const fila = LETRAS[i];
+    const bloqueadas = bloqueadasAlFinal[fila] || 0;
     columnas.forEach((columna, indice) => {
       const numero = indice + 1;
+      const estado = numero > columnas.length - bloqueadas ? 'bloqueada'
+        : (ocupadas[fila] || []).includes(numero) ? 'ocupada' : 'libre';
       butacas.push({
-        id: etiqueta + numero, fila: etiqueta, numero, x: columna, y: y + i,
-        zona, grupo: null,
-        estado: (ocupadas[etiqueta] || []).includes(numero) ? 'ocupada' : 'libre',
+        id: id + '-' + fila + numero, fila, numero, banda: id, bandaNombre: nombre,
+        x: columna, y: y + i, zona, grupo: null, estado,
       });
     });
-    muebles.push({ tipo: 'rotulo', texto: etiqueta, x: columnas[0] - 1, y: y + i });
-  });
+    muebles.push({ tipo: 'rotulo', texto: fila, x: columnas[0] - 1, y: y + i });
+  }
 }
 
-// Una mesa ocupa 2 x 3 celdas: dos lugares arriba, la mesa en las dos celdas
-// de en medio y dos lugares abajo. (x, y) es su esquina superior izquierda.
-// El grupo es una identidad real, no un hueco visual: los lugares se llaman
-// M2-1, M2-2... por la mesa, no por la posicion, asi que moverla no los renombra.
-const MESA = { ancho: 2, alto: 3, lugares: [[0, 0], [1, 0], [0, 2], [1, 2]] };
-const mesas = [];     // {id, nombre, x, y}: las piezas que el editor puede mover
+// ---------------------------------------------------------------------------
+// Mesas.
+//
+// Una mesa se describe con cuatro datos ademas de su posicion:
+//   largo       celdas de tablero (1, 2, 3...)
+//   cabeceras   si lleva un lugar en cada extremo
+//   unLado      si solo tiene lugares en un lado largo (el sur, antes de girar)
+//   giro        0, 90, 180 o 270 grados en sentido horario
+// De ahi sale su geometria. Los estilos son el mismo modelo:
+//   lados  largo 2        cruz  largo 1, cabeceras     barra  largo 4, un lado
+//      N1 N2                    N1                       [    Mesa    ]
+//     [ Mesa ]               C1 [4] C2                    S4 S3 S2 S1
+//      S1 S2                    S1
+// La huella es el rectangulo completo: las esquinas vacias quedan reservadas.
+//
+// Los lugares se identifican por lado, no por orden: M2-N1, M2-S2, M2-C1. Asi
+// alargar solo anade lugares, girar no cambia ninguno y moverla tampoco.
+// ---------------------------------------------------------------------------
+const LARGO_MAXIMO = 8;
+const ESTILOS = {
+  lados: { largo: 2, cabeceras: false, unLado: false },
+  cruz:  { largo: 1, cabeceras: true,  unLado: false },
+  barra: { largo: 4, cabeceras: false, unLado: true },
+};
+const mesas = [];     // {id, nombre, x, y, largo, cabeceras, unLado, giro, geo}
 
-function agregarMesa({ id, nombre, x, y, ocupadas = [] }) {
-  mesas.push({ id, nombre, x, y });
-  muebles.push({ tipo: 'mesa', mesa: id, x, y: y + 1, w: 2, h: 1, texto: nombre });
-  MESA.lugares.forEach(([dx, dy], i) => {
-    const numero = i + 1;
+// Geometria relativa a la esquina superior izquierda (dx, dy en celdas). Cada
+// lugar lleva 'mira': cuanto girar su icono para que mire al tablero. El icono
+// sin girar tiene el respaldo arriba, asi que mira hacia abajo.
+function geometriaMesa({ largo, cabeceras, unLado = false, giro = 0 }) {
+  const extremo = cabeceras ? 1 : 0;
+  const ancho = largo + 2 * extremo;
+  const alto = unLado ? 2 : 3;
+  const filaTablero = unLado ? 0 : 1;
+  // Primero sin girar. Los lugares van en sentido horario, que es el orden en que
+  // se numeran para mostrar: norte, cabecera derecha, sur, cabecera izquierda.
+  const lugares = [];
+  if (!unLado) {
+    for (let i = 0; i < largo; i++) lugares.push({ lado: 'N' + (i + 1), dx: extremo + i, dy: 0, mira: 0 });
+  }
+  if (cabeceras) lugares.push({ lado: 'C2', dx: ancho - 1, dy: filaTablero, mira: 90 });
+  for (let i = largo - 1; i >= 0; i--) {
+    lugares.push({ lado: 'S' + (i + 1), dx: extremo + i, dy: alto - 1, mira: 180 });
+  }
+  if (cabeceras) lugares.push({ lado: 'C1', dx: 0, dy: filaTablero, mira: 270 });
+  let geo = { ancho, alto, tablero: { dx: extremo, dy: filaTablero, w: largo, h: 1 }, lugares };
+  for (let g = 0; g < giro; g += 90) geo = girar90(geo);
+  return geo;
+}
+
+// Un cuarto de vuelta en sentido horario: (dx, dy) -> (alto - 1 - dy, dx). El
+// orden horario se conserva, asi que la numeracion no cambia al girar.
+function girar90({ ancho, alto, tablero, lugares }) {
+  return {
+    ancho: alto, alto: ancho,
+    tablero: { dx: alto - tablero.dy - tablero.h, dy: tablero.dx, w: tablero.h, h: tablero.w },
+    lugares: lugares.map((l) => ({ lado: l.lado, dx: alto - 1 - l.dy, dy: l.dx, mira: (l.mira + 90) % 360 })),
+  };
+}
+
+function agregarMesa(config, ocupadas = []) {
+  const { id, x, y } = config;
+  const nombre = 'Mesa ' + id.slice(1);
+  const geo = geometriaMesa(config);
+  mesas.push({ ...config, nombre, geo });
+  muebles.push({ tipo: 'mesa', mesa: id, x: x + geo.tablero.dx, y: y + geo.tablero.dy,
+                 w: geo.tablero.w, h: geo.tablero.h, texto: nombre, numero: id.slice(1) });
+  geo.lugares.forEach((l, i) => {
     butacas.push({
-      id: id + '-' + numero, fila: id, numero, x: x + dx, y: y + dy,
+      id: id + '-' + l.lado, fila: id, numero: i + 1, x: x + l.dx, y: y + l.dy, mira: l.mira,
       zona: 'mesas', grupo: { id, nombre },
-      estado: ocupadas.includes(numero) ? 'ocupada' : 'libre',
+      estado: ocupadas.includes(l.lado) ? 'ocupada' : 'libre',
     });
   });
 }
 
-const MESAS_OCUPADAS = { M2: [3, 4] };
+const MESAS_OCUPADAS = { M2: ['S1', 'S2'] };
 
-// Posicion automatica: tres mesas por banda, repartidas por los bloques.
+// Posicion automatica: en cada banda de mesas, 'filasDeMesas' filas de tres mesas
+// de estilo «lados», cada cuatro filas de rejilla empezando en la tercera. Los ids
+// siguen el orden de lectura: M1, M2, M3 en la primera fila, M4... en la segunda.
 function mesasAutomaticas(sala) {
   const lista = [];
-  repartirMesas(sala, 3).forEach((x, i) => {
-    lista.push({ id: 'M' + (i + 1), x, y: 7 });
-    lista.push({ id: 'M' + (i + 4), x, y: 11 });
-  });
+  const base = { ...ESTILOS.lados, giro: 0 };
+  const arranques = repartirMesas(sala, 3);
+  for (const banda of sala.bandas) {
+    if (banda.tipo !== 'mesas') continue;
+    for (let k = 0; k < (banda.filasDeMesas || 0); k++) {
+      const y = banda.y + 2 + 4 * k;
+      if (y + geometriaMesa(base).alto > banda.y + banda.alto) break;
+      for (const x of arranques) lista.push({ id: 'M' + (lista.length + 1), x, y, ...base });
+    }
+  }
   return lista;
 }
 
-// 'posiciones' ({ M1: {x, y}, ... }) es lo que guarda el editor. Una mesa sin
-// posicion guardada va a su sitio automatico.
-function generarPlano(disposicion, posiciones = {}) {
+// 'plano' es lo que guarda el editor para un tipo de sala: { bandas, mesas,
+// siguiente, siguienteBanda }. Sin plano, se usan las bandas del tipo y las
+// mesas automaticas.
+function generarPlano(tipo, plano = null) {
+  const definicion = TIPOS_DE_SALA[tipo];
+  if (!definicion) throw new Error('Tipo de sala desconocido: ' + tipo);
   butacas.length = 0;
   muebles.length = 0;
   mesas.length = 0;
-  const sala = rejillaDeSala({ ancho: ANCHO_SALA, pasillos: disposicion });
+  const sala = rejillaDeSala({ ancho: ANCHO_SALA, pasillos: definicion.pasillos });
 
-  // El escenario abarca la rejilla completa, no un tramo suelto.
-  muebles.push({ tipo: 'escenario', x: 1, y: 0, w: sala.ancho, h: 1.2 });
+  // Las bandas se apilan: cada una empieza donde acaba la anterior. Las que no
+  // traen nombre toman el de su zona, numerado si se repite: General, General 2.
+  sala.bandas = [];
+  const vistos = {};
+  let y = 0;
+  for (const banda of (plano && plano.bandas) || definicion.bandas) {
+    let nombre = banda.nombre;
+    if (!nombre && banda.tipo !== 'escenario') {
+      const base = banda.tipo === 'filas' ? zonas[banda.zona].nombre : 'Zona de mesas';
+      vistos[base] = (vistos[base] || 0) + 1;
+      nombre = vistos[base] > 1 ? base + ' ' + vistos[base] : base;
+    }
+    const colocada = { ...banda, nombre: nombre || 'Escenario', y, alto: altoDeBanda(banda) };
+    sala.bandas.push(colocada);
+    // El escenario abarca la rejilla completa, no un tramo suelto.
+    if (banda.tipo === 'escenario') muebles.push({ tipo: 'escenario', x: 1, y, w: sala.ancho, h: 1.2 });
+    if (banda.tipo === 'filas') agregarFilas(colocada, sala.columnas);
+    y += colocada.alto;
+  }
+  sala.alto = y;
 
-  agregarFilas({ etiquetas: ['A', 'B', 'C'], columnas: sala.columnas, y: 2, zona: 'luneta',
-                 ocupadas: { B: [5, 6], C: [11] } });
-
-  for (const auto of mesasAutomaticas(sala)) {
-    const { x, y } = posiciones[auto.id] || auto;
-    agregarMesa({ id: auto.id, nombre: 'Mesa ' + auto.id.slice(1), x, y,
-                  ocupadas: MESAS_OCUPADAS[auto.id] });
+  for (const config of plano ? plano.mesas : mesasAutomaticas(sala)) {
+    agregarMesa(config, MESAS_OCUPADAS[config.id]);
   }
 
-  agregarFilas({ etiquetas: ['G', 'H'], columnas: sala.columnas, y: 15, zona: 'general',
-                 ocupadas: { G: [1, 2, 3] } });
-
-  const ultimas = sala.columnas.length - 2;
-  butacas.filter((b) => b.fila === 'H' && b.numero > ultimas)
-         .forEach((b) => { b.estado = 'bloqueada'; });
-
-  // Filas de la rejilla donde puede haber mesas: de la primera a la ultima fila de butacas.
-  const ysDeFila = butacas.filter((b) => !b.grupo).map((b) => b.y);
-  sala.filas = { min: Math.min(...ysDeFila), max: Math.max(...ysDeFila) };
+  // Filas de la rejilla donde puede haber mesas: toda la sala bajo el escenario.
+  const primera = sala.bandas.find((b) => b.tipo !== 'escenario');
+  sala.filas = { min: primera ? primera.y : y, max: y - 1 };
   return sala;
 }
 
 // ---------------------------------------------------------------------------
-// Editor: mover mesas por la rejilla.
+// Editor: colocar mesas en la rejilla.
 //
 // La sala se trata como una tabla de celdas. Cada celda esta libre o la ocupa
-// algo: una butaca de fila, una mesa (sus 6 celdas) o un pasillo. Una mesa cabe
-// en (x, y) si sus 6 celdas estan dentro de la sala y libres.
+// algo: una butaca de fila, una mesa (todo su rectangulo) o un pasillo. Una
+// mesa cabe en (x, y) si todas las celdas de su huella estan dentro de la sala
+// y libres. Las operaciones devuelven una configuracion nueva; no tocan la actual.
 // ---------------------------------------------------------------------------
 const celda = (x, y) => x + ',' + y;
 
 // Celda -> quien la ocupa, en palabras para el aviso. 'excluir' es la mesa que
-// se esta moviendo: sus propias celdas no le estorban.
+// se esta editando: sus propias celdas no le estorban.
 function celdasOcupadas(excluir) {
   const ocupadas = new Map();
   for (const b of butacas) {
-    if (!b.grupo) ocupadas.set(celda(b.x, b.y), 'la fila ' + b.fila);
+    if (!b.grupo) ocupadas.set(celda(b.x, b.y), 'la fila ' + b.fila + ' de ' + b.bandaNombre);
   }
   for (const m of mesas) {
     if (m.id === excluir) continue;
-    for (let dy = 0; dy < MESA.alto; dy++) {
-      for (let dx = 0; dx < MESA.ancho; dx++) ocupadas.set(celda(m.x + dx, m.y + dy), m.nombre);
+    for (let dy = 0; dy < m.geo.alto; dy++) {
+      for (let dx = 0; dx < m.geo.ancho; dx++) ocupadas.set(celda(m.x + dx, m.y + dy), m.nombre);
     }
   }
   return ocupadas;
 }
 
-// Devuelve null si la mesa cabe, o el motivo por el que no.
-function motivoNoCabe(sala, ocupadas, x, y) {
-  for (let dy = 0; dy < MESA.alto; dy++) {
-    for (let dx = 0; dx < MESA.ancho; dx++) {
-      const cx = x + dx, cy = y + dy;
+// Devuelve null si la mesa (una configuracion con x, y) cabe, o el motivo por el que no.
+function motivoNoCabe(sala, ocupadas, mesa) {
+  const { ancho, alto } = geometriaMesa(mesa);
+  for (let dy = 0; dy < alto; dy++) {
+    for (let dx = 0; dx < ancho; dx++) {
+      const cx = mesa.x + dx, cy = mesa.y + dy;
       if (cx < 1 || cx > sala.ancho || cy < sala.filas.min || cy > sala.filas.max) {
         return 'se sale de la sala';
       }
@@ -406,14 +596,177 @@ function motivoNoCabe(sala, ocupadas, x, y) {
   return null;
 }
 
+const fueraDeSala = (sala, x, y) =>
+  x < 1 || x > sala.ancho || y < sala.filas.min || y > sala.filas.max;
+
 // Para el teclado: el primer sitio donde cabe avanzando en (dx, dy). Salta por
 // encima de pasillos y otras mesas, que con el raton se cruzan sin mas.
-function buscarHueco(sala, ocupadas, x, y, dx, dy) {
+function buscarHueco(sala, ocupadas, mesa, dx, dy) {
   for (let paso = 1; ; paso++) {
-    const nx = x + dx * paso, ny = y + dy * paso;
-    if (nx < 1 || nx > sala.ancho || ny < sala.filas.min || ny > sala.filas.max) return null;
-    if (!motivoNoCabe(sala, ocupadas, nx, ny)) return { x: nx, y: ny };
+    const x = mesa.x + dx * paso, y = mesa.y + dy * paso;
+    if (fueraDeSala(sala, x, y)) return null;
+    if (!motivoNoCabe(sala, ocupadas, { ...mesa, x, y })) return { x, y };
   }
+}
+
+// Coloca la configuracion en su sitio o, si ahi no cabe, en el mas cercano a
+// una celda de distancia (primero en cruz, luego en diagonal). Devuelve la
+// configuracion colocada, o { motivo } con la razon del sitio original.
+function colocarCerca(sala, ocupadas, mesa) {
+  const desplazamientos = [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1],
+                           [-1, -1], [1, -1], [-1, 1], [1, 1]];
+  for (const [dx, dy] of desplazamientos) {
+    const intento = { ...mesa, x: mesa.x + dx, y: mesa.y + dy };
+    if (!motivoNoCabe(sala, ocupadas, intento)) return intento;
+  }
+  return { motivo: motivoNoCabe(sala, ocupadas, mesa) };
+}
+
+// Gira 90 grados en sentido horario sobre el centro. Si el centro cae entre
+// celdas, al quedar en vertical (90 o 270) se redondea hacia abajo y al volver a
+// horizontal hacia arriba: cuatro giros dejan la mesa exactamente donde estaba.
+function girarMesa(mesa) {
+  const antes = geometriaMesa(mesa);
+  const giro = ((mesa.giro || 0) + 90) % 360;
+  const despues = geometriaMesa({ ...mesa, giro });
+  const redondear = giro % 180 ? Math.floor : Math.ceil;
+  return {
+    ...mesa, giro,
+    x: redondear(mesa.x + (antes.ancho - despues.ancho) / 2),
+    y: redondear(mesa.y + (antes.alto - despues.alto) / 2),
+  };
+}
+
+// Recoloca 'despues' para que su tablero empiece en la misma celda que el de
+// 'antes'. Asi alargar, cabeceras y un lado cambian los lugares sin mover la mesa.
+function anclarTablero(antes, despues) {
+  const a = geometriaMesa(antes).tablero, d = geometriaMesa(despues).tablero;
+  return { ...despues, x: antes.x + a.dx - d.dx, y: antes.y + a.dy - d.dy };
+}
+
+// Alarga o acorta una celda. El tablero crece desde su primera celda hacia la
+// derecha, o hacia abajo si esta en vertical. Devuelve null fuera de los limites.
+function cambiarLargo(mesa, delta) {
+  const largo = mesa.largo + delta;
+  if (largo < 1 || largo > LARGO_MAXIMO) return null;
+  return anclarTablero(mesa, { ...mesa, largo });
+}
+
+// Pone o quita las cabeceras: la huella crece o encoge una celda por extremo.
+const alternarCabeceras = (mesa) => anclarTablero(mesa, { ...mesa, cabeceras: !mesa.cabeceras });
+
+// Pasa de lugares en los dos lados largos a solo uno (se quedan los del sur) o al revés.
+const alternarUnLado = (mesa) => anclarTablero(mesa, { ...mesa, unLado: !mesa.unLado });
+
+// Primer sitio libre para una mesa nueva, recorriendo la sala por filas.
+function buscarSitioLibre(sala, ocupadas, config) {
+  for (let y = sala.filas.min; y <= sala.filas.max; y++) {
+    for (let x = 1; x <= sala.ancho; x++) {
+      if (!motivoNoCabe(sala, ocupadas, { ...config, x, y })) return { ...config, x, y };
+    }
+  }
+  return null;
+}
+
+// Tras cambiar las bandas, la primera mesa que ya no cabe (se sale, choca con
+// una fila u otra mesa), o null si todas caben. Mira el plano ya generado.
+function primeraMesaQueNoCabe(sala) {
+  for (const m of mesas) {
+    const motivo = motivoNoCabe(sala, celdasOcupadas(m.id), m);
+    if (motivo) return { mesa: m, motivo };
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Editor de bandas. Cada operacion recibe el plano y la sala generada desde el
+// (con 'y' y 'alto' de cada banda) y devuelve un plano nuevo, o { motivo }.
+// Las mesas que quedan debajo de una banda que cambia de alto se desplazan con
+// ella; las que estan dentro de una banda que se mueve, viajan con la banda.
+// ---------------------------------------------------------------------------
+const copiarPlano = (plano) => ({
+  ...plano, bandas: plano.bandas.map((b) => ({ ...b })), mesas: plano.mesas.map((m) => ({ ...m })),
+});
+const bandaDe = (sala, id) => sala.bandas.find((b) => b.id === id);
+const dentroDeBanda = (banda, mesa) => mesa.y >= banda.y && mesa.y < banda.y + banda.alto;
+
+function redimensionarBanda(plano, sala, id, delta) {
+  const banda = bandaDe(sala, id);
+  if (banda.tipo === 'escenario') return { motivo: 'el escenario tiene un alto fijo' };
+  const clave = banda.tipo === 'filas' ? 'filas' : 'alto';
+  const valor = banda[clave] + delta;
+  const maximo = banda.tipo === 'filas' ? FILAS_MAXIMAS : ALTO_MAXIMO;
+  if (valor < 1) return { motivo: 'ya tiene el mínimo' };
+  if (valor > maximo) return { motivo: 'ya tiene el máximo (' + maximo + ')' };
+  const nuevo = copiarPlano(plano);
+  nuevo.bandas.find((b) => b.id === id)[clave] = valor;
+  // La banda crece o encoge por abajo: todo lo que queda debajo se desplaza.
+  const fin = banda.y + banda.alto;
+  for (const m of nuevo.mesas) if (m.y >= fin) m.y += delta;
+  return nuevo;
+}
+
+function moverBanda(plano, sala, id, sentido) {
+  const i = sala.bandas.findIndex((b) => b.id === id);
+  const j = i + sentido;
+  if (j < 0 || j >= sala.bandas.length || sala.bandas[j].tipo === 'escenario' ||
+      sala.bandas[i].tipo === 'escenario') {
+    return { motivo: sentido < 0 ? 'ya está arriba del todo' : 'ya está abajo del todo' };
+  }
+  const [arriba, abajo] = sentido < 0 ? [sala.bandas[j], sala.bandas[i]] : [sala.bandas[i], sala.bandas[j]];
+  const nuevo = copiarPlano(plano);
+  [nuevo.bandas[i], nuevo.bandas[j]] = [nuevo.bandas[j], nuevo.bandas[i]];
+  for (const m of nuevo.mesas) {
+    if (dentroDeBanda(arriba, m)) m.y += abajo.alto;
+    else if (dentroDeBanda(abajo, m)) m.y -= arriba.alto;
+  }
+  return nuevo;
+}
+
+// Quita la banda y las mesas que empiezan dentro de ella; lo de debajo sube.
+function eliminarBanda(plano, sala, id) {
+  const banda = bandaDe(sala, id);
+  if (banda.tipo === 'escenario') return { motivo: 'el escenario no se puede eliminar' };
+  const nuevo = copiarPlano(plano);
+  nuevo.bandas = nuevo.bandas.filter((b) => b.id !== id);
+  nuevo.mesas = nuevo.mesas.filter((m) => !dentroDeBanda(banda, m));
+  for (const m of nuevo.mesas) if (m.y >= banda.y + banda.alto) m.y -= banda.alto;
+  return nuevo;
+}
+
+// Agrega una banda al final de la sala. Su id no reutiliza el de una eliminada.
+function agregarBanda(plano, tipo) {
+  const nuevo = copiarPlano(plano);
+  const id = 'banda' + nuevo.siguienteBanda++;
+  nuevo.bandas.push(tipo === 'filas'
+    ? { id, tipo: 'filas', zona: 'general', filas: 2 }
+    : { id, tipo: 'mesas', alto: 4 });
+  return nuevo;
+}
+
+// El plano editable de una sala ya generada: bandas y mesas como datos. De cada
+// banda se quitan lo calculado al generar (y, nombre por defecto) pero no los
+// datos propios: el alto de una zona de mesas SI es un dato, el de las demas no.
+function planoDesdeSala(tipo, sala) {
+  const conNombre = new Set(TIPOS_DE_SALA[tipo].bandas.filter((b) => b.nombre).map((b) => b.id));
+  return {
+    bandas: sala.bandas.map(({ y, alto, nombre, ...banda }) => ({
+      ...banda,
+      ...(banda.tipo === 'mesas' ? { alto } : {}),
+      ...(conNombre.has(banda.id) ? { nombre } : {}),
+    })),
+    mesas: mesas.map(({ id, x, y, largo, cabeceras, unLado, giro }) => ({ id, x, y, largo, cabeceras, unLado, giro })),
+    siguiente: Math.max(0, ...mesas.map((m) => Number(m.id.slice(1)))) + 1,
+    siguienteBanda: 1,
+  };
+}
+
+function cambiarZonaBanda(plano, id, zona) {
+  const nuevo = copiarPlano(plano);
+  const banda = nuevo.bandas.find((b) => b.id === id);
+  banda.zona = zona;
+  delete banda.nombre;   // el nombre por defecto sigue a la zona
+  return nuevo;
 }
 
 // ---------------------------------------------------------------------------
@@ -422,10 +775,11 @@ function buscarHueco(sala, ocupadas, x, y, dx, dy) {
 // ---------------------------------------------------------------------------
 const elegidas = new Set();
 
-// La identidad es fila + numero y es estable entre disposiciones: solo cambia
-// la columna. Lo unico que no sobrevive es una butaca que la nueva disposicion
-// ya no tiene, porque el pasillo se llevo su lugar, o una que sigue existiendo
-// pero ahi no esta libre. Ambas se devuelven para avisar, nunca en silencio.
+// La identidad es banda + fila + numero y es estable entre salas mixtas: solo
+// cambia la columna. Lo unico que no sobrevive es una butaca que la nueva sala
+// ya no tiene (el pasillo se llevo su lugar, o se quito la banda o la mesa), o
+// una que sigue existiendo pero ahi no esta libre. Ambas se devuelven para
+// avisar, nunca en silencio.
 function conciliarSeleccion(ids, lista) {
   const indice = new Map(lista.map((b) => [b.id, b]));
   const ausentes = [], noLibres = [];
@@ -451,7 +805,7 @@ const formatoDinero = new Intl.NumberFormat('es-MX', { style: 'currency', curren
 const dinero = (centavos) => formatoDinero.format(centavos / 100);
 const porId = new Map();   // id -> butaca, para no recorrer la lista en cada interaccion
 const etiquetaDe = (b) => (b.grupo ? b.grupo.nombre + ', lugar ' + b.numero
-                                   : 'Fila ' + b.fila + ', butaca ' + b.numero);
+                                   : b.bandaNombre + ', fila ' + b.fila + ', butaca ' + b.numero);
 
 function nodo(nombre, atributos) {
   const el = document.createElementNS(NS, nombre);
@@ -475,13 +829,31 @@ function dibujarMuebles() {
     } else if (m.tipo === 'mesa') {
       const rect = nodo('rect', { class: 'mueble', x: m.x * PASO + 1, y: m.y * PASO + 1,
         width: m.w * PASO - 2, height: m.h * PASO - 2, rx: 4 });
-      const rotulo = texto('rotulo', (m.x + m.w / 2) * PASO, (m.y + m.h / 2) * PASO, m.texto);
+      // En una celda sola «Mesa 4» no cabe: solo el numero. En vertical, el texto se gira.
+      const cx = (m.x + m.w / 2) * PASO, cy = (m.y + m.h / 2) * PASO;
+      const unaCelda = m.w === 1 && m.h === 1;
+      const rotulo = texto('rotulo', cx, cy, unaCelda ? m.numero : m.texto);
+      if (!unaCelda && m.h > m.w) rotulo.setAttribute('transform', `rotate(-90 ${cx} ${cy})`);
       rect.dataset.mesa = rotulo.dataset.mesa = m.mesa;
       capaMuebles.append(rect, rotulo);
     } else if (m.tipo === 'rotulo') {
       capaMuebles.appendChild(texto('rotulo', (m.x + 0.5) * PASO, (m.y + 0.5) * PASO, m.texto));
     }
   }
+  if (modo !== 'editor') return;
+  for (const banda of salaActual.bandas.slice(1)) {
+    capaMuebles.appendChild(nodo('line', { class: 'limite-banda', x1: 0, y1: banda.y * PASO,
+      x2: (salaActual.ancho + 1) * PASO, y2: banda.y * PASO }));
+  }
+}
+
+// El icono de butaca en la celda (x, y), girado 'mira' grados sobre su centro
+// para que un lugar de mesa mire al tablero. Las butacas de fila no giran.
+function glifoButaca(x, y, mira = 0) {
+  const glifo = nodo('use', { href: '#butaca',
+    x: x * PASO + (PASO - GLIFO) / 2, y: y * PASO + (PASO - GLIFO) / 2, width: GLIFO, height: GLIFO });
+  if (mira) glifo.setAttribute('transform', `rotate(${mira} ${(x + 0.5) * PASO} ${(y + 0.5) * PASO})`);
+  return glifo;
 }
 
 function dibujarButacas() {
@@ -503,32 +875,43 @@ function dibujarButacas() {
     // El area sensible es la celda entera: contigua con sus vecinas y sin solaparlas.
     g.appendChild(nodo('rect', { class: 'toque', x: b.x * PASO, y: b.y * PASO,
       width: PASO, height: PASO, rx: 2 }));
-    g.appendChild(nodo('use', { href: '#butaca',
-      x: b.x * PASO + (PASO - GLIFO) / 2, y: b.y * PASO + (PASO - GLIFO) / 2,
-      width: GLIFO, height: GLIFO }));
+    g.appendChild(glifoButaca(b.x, b.y, b.mira));
     // Libre lleva la palomita siempre, oculta por CSS hasta que se elige.
-    g.appendChild(nodo('use', { class: 'marca marca-' + (seleccionable ? 'elegida' : b.estado),
+    const marca = nodo('use', { class: 'marca marca-' + (seleccionable ? 'elegida' : b.estado),
       href: '#marca-' + (seleccionable ? 'elegida' : b.estado),
       x: b.x * PASO + (PASO - GLIFO) / 2, y: b.y * PASO + (PASO - GLIFO) / 2,
-      width: GLIFO, height: GLIFO }));
+      width: GLIFO, height: GLIFO });
+    // El hueco del icono, donde va la marca, es horizontal con el asiento a 0 o
+    // 180 grados y vertical a 90 o 270. Solo en esos dos giros la marca gira con
+    // el asiento: derecha no cabe en el hueco y se pisa con respaldo y asiento.
+    if (b.mira % 180) {
+      marca.setAttribute('transform', `rotate(${b.mira} ${(b.x + 0.5) * PASO} ${(b.y + 0.5) * PASO})`);
+    }
+    g.appendChild(marca);
     capaButacas.appendChild(g);
     b.nodo = g;
     porId.set(b.id, b);
   });
 }
 
-// Solo en el editor: una zona por mesa que cubre sus 6 celdas. Es lo que se
+// Solo en el editor: una zona por mesa que cubre toda su huella. Es lo que se
 // agarra con el raton y lo que recibe el foco con el teclado.
-const etiquetaMesa = (m) => m.nombre + ', columna ' + m.x + ', fila ' + m.y;
+const etiquetaMesa = (m) => m.nombre + ', ' + m.geo.lugares.length + ' lugares' +
+  (m.giro ? ', girada ' + m.giro + '°' : '') + (m.cabeceras ? ', con cabeceras' : '') +
+  (m.unLado ? ', un solo lado' : '') + ', columna ' + m.x + ', fila ' + m.y;
 
 function dibujarPiezas() {
   if (modo !== 'editor') return;
+  // Si la mesa activa ya no existe (se elimino), el punto de tabulacion va a la primera.
+  const hayActiva = mesas.some((m) => m.id === mesaActiva);
   mesas.forEach((m, indice) => {
+    const activa = m.id === mesaActiva;
     const pieza = nodo('rect', {
-      class: 'pieza', x: m.x * PASO + 0.5, y: m.y * PASO + 0.5,
-      width: MESA.ancho * PASO - 1, height: MESA.alto * PASO - 1, rx: 3,
+      class: 'pieza' + (activa ? ' activa' : ''), x: m.x * PASO + 0.5, y: m.y * PASO + 0.5,
+      width: m.geo.ancho * PASO - 1, height: m.geo.alto * PASO - 1, rx: 3,
       role: 'button', 'aria-label': etiquetaMesa(m), 'aria-describedby': 'pista',
-      tabindex: indice === 0 ? '0' : '-1',
+      'aria-pressed': String(activa),
+      tabindex: (hayActiva ? activa : indice === 0) ? '0' : '-1',
     });
     pieza.dataset.mesa = m.id;
     capaPiezas.appendChild(pieza);
@@ -542,7 +925,141 @@ function dibujarTodo() {
   dibujarMuebles();
   dibujarButacas();
   dibujarPiezas();
+  dibujarBandas();
 }
+
+// ---------------------------------------------------------------------------
+// Panel de bandas (editor). Es HTML normal: una lista con botones, recorrible
+// con Tab. Se rehace entero con cada cambio y el foco vuelve al mismo control.
+// ---------------------------------------------------------------------------
+const listaBandas = document.getElementById('lista-bandas');
+
+function boton(texto, etiqueta, op, banda, deshabilitado = false) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.textContent = texto;
+  b.setAttribute('aria-label', etiqueta);
+  b.dataset.op = op;
+  b.dataset.banda = banda;
+  b.disabled = deshabilitado;
+  return b;
+}
+
+function dibujarBandas() {
+  if (modo !== 'editor') return;
+  const activo = document.activeElement;
+  const foco = listaBandas.contains(activo) ? { op: activo.dataset.op, banda: activo.dataset.banda } : null;
+  listaBandas.textContent = '';
+  const bandas = salaActual.bandas;
+  bandas.forEach((banda, i) => {
+    const li = document.createElement('li');
+    li.className = 'banda';
+    const nombre = document.createElement('span');
+    nombre.className = 'banda-nombre';
+    nombre.textContent = banda.nombre;
+    const detalle = document.createElement('span');
+    detalle.className = 'banda-detalle';
+    li.append(nombre, detalle);
+    if (banda.tipo === 'escenario') {
+      detalle.textContent = 'Fijo, arriba';
+      listaBandas.appendChild(li);
+      return;
+    }
+    const n = banda.nombre;
+    if (banda.tipo === 'filas') {
+      detalle.textContent = plural(banda.filas, 'fila', 'filas') + ' (A' +
+        (banda.filas > 1 ? '–' + LETRAS[banda.filas - 1] : '') + ')';
+      li.append(
+        boton('−', 'Quitar una fila a ' + n, 'menos', banda.id, banda.filas <= 1),
+        boton('+', 'Agregar una fila a ' + n, 'mas', banda.id, banda.filas >= FILAS_MAXIMAS));
+      const zona = document.createElement('select');
+      zona.setAttribute('aria-label', 'Zona de ' + n);
+      zona.dataset.op = 'zona';
+      zona.dataset.banda = banda.id;
+      for (const clave of ['luneta', 'general']) {
+        zona.appendChild(new Option(zonas[clave].nombre + ' · ' + dinero(zonas[clave].precio), clave,
+                                    false, banda.zona === clave));
+      }
+      li.appendChild(zona);
+    } else {
+      detalle.textContent = plural(banda.alto, 'fila', 'filas') + ' de alto';
+      li.append(
+        boton('−', 'Quitar una fila de alto a ' + n, 'menos', banda.id, banda.alto <= 1),
+        boton('+', 'Agregar una fila de alto a ' + n, 'mas', banda.id, banda.alto >= ALTO_MAXIMO));
+    }
+    li.append(
+      boton('↑', 'Subir ' + n, 'subir', banda.id, bandas[i - 1].tipo === 'escenario'),
+      boton('↓', 'Bajar ' + n, 'bajar', banda.id, i === bandas.length - 1),
+      boton('Eliminar', 'Eliminar ' + n, 'eliminar', banda.id));
+    listaBandas.appendChild(li);
+  });
+  if (foco) {
+    const destino = listaBandas.querySelector(`[data-op="${foco.op}"][data-banda="${foco.banda}"]`);
+    if (destino && !destino.disabled) destino.focus();
+    else document.getElementById('agregar-banda-filas').focus();
+  }
+}
+
+// Aplica un plano nuevo de bandas si todas las mesas siguen cabiendo. Si alguna
+// no cabe, se vuelve al plano anterior y se explica cual y por que.
+function aplicarBandas(resultado, mensaje) {
+  if (resultado.motivo) {
+    anunciar('No se pudo: ' + resultado.motivo + '.');
+    return;
+  }
+  const antes = fotoDeButacas();
+  const mesasAntes = new Map(mesas.map((m) => [m.id, m.nombre]));
+  const previo = planos[tipoActual];
+  planos[tipoActual] = resultado;
+  salaActual = generarPlano(tipoActual, resultado);
+  const fallo = primeraMesaQueNoCabe(salaActual);
+  if (fallo) {
+    planos[tipoActual] = previo;
+    salaActual = generarPlano(tipoActual, previo);
+    anunciar('No se pudo: ' + fallo.mesa.nombre + ' ' + fallo.motivo + '.');
+    return;
+  }
+  const quitadas = [...mesasAntes].filter(([id]) => !resultado.mesas.some((m) => m.id === id))
+                                  .map(([, nombre]) => nombre);
+  regenerar(mensaje + (quitadas.length ? ' Se quitaron con ella: ' + quitadas.join(', ') + '.' : ''), antes);
+  calcularEncuadre();
+}
+
+listaBandas.addEventListener('click', (e) => {
+  const control = e.target.closest('button[data-op]');
+  if (!control) return;
+  const { op, banda: id } = control.dataset;
+  const plano = planoEditable();
+  const banda = bandaDe(salaActual, id);
+  const n = banda.nombre;
+  if (op === 'menos' || op === 'mas') {
+    const delta = op === 'mas' ? 1 : -1;
+    const resultado = redimensionarBanda(plano, salaActual, id, delta);
+    const valor = banda.tipo === 'filas' ? banda.filas + delta : banda.alto + delta;
+    aplicarBandas(resultado, n + ': ' + (banda.tipo === 'filas'
+      ? plural(valor, 'fila', 'filas') + '.' : plural(valor, 'fila', 'filas') + ' de alto.'));
+  } else if (op === 'subir' || op === 'bajar') {
+    aplicarBandas(moverBanda(plano, salaActual, id, op === 'subir' ? -1 : 1),
+                  n + (op === 'subir' ? ' subida.' : ' bajada.'));
+  } else if (op === 'eliminar') {
+    aplicarBandas(eliminarBanda(plano, salaActual, id), n + ' eliminada.');
+  }
+});
+
+listaBandas.addEventListener('change', (e) => {
+  const control = e.target.closest('select[data-op="zona"]');
+  if (!control) return;
+  const antes = bandaDe(salaActual, control.dataset.banda).nombre;
+  aplicarBandas(cambiarZonaBanda(planoEditable(), control.dataset.banda, control.value),
+                antes + ' pasa a la zona ' + zonas[control.value].nombre + '.');
+});
+
+document.getElementById('agregar-banda-filas').addEventListener('click', () => {
+  aplicarBandas(agregarBanda(planoEditable(), 'filas'), 'Banda de 2 filas agregada al final.');
+});
+document.getElementById('agregar-banda-mesas').addEventListener('click', () => {
+  aplicarBandas(agregarBanda(planoEditable(), 'mesas'), 'Zona de mesas de 4 filas agregada al final.');
+});
 
 // ---------------------------------------------------------------------------
 // Zoom y desplazamiento: se mueve el viewBox, no el DOM.
@@ -550,10 +1067,11 @@ function dibujarTodo() {
 let vista, vistaInicial;
 
 // El encuadre abarca todo lo dibujado, butacas y muebles (escenario, mesas,
-// rotulos de fila), mas una celda de margen. Cada elemento ocupa una celda
+// rotulos de fila), y la sala entera aunque una zona de mesas este vacia, mas
+// una celda de margen. Cada elemento ocupa una celda
 // salvo que declare w y h.
 function calcularEncuadre() {
-  const cajas = [...butacas, ...muebles];
+  const cajas = [...butacas, ...muebles, { x: 0, y: 0, w: salaActual.ancho + 1, h: salaActual.alto }];
   const margen = PASO;
   const x = Math.min(...cajas.map((c) => c.x)) * PASO - margen;
   const y = Math.min(...cajas.map((c) => c.y)) * PASO - margen;
@@ -681,7 +1199,11 @@ function soltarPuntero(e, cancelado) {
   if (punteros.size) return;   // queda un dedo: el gesto sigue
   svg.classList.remove('arrastrando');
   // Un arrastre no debe contar como clic sobre la butaca que quedo debajo.
-  if (!cancelado && arrastre && arrastre.movido <= 4) alternar(arrastre.butaca);
+  if (!cancelado && arrastre && arrastre.movido <= 4) {
+    // En el editor, un clic en el fondo deselecciona la mesa activa.
+    if (modo === 'editor') marcarActiva(null);
+    else alternar(arrastre.butaca);
+  }
   arrastre = null;
 }
 svg.addEventListener('pointerup', (e) => soltarPuntero(e, false));
@@ -750,9 +1272,11 @@ svg.addEventListener('focusin', (e) => {
   elemento.setAttribute('tabindex', '0');
   // Durante un clic no se reencuadra: moveria el plano bajo el puntero y el
   // arrastre, que parte de la vista anterior, lo haria saltar.
+  const esPieza = elemento.classList.contains('pieza');
+  if (esPieza) marcarActiva(elemento.dataset.mesa);
   if (arrastre || arrastreMesa) return;
-  const m = elemento.dataset.mesa && elemento.classList.contains('pieza') && mesaPorId(elemento.dataset.mesa);
-  const caja = m ? { x: m.x, y: m.y, w: MESA.ancho, h: MESA.alto } : porNodo(elemento);
+  const m = esPieza && mesaPorId(elemento.dataset.mesa);
+  const caja = m ? { x: m.x, y: m.y, w: m.geo.ancho, h: m.geo.alto } : porNodo(elemento);
   if (caja) asegurarVisible(caja);
 });
 
@@ -765,10 +1289,20 @@ svg.addEventListener('keydown', (e) => {
   }
   const pieza = e.target.closest('.pieza');
   if (pieza) {
+    const id = pieza.dataset.mesa;
     const flecha = FLECHAS[e.key];
-    if (!flecha) return;
-    e.preventDefault();
-    moverMesaConTeclado(pieza.dataset.mesa, flecha);
+    const accion = ATAJOS[e.key];
+    if (flecha) {
+      e.preventDefault();
+      moverMesaConTeclado(id, flecha);
+    } else if (accion) {
+      e.preventDefault();
+      ejecutarAccion(accion, id);
+      // El DOM se rehizo: el foco vuelve a la mesa, o a la primera si se elimino.
+      const destino = capaPiezas.querySelector('[data-mesa="' + id + '"]') ||
+                      capaPiezas.querySelector('.pieza');
+      if (destino) destino.focus();
+    }
     return;
   }
   const elemento = e.target.closest('.butaca');
@@ -793,30 +1327,64 @@ const FLECHAS = {
 };
 
 // ---------------------------------------------------------------------------
-// Modo editor: arrastrar y soltar mesas, encajadas en la rejilla.
+// Modo editor: colocar, girar, alargar, agregar y eliminar mesas.
 // ---------------------------------------------------------------------------
 let modo = 'vista';        // 'vista' (previsualizar, como quien compra) o 'editor'
 let arrastreMesa = null;
-let disposicionActual, salaActual;
-// Posiciones guardadas por disposicion: { ambos: { M1: {x, y}, ... } }. Cada
-// disposicion tiene su propio plano; mover mesas en una no toca las otras.
-const posiciones = {};
+let mesaActiva = null;     // id de la mesa sobre la que actuan los botones y atajos
+let tipoActual, salaActual;
+// Plano guardado por tipo de sala: { 'mixta-ambos': { bandas, mesas, siguiente,
+// siguienteBanda } }. Cada tipo tiene el suyo; editar uno no toca los otros.
+// 'siguiente' y 'siguienteBanda' solo crecen: un id nuevo nunca reutiliza el de
+// una mesa o banda eliminada.
+const planos = {};
 
 const mesaPorId = (id) => mesas.find((m) => m.id === id);
 const anunciar = (mensaje) => { document.getElementById('estado').textContent = mensaje; };
+const configDe = ({ id, x, y, largo, cabeceras, unLado, giro }) =>
+  ({ id, x, y, largo, cabeceras, unLado, giro });
 
-// Sombra del destino: contorno de 6 celdas, mesa y 4 lugares. Se crea una vez
-// y se desplaza con transform.
+// Sombra del destino: contorno de la huella, tablero y lugares. Se rehace con la
+// forma de la mesa al empezar cada arrastre y se desplaza con transform.
 const sombra = nodo('g', { class: 'sombra oculta', 'aria-hidden': 'true' });
-sombra.appendChild(nodo('rect', { class: 'contorno', x: 0.5, y: 0.5,
-  width: MESA.ancho * PASO - 1, height: MESA.alto * PASO - 1, rx: 3 }));
-sombra.appendChild(nodo('rect', { class: 'tablero', x: 1, y: PASO + 1,
-  width: MESA.ancho * PASO - 2, height: PASO - 2, rx: 4 }));
-for (const [dx, dy] of MESA.lugares) {
-  sombra.appendChild(nodo('use', { href: '#butaca',
-    x: dx * PASO + (PASO - GLIFO) / 2, y: dy * PASO + (PASO - GLIFO) / 2, width: GLIFO, height: GLIFO }));
-}
 svg.appendChild(sombra);
+
+function construirSombra({ ancho, alto, tablero, lugares }) {
+  sombra.textContent = '';
+  sombra.appendChild(nodo('rect', { class: 'contorno', x: 0.5, y: 0.5,
+    width: ancho * PASO - 1, height: alto * PASO - 1, rx: 3 }));
+  sombra.appendChild(nodo('rect', { class: 'tablero', x: tablero.dx * PASO + 1, y: tablero.dy * PASO + 1,
+    width: tablero.w * PASO - 2, height: tablero.h * PASO - 2, rx: 4 }));
+  for (const { dx, dy, mira } of lugares) sombra.appendChild(glifoButaca(dx, dy, mira));
+}
+
+// Marca la mesa activa sin redibujar: solo clases, aria-pressed y botones.
+function marcarActiva(id) {
+  mesaActiva = id;
+  for (const p of capaPiezas.querySelectorAll('.pieza')) {
+    const activa = p.dataset.mesa === id;
+    p.classList.toggle('activa', activa);
+    p.setAttribute('aria-pressed', String(activa));
+  }
+  actualizarControles();
+}
+
+const botonesDeMesa = () => document.querySelectorAll('#herramientas-editor [data-accion]');
+
+function actualizarControles() {
+  const m = mesaActiva && mesaPorId(mesaActiva);
+  document.getElementById('mesa-activa').textContent = m
+    ? m.nombre + ' · ' + m.geo.lugares.length + ' lugares'
+    : 'Ninguna mesa seleccionada';
+  for (const boton of botonesDeMesa()) {
+    const accion = boton.dataset.accion;
+    boton.disabled = !m ||
+      (accion === 'alargar' && m.largo >= LARGO_MAXIMO) ||
+      (accion === 'acortar' && m.largo <= 1);
+    if (accion === 'cabeceras') boton.setAttribute('aria-pressed', String(Boolean(m && m.cabeceras)));
+    if (accion === 'unlado') boton.setAttribute('aria-pressed', String(Boolean(m && m.unLado)));
+  }
+}
 
 // Atenua la mesa original (tablero, rotulo y lugares) mientras se arrastra.
 // Al soltar se limpia todo el plano, no solo esa mesa: no pueden quedar restos.
@@ -833,6 +1401,8 @@ const celdaBajo = (e) => {
 function iniciarArrastreMesa(pieza, e) {
   const mesa = mesaPorId(pieza.dataset.mesa);
   const agarrada = celdaBajo(e);
+  marcarActiva(mesa.id);
+  construirSombra(mesa.geo);
   return {
     mesa, pointerId: e.pointerId, x: e.clientX, y: e.clientY, movido: 0, destino: null,
     // En que celda de la mesa se agarro: asi no salta a la esquina del puntero.
@@ -848,7 +1418,7 @@ function moverSombra(e) {
   const c = celdaBajo(e);
   const x = c.x - a.agarre.dx, y = c.y - a.agarre.dy;
   if (a.destino && a.destino.x === x && a.destino.y === y) return;
-  a.destino = { x, y, motivo: motivoNoCabe(salaActual, a.ocupadas, x, y) };
+  a.destino = { x, y, motivo: motivoNoCabe(salaActual, a.ocupadas, { ...configDe(a.mesa), x, y }) };
   sombra.setAttribute('transform', 'translate(' + x * PASO + ' ' + y * PASO + ')');
   sombra.classList.toggle('invalida', Boolean(a.destino.motivo));
   sombra.classList.remove('oculta');
@@ -874,7 +1444,7 @@ function terminarArrastreMesa(confirmar) {
 
 function moverMesaConTeclado(id, { dx, dy, hacia }) {
   const m = mesaPorId(id);
-  const hueco = buscarHueco(salaActual, celdasOcupadas(id), m.x, m.y, dx, dy);
+  const hueco = buscarHueco(salaActual, celdasOcupadas(id), configDe(m), dx, dy);
   if (!hueco) {
     anunciar(m.nombre + ' no tiene hueco libre hacia ' + hacia + '.');
     return;
@@ -884,24 +1454,140 @@ function moverMesaConTeclado(id, { dx, dy, hacia }) {
   capaPiezas.querySelector('[data-mesa="' + id + '"]').focus();
 }
 
-// La posicion es un dato: se guarda y el plano se regenera desde ella. Los
-// lugares conservan su id, asi que la seleccion y las reservas no se pierden.
-function moverMesa(id, x, y) {
-  if (!posiciones[disposicionActual]) {
-    posiciones[disposicionActual] = Object.fromEntries(mesas.map((m) => [m.id, { x: m.x, y: m.y }]));
-  }
-  posiciones[disposicionActual][id] = { x, y };
-  salaActual = generarPlano(disposicionActual, posiciones[disposicionActual]);
+// El plano del tipo de sala actual, creado desde lo que se ve la primera vez
+// que se edita.
+function planoEditable() {
+  if (!planos[tipoActual]) planos[tipoActual] = planoDesdeSala(tipoActual, salaActual);
+  return planos[tipoActual];
+}
+
+// Las configuraciones son datos: se guardan y el plano se regenera desde ellas.
+// Si al regenerar desaparecen lugares (acortar, quitar cabeceras, eliminar, bandas),
+// se avisa de los elegidos que se soltaron y de los ocupados que se quitaron.
+const fotoDeButacas = () => butacas.map((b) => ({ id: b.id, estado: b.estado }));
+
+// 'antes' se puede pasar hecho cuando el plano ya se genero para validarlo.
+function regenerar(mensaje, antes = fotoDeButacas()) {
+  salaActual = generarPlano(tipoActual, planos[tipoActual]);
+  const existe = new Set(butacas.map((b) => b.id));
+  const { ausentes } = conciliarSeleccion(elegidas, butacas);
+  const ocupadasQuitadas = antes.filter((b) => b.estado === 'ocupada' && !existe.has(b.id))
+                                .map((b) => b.id);
+  if (!mesaPorId(mesaActiva)) mesaActiva = null;
   dibujarTodo();
   actualizarResumen();
-  const m = mesaPorId(id);
-  anunciar(m.nombre + ' movida a columna ' + x + ', fila ' + y + '.');
+  actualizarAforo(salaActual);
+  actualizarControles();
+  anunciar(mensaje);
+  document.getElementById('aviso').textContent = [
+    frase(ausentes, 'ya no existe en el plano', 'ya no existen en el plano'),
+    ocupadasQuitadas.length
+      ? 'Atención: se quitaron lugares ocupados: ' + ocupadasQuitadas.join(', ') + '.' : '',
+  ].filter(Boolean).join(' ');
 }
+
+function reemplazarMesa(config) {
+  const plano = planoEditable();
+  plano.mesas = plano.mesas.map((c) => (c.id === config.id ? config : c));
+}
+
+// Los lugares conservan su id al mover, asi que la seleccion y las reservas no se pierden.
+function moverMesa(id, x, y) {
+  const m = mesaPorId(id);
+  reemplazarMesa({ ...configDe(m), x, y });
+  regenerar(m.nombre + ' movida a columna ' + x + ', fila ' + y + '.');
+}
+
+const posicionTexto = (antes, despues) =>
+  (antes.x === despues.x && antes.y === despues.y ? ''
+    : ' Se desplazó a columna ' + despues.x + ', fila ' + despues.y + ' para caber.');
+
+// Girar, alargar, acortar y cabeceras: se calcula la configuracion nueva, se
+// coloca en su sitio o en el mas cercano, y si no cabe se anuncia por que.
+const TRANSFORMACIONES = {
+  girar:     { calcular: girarMesa,
+               fallo: (m) => 'No se pudo girar ' + m.nombre,
+               hecho: (m) => (m.giro ? 'girada ' + m.giro + '°' : 'de vuelta a su posición original') },
+  alargar:   { calcular: (c) => cambiarLargo(c, 1), tope: 'el largo máximo',
+               fallo: (m) => 'No se pudo alargar ' + m.nombre,
+               hecho: () => 'alargada' },
+  acortar:   { calcular: (c) => cambiarLargo(c, -1), tope: 'el largo mínimo',
+               fallo: (m) => 'No se pudo acortar ' + m.nombre,
+               hecho: () => 'acortada' },
+  cabeceras: { calcular: alternarCabeceras,
+               fallo: (m) => (m.cabeceras ? 'No se pudieron quitar las cabeceras de '
+                                          : 'No se pudieron poner cabeceras a ') + m.nombre,
+               hecho: (m) => (m.cabeceras ? 'con cabeceras' : 'sin cabeceras') },
+  unlado:    { calcular: alternarUnLado,
+               fallo: (m) => 'No se pudieron poner lugares en el otro lado de ' + m.nombre,
+               hecho: (m) => (m.unLado ? 'con lugares en un solo lado' : 'con lugares en los dos lados') },
+};
+
+function transformarMesa(id, accion) {
+  const m = mesaPorId(id);
+  const t = TRANSFORMACIONES[accion];
+  const nueva = t.calcular(configDe(m));
+  if (!nueva) {
+    anunciar(m.nombre + ' ya tiene ' + t.tope + '.');
+    return;
+  }
+  const colocada = colocarCerca(salaActual, celdasOcupadas(id), nueva);
+  if (colocada.motivo) {
+    anunciar(t.fallo(m) + ': ' + colocada.motivo + '.');
+    return;
+  }
+  reemplazarMesa(colocada);
+  regenerar('');
+  const despues = mesaPorId(id);
+  anunciar(despues.nombre + ' ' + t.hecho(despues) + ': ' + despues.geo.lugares.length +
+           ' lugares.' + posicionTexto(nueva, colocada));
+}
+
+function agregarMesaNueva(estilo) {
+  const plano = planoEditable();
+  const id = 'M' + plano.siguiente;
+  const config = { id, x: 0, y: 0, ...ESTILOS[estilo], giro: 0 };
+  const sitio = buscarSitioLibre(salaActual, celdasOcupadas(null), config);
+  if (!sitio) {
+    anunciar('No hay sitio libre para otra mesa. Mueve o acorta alguna antes.');
+    return;
+  }
+  plano.siguiente++;
+  plano.mesas.push(sitio);
+  mesaActiva = id;
+  regenerar('Mesa ' + id.slice(1) + ' agregada en columna ' + sitio.x + ', fila ' + sitio.y + '.');
+  const m = mesaPorId(id);
+  asegurarVisible({ x: m.x, y: m.y, w: m.geo.ancho, h: m.geo.alto });
+}
+
+function eliminarMesa(id) {
+  const m = mesaPorId(id);
+  const plano = planoEditable();
+  plano.mesas = plano.mesas.filter((c) => c.id !== id);
+  regenerar(m.nombre + ' eliminada.');
+}
+
+function ejecutarAccion(accion, id = mesaActiva) {
+  if (!id || !mesaPorId(id)) return;
+  if (accion === 'eliminar') eliminarMesa(id);
+  else transformarMesa(id, accion);
+}
+
+const ATAJOS = {
+  r: 'girar', R: 'girar',
+  '+': 'alargar', '=': 'alargar',
+  '-': 'acortar',
+  c: 'cabeceras', C: 'cabeceras',
+  u: 'unlado', U: 'unlado',
+  Delete: 'eliminar', Backspace: 'eliminar',
+};
 
 const PISTAS = {
   vista: 'Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer',
-  editor: 'Arrastra una mesa para moverla · con teclado, Tab hasta la mesa y flechas ' +
-          'para llevarla al siguiente hueco libre · Esc cancela',
+  editor: 'Arrastra una mesa para moverla · con teclado, Tab hasta una mesa: flechas la ' +
+          'mueven, R la gira, + y − cambian su largo, C pone o quita cabeceras, U alterna ' +
+          'uno o dos lados, Supr la ' +
+          'elimina · Esc cancela un arrastre',
 };
 
 function cambiarModo(nuevo) {
@@ -912,12 +1598,15 @@ function cambiarModo(nuevo) {
   svg.classList.toggle('editando', editando);
   document.getElementById('modo-vista').setAttribute('aria-pressed', String(!editando));
   document.getElementById('modo-editor').setAttribute('aria-pressed', String(editando));
-  document.getElementById('restablecer').hidden = !editando;
+  document.getElementById('herramientas-editor').hidden = !editando;
+  document.getElementById('panel-bandas').hidden = !editando;
   document.getElementById('pista').textContent = PISTAS[modo];
   // En el editor las butacas son decorado: el lector de pantalla recorre mesas.
   if (editando) capaButacas.setAttribute('aria-hidden', 'true');
   else capaButacas.removeAttribute('aria-hidden');
+  mesaActiva = null;
   dibujarTodo();
+  actualizarControles();
   anunciar(editando
     ? 'Modo editor: arrastra las mesas para colocarlas.'
     : 'Previsualización: el plano como lo verá quien compra.');
@@ -926,12 +1615,17 @@ function cambiarModo(nuevo) {
 document.getElementById('modo-vista').addEventListener('click', () => cambiarModo('vista'));
 document.getElementById('modo-editor').addEventListener('click', () => cambiarModo('editor'));
 document.getElementById('restablecer').addEventListener('click', () => {
-  delete posiciones[disposicionActual];
-  salaActual = generarPlano(disposicionActual);
-  dibujarTodo();
-  actualizarResumen();
-  anunciar('Mesas en su posición automática.');
+  delete planos[tipoActual];
+  mesaActiva = null;
+  regenerar('Sala restablecida: bandas y mesas como en su tipo.');
+  calcularEncuadre();
 });
+document.getElementById('agregar-lados').addEventListener('click', () => agregarMesaNueva('lados'));
+document.getElementById('agregar-cruz').addEventListener('click', () => agregarMesaNueva('cruz'));
+document.getElementById('agregar-barra').addEventListener('click', () => agregarMesaNueva('barra'));
+for (const boton of botonesDeMesa()) {
+  boton.addEventListener('click', () => ejecutarAccion(boton.dataset.accion));
+}
 
 // ---------------------------------------------------------------------------
 // Resumen: agrupa por mesa cuando la butaca pertenece a una.
@@ -946,7 +1640,7 @@ function actualizarResumen() {
 
   const cubos = new Map();
   for (const b of lista) {
-    const clave = b.grupo ? b.grupo.nombre : zonas[b.zona].nombre;
+    const clave = b.grupo ? b.grupo.nombre : b.bandaNombre;
     if (!cubos.has(clave)) cubos.set(clave, []);
     cubos.get(clave).push(b);
   }
@@ -955,7 +1649,7 @@ function actualizarResumen() {
   for (const [clave, items] of cubos) {
     const li = document.createElement('li');
     const cuantos = items.length === 1 ? '1 lugar' : items.length + ' lugares';
-    const cuales = items.map((b) => (b.grupo ? b.numero : b.id)).join(', ');
+    const cuales = items.map((b) => (b.grupo ? b.numero : b.fila + b.numero)).join(', ');
     const importe = items.reduce((s, b) => s + zonas[b.zona].precio, 0);
     li.textContent = clave + ' · ' + cuantos + ' (' + cuales + ') · ' + dinero(importe);
     detalle.appendChild(li);
@@ -963,12 +1657,30 @@ function actualizarResumen() {
 }
 
 // ---------------------------------------------------------------------------
-// Cambio de disposicion
+// Cambio de tipo de sala
 // ---------------------------------------------------------------------------
-function redibujar(disposicion) {
+const frase = (ids, singular, plural) => (!ids.length ? ''
+  : ids.length === 1
+    ? 'Se soltó 1 butaca que ' + singular + ': ' + ids[0] + '.'
+    : 'Se soltaron ' + ids.length + ' butacas que ' + plural + ': ' + ids.join(', ') + '.');
+
+const plural = (n, uno, varios) => n + ' ' + (n === 1 ? uno : varios);
+
+function actualizarAforo(sala) {
+  const filas = sala.bandas.reduce((s, b) => s + (b.tipo === 'filas' ? b.filas : 0), 0);
+  document.getElementById('aforo').textContent = [
+    'Sala de ' + sala.ancho + ' columnas',
+    filas ? plural(filas, 'fila', 'filas') + ' de ' + sala.columnas.length + ' butacas' : 'sin filas',
+    mesas.length ? plural(mesas.length, 'mesa', 'mesas') : 'sin mesas',
+    butacas.length + ' lugares en total',
+  ].join(' · ');
+}
+
+function redibujar(tipo) {
   if (arrastreMesa) terminarArrastreMesa(false);
-  disposicionActual = disposicion;
-  const sala = salaActual = generarPlano(disposicion, posiciones[disposicion]);
+  tipoActual = tipo;
+  mesaActiva = null;
+  salaActual = generarPlano(tipo, planos[tipo]);
   // Antes de dibujar: asi el DOM nace ya con la seleccion que sobrevive.
   const { ausentes, noLibres } = conciliarSeleccion(elegidas, butacas);
   dibujarTodo();
@@ -976,22 +1688,26 @@ function redibujar(disposicion) {
 
   calcularEncuadre();
   actualizarResumen();
-
-  const porFila = sala.columnas.length;
-  document.getElementById('aforo').textContent =
-    'Sala de ' + sala.ancho + ' columnas · ' + porFila + ' butacas por fila · ' +
-    butacas.length + ' lugares en total';
-  const frase = (ids, singular, plural) => (!ids.length ? ''
-    : ids.length === 1
-      ? 'Se soltó 1 butaca que ' + singular + ': ' + ids[0] + '.'
-      : 'Se soltaron ' + ids.length + ' butacas que ' + plural + ': ' + ids.join(', ') + '.');
+  actualizarAforo(salaActual);
+  actualizarControles();
   document.getElementById('aviso').textContent = [
-    frase(ausentes, 'esta disposición no tiene', 'esta disposición no tiene'),
-    frase(noLibres, 'en esta disposición no está libre', 'en esta disposición no están libres'),
+    frase(ausentes, 'esta sala no tiene', 'esta sala no tiene'),
+    frase(noLibres, 'en esta sala no está libre', 'en esta sala no están libres'),
   ].filter(Boolean).join(' ');
 }
 
-const selector = document.getElementById('disposicion');
+// Las opciones del selector salen de TIPOS_DE_SALA, agrupadas.
+const selector = document.getElementById('tipo-sala');
+const gruposDeSala = new Map();
+for (const [id, { nombre, grupo }] of Object.entries(TIPOS_DE_SALA)) {
+  if (!gruposDeSala.has(grupo)) {
+    const optgroup = document.createElement('optgroup');
+    optgroup.label = grupo;
+    gruposDeSala.set(grupo, optgroup);
+    selector.appendChild(optgroup);
+  }
+  gruposDeSala.get(grupo).appendChild(new Option(nombre, id));
+}
 selector.addEventListener('change', () => redibujar(selector.value));
 redibujar(selector.value);
 </script>
