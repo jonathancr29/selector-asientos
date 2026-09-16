@@ -20,7 +20,8 @@ const cargar = () => new Function(html.slice(inicio, fin) +
   ' muebles, mesas, conciliarSeleccion, geometriaMesa, celdasOcupadas, motivoNoCabe, buscarHueco,' +
   ' colocarCerca, girarMesa, cambiarLargo, alternarCabeceras, alternarUnLado, buscarSitioLibre,' +
   ' TIPOS_DE_SALA, primeraMesaQueNoCabe, redimensionarBanda, moverBanda, eliminarBanda, agregarBanda,' +
-  ' cambiarZonaBanda, planoDesdeSala };')();
+  ' cambiarZonaBanda, planoDesdeSala, alternarBloqueada, mapaDesdePlano, validarMapa, registrarMapa,' +
+  ' claveDeMapa, nombreDeArchivo, FORMATO_MAPA };')();
 
 const DISPOSICIONES = ['ninguno', 'izquierda', 'derecha', 'ambos'];
 const rango = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
@@ -515,5 +516,121 @@ test('planoDesdeSala conserva el alto de las zonas de mesas y regenera la misma 
   // Solo guarda los nombres puestos a mano: «Platea» si, «General» no.
   const { plano } = planoDe(api, 'solo-filas');
   assert.deepEqual(plano.bandas.map((b) => b.nombre), [undefined, 'Platea', undefined]);
+});
+
+// --- Bloqueos y mapas guardados ----------------------------------------------
+
+const estados = (api) => Object.fromEntries(api.butacas.map((b) => [b.id, b.estado]));
+
+test('las bloqueadas de la plantilla pasan a una lista que se puede editar butaca a butaca', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  assert.deepEqual(plano.bloqueadas, ['general-B11', 'general-B12']);
+  assert.ok(plano.bandas.every((b) => b.bloqueadasAlFinal === undefined));
+
+  let editado = api.alternarBloqueada(plano, 'luneta-A1');   // bloquea una de fila
+  editado = api.alternarBloqueada(editado, 'M1-N1');         // y un lugar de mesa
+  editado = api.alternarBloqueada(editado, 'general-B12');   // y desbloquea una de la plantilla
+  assert.deepEqual(plano.bloqueadas, ['general-B11', 'general-B12'], 'el plano original no cambia');
+  api.generarPlano('mixta-ambos', editado);
+  const e = estados(api);
+  assert.deepEqual([e['luneta-A1'], e['M1-N1'], e['general-B11'], e['general-B12']],
+    ['bloqueada', 'bloqueada', 'bloqueada', 'libre']);
+});
+
+test('un mapa guarda el diseño y las bloqueadas, pero no la ocupacion', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  let editado = api.alternarBloqueada(plano, 'luneta-A1');
+  editado = api.agregarBanda(editado, 'filas');
+  const sala = api.generarPlano('mixta-ambos', editado);
+  const ids = new Set(api.butacas.map((b) => b.id));
+  const mapa = api.mapaDesdePlano('Salón Jardín', 'mixta-ambos', editado, '2026-09-16T18:30:00Z', ids);
+
+  assert.equal(mapa.formato, api.FORMATO_MAPA);
+  assert.equal(mapa.version, 1);
+  assert.equal(mapa.pasillos, 'ambos');
+  const texto = JSON.stringify(mapa);
+  assert.ok(!texto.includes('ocupadas') && !texto.includes('filasDeMesas') && !texto.includes('bloqueadasAlFinal'), texto);
+  assert.deepEqual(mapa.bloqueadas.sort(), ['general-B11', 'general-B12', 'luneta-A1']);
+  assert.equal(mapa.mesas.length, 6);
+  assert.equal(sala.bandas.length, 5);
+
+  // Ida y vuelta por JSON: valida, se registra y genera la misma sala sin ocupadas.
+  const { mapa: leido, errores } = api.validarMapa(JSON.parse(texto));
+  assert.equal(errores, undefined);
+  const clave = api.registrarMapa(leido);
+  assert.equal(clave, api.claveDeMapa('Salón Jardín'));
+  api.generarPlano('mixta-ambos', editado);
+  const esperado = estados(api);
+  api.generarPlano(clave);
+  const obtenido = estados(api);
+  assert.deepEqual(Object.keys(obtenido).sort(), Object.keys(esperado).sort());
+  for (const [id, estado] of Object.entries(obtenido)) {
+    assert.equal(estado, esperado[id] === 'ocupada' ? 'libre' : esperado[id], id);
+  }
+});
+
+test('las bloqueadas de una banda o mesa eliminada no se guardan', () => {
+  const api = cargar();
+  const { plano, sala } = planoDe(api, 'mixta-ambos');
+  const sinGeneral = api.eliminarBanda(plano, sala, 'general');
+  api.generarPlano('mixta-ambos', sinGeneral);
+  const mapa = api.mapaDesdePlano('Sin general', 'mixta-ambos', sinGeneral, null, new Set(api.butacas.map((b) => b.id)));
+  assert.deepEqual(mapa.bloqueadas, []);
+});
+
+test('validarMapa rechaza archivos que no son mapas o traen datos no validos', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const bueno = JSON.parse(JSON.stringify(api.mapaDesdePlano('Bueno', 'mixta-ambos', plano, null)));
+  const con = (cambio) => { const m = JSON.parse(JSON.stringify(bueno)); cambio(m); return api.validarMapa(m).errores || []; };
+
+  assert.deepEqual(api.validarMapa(null).errores, ['el archivo no contiene un mapa']);
+  assert.deepEqual(api.validarMapa([1, 2]).errores, ['el archivo no contiene un mapa']);
+  assert.deepEqual(con((m) => { m.formato = 'otra-cosa'; }), ['no es un mapa de este selector de asientos']);
+  assert.deepEqual(con((m) => { m.version = 2; }), ['versión de mapa no compatible (2)']);
+  assert.ok(con((m) => { m.nombre = '   '; }).includes('el nombre debe tener entre 1 y 80 caracteres'));
+  assert.ok(con((m) => { m.pasillos = 'centro'; }).includes('pasillos desconocidos'));
+  assert.ok(con((m) => { m.bandas.shift(); }).includes('la primera banda debe ser el escenario'));
+  assert.ok(con((m) => { m.bandas[1].filas = 30; }).includes('banda 2: número de filas fuera de rango'));
+  assert.ok(con((m) => { m.bandas[1].zona = 'vip'; }).includes('banda 2: zona desconocida'));
+  assert.ok(con((m) => { m.bandas[2].id = 'luneta'; }).includes('banda 3: id no válido o repetido'));
+  assert.ok(con((m) => { m.mesas[1].id = 'M1'; }).includes('mesa 2: id no válido o repetido'));
+  assert.ok(con((m) => { m.mesas[0].giro = 45; }).includes('M1: giro no válido'));
+  assert.ok(con((m) => { m.mesas[0].cabeceras = 'si'; }).includes('M1: cabeceras y unLado deben ser true o false'));
+  assert.ok(con((m) => { m.bloqueadas = 'todas'; }).includes('la lista de butacas bloqueadas no es válida'));
+  // Estructura valida pero una mesa encima de otra: se genera y se comprueba.
+  assert.deepEqual(con((m) => { m.mesas[1].x = m.mesas[0].x; m.mesas[1].y = m.mesas[0].y; }), ['Mesa 1 choca con Mesa 2']);
+  assert.deepEqual(con((m) => { m.mesas[0].y = 2; }), ['Mesa 1 choca con la fila A de Luneta']);
+});
+
+test('validarMapa descarta campos desconocidos y no deja reutilizar ids', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const dato = JSON.parse(JSON.stringify(api.mapaDesdePlano('Limpio', 'mixta-ambos', api.agregarBanda(plano, 'mesas'), null)));
+  dato.script = '<script>alert(1)</script>';
+  dato.mesas[0].color = 'rojo';
+  dato.bandas[1].ocupadas = { A: [1] };
+  dato.siguiente = 2;          // por debajo de M6
+  dato.siguienteBanda = 1;     // por debajo de banda1
+  dato.bloqueadas = ['luneta-A1', 'luneta-A1'];
+  const { mapa } = api.validarMapa(dato);
+  assert.equal(mapa.script, undefined);
+  assert.equal(mapa.mesas[0].color, undefined);
+  assert.equal(mapa.bandas[1].ocupadas, undefined);
+  assert.equal(mapa.siguiente, 7);
+  assert.equal(mapa.siguienteBanda, 2);
+  assert.deepEqual(mapa.bloqueadas, ['luneta-A1']);
+  // Al editar un mapa registrado, los contadores parten de lo guardado.
+  const clave = api.registrarMapa({ ...mapa, siguiente: 20 });
+  const sala = api.generarPlano(clave);
+  assert.equal(api.planoDesdeSala(clave, sala).siguiente, 20);
+});
+
+test('nombreDeArchivo quita tildes y simbolos', () => {
+  const { nombreDeArchivo } = cargar();
+  assert.equal(nombreDeArchivo('Salón Jardín, boda'), 'salon-jardin-boda.json');
+  assert.equal(nombreDeArchivo('¡¡!!'), 'mapa.json');
 });
 

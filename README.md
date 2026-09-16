@@ -182,6 +182,7 @@ atajo de teclado sobre la mesa enfocada:
 | Eliminar | Eliminar | Supr |
 | Agregar una mesa nueva | Lados / Cruz / Un lado | — |
 | Volver a la sala de su tipo | Restablecer sala | — |
+| Bloquear o desbloquear butacas | Bloquear butacas, y clic en la butaca | Enter o Espacio |
 
 Con el ratón, una mesa se arrastra y una sombra marca el destino encajado en la rejilla: verde si
 cabe, roja y con contorno discontinuo si no. Esc cancela un arrastre.
@@ -218,12 +219,65 @@ Cada tipo de sala guarda su propio plano: `{ bandas: […], mesas: [{ id, x, y, 
 unLado, giro }, …], siguiente, siguienteBanda }`. `siguiente` y `siguienteBanda` solo crecen, para
 que una mesa o banda nueva nunca reutilice el id de una eliminada. «Restablecer sala» devuelve el
 tipo a sus bandas y mesas originales.
-Los planos viven en memoria: en una aplicación real se guardarían con el recinto, y el servidor
-volvería a validarlos.
+Mientras no se guardan, los planos viven en memoria y se pierden al recargar. Para conservarlos,
+ver *Mapas guardados*.
+
+### Butacas bloqueadas
+
+Con **Bloquear butacas** activado, cada clic (o Enter) sobre una butaca la bloquea o desbloquea: por
+ejemplo, butacas sin visibilidad. Vale para butacas de fila y lugares de mesa; las ocupadas no se
+pueden bloquear. Si una butaca elegida queda bloqueada, se suelta con aviso. Las bloqueadas son
+parte del diseño del recinto y se guardan con el mapa.
+
+### Mapas guardados
+
+El diseño se guarda **sin base de datos**, como JSON, de dos formas:
+
+- **En el navegador:** escribe un nombre y pulsa **Guardar**. El mapa aparece en el selector **Tipo
+  de sala**, en el grupo **Mis mapas**, y sigue ahí al recargar. Si el nombre ya existe, se
+  pregunta antes de sobrescribir. **Eliminar mapa** lo borra.
+- **Como archivo:** **Exportar JSON** descarga el mapa (`salon-jardin-boda.json`) y **Importar JSON**
+  lo vuelve a cargar y lo guarda en el navegador. Sirve para copias de seguridad, para pasar un mapa
+  a otro equipo o para versionarlo en git.
+
+Un mapa guarda el **diseño**, no la venta: nombre, pasillos, bandas, mesas con su forma y posición,
+butacas bloqueadas y los contadores de ids. No guarda la ocupación ni la selección.
+
+```json
+{
+  "formato": "selector-asientos/mapa",
+  "version": 1,
+  "nombre": "Salón Jardín, boda",
+  "guardado": "2026-09-16T18:30:00.000Z",
+  "pasillos": "ambos",
+  "bandas": [
+    { "id": "escenario", "tipo": "escenario" },
+    { "id": "luneta", "tipo": "filas", "zona": "luneta", "filas": 3 },
+    { "id": "mesas", "tipo": "mesas", "alto": 13 }
+  ],
+  "mesas": [
+    { "id": "M1", "x": 2, "y": 7, "largo": 2, "cabeceras": false, "unLado": false, "giro": 0 }
+  ],
+  "bloqueadas": ["luneta-A1", "M1-N1"],
+  "siguiente": 2,
+  "siguienteBanda": 1
+}
+```
+
+**Al importar, el archivo no se da por bueno.** Se comprueban el formato y la versión, cada banda y
+cada mesa (ids, rangos, giro), se descartan los campos desconocidos y se genera el plano para
+verificar que todas las mesas quepan. Si algo falla, no se carga y se dice qué (*«Mesa 1 choca con
+Mesa 2»*). Los mapas guardados en el navegador que dejen de validar no se cargan y se avisa de
+cuáles.
+
+`localStorage` es de cada navegador y de cada equipo, y se pierde si se borran los datos de
+navegación: para conservar un mapa, expórtalo. Algunos navegadores no permiten guardar en páginas
+abiertas de ciertas formas (por ejemplo, vistas previas); en ese caso la página lo avisa y se puede
+seguir usando **Exportar JSON**.
 
 ### Posibles mejoras
 
-- **Guardar los planos** en un servidor, en lugar de en memoria.
+- **Guardar los mapas** en un servidor, en lugar de en el navegador.
 - **Desplazar el plano** solo al arrastrar una mesa hasta el borde con zoom.
 
 ## Pruebas

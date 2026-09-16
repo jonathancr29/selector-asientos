@@ -4,9 +4,38 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Mesas configurables y tipos de sala
+## Sin publicar — Mapas guardados y butacas bloqueadas
 
-Rama `claude/mesas-configurables`.
+Rama `claude/mapas-guardados`.
+
+### Añadido
+
+- **Mapas guardados con nombre, sin base de datos.** En el editor: campo «Nombre del mapa» con
+  **Guardar** (en el navegador, con `localStorage`) y **Eliminar mapa**. Los mapas aparecen en el
+  selector «Tipo de sala», en el grupo **Mis mapas**, y siguen ahí al recargar. Si el nombre existe,
+  se pregunta antes de sobrescribir.
+- **Exportar e importar JSON.** Formato `selector-asientos/mapa`, versión 1: nombre, pasillos,
+  bandas, mesas, butacas bloqueadas y contadores de ids. Sin ocupación ni selección.
+- **Validación de mapas** al importar y al cargar: formato, versión, cada banda y mesa, campos
+  desconocidos descartados y comprobación de que todas las mesas quepan. Los mapas guardados que no
+  validan no se cargan y se avisa de cuáles.
+- **Herramienta «Bloquear butacas»** en el editor: clic o Enter sobre una butaca de fila o lugar de
+  mesa para bloquearla o desbloquearla (por ejemplo, sin visibilidad). Las ocupadas no se bloquean.
+- Pruebas de bloqueos, mapas (ida y vuelta por JSON, sin ocupación), validación, contadores y nombre
+  de archivo (37 en total).
+
+### Cambiado
+
+- **Las bloqueadas son una lista de ids** en el plano; `bloqueadasAlFinal` de las plantillas solo
+  se usa como valor inicial.
+- **La ocupación de ejemplo de las mesas** pasa de una constante global a cada plantilla
+  (`mesasOcupadas`), para que un mapa guardado no la herede.
+- **Si al regenerar una butaca elegida deja de estar libre**, se suelta con aviso.
+
+## 2026-09-16 — PR #3: mesas configurables y tipos de sala
+
+[PR #3](https://github.com/jonathancr29/selector-asientos/pull/3), fusionado en `main` con el
+commit `8438432`.
 
 ### Añadido
 
