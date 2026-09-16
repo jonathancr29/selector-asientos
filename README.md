@@ -22,8 +22,9 @@ bien en una maqueta y se rompe en cuanto la sala crece. Aquí el plano es **un �
 
 - **Escala con el ancho disponible.** Una sala de 94 lugares entra completa en una pantalla de
   375 px sin desbordarse ni cortar butacas.
-- **Zoom y desplazamiento** moviendo el `viewBox`: rueda, arrastre y botones. Un arrastre que
-  empieza sobre una butaca mueve el plano y no la selecciona.
+- **Zoom y desplazamiento** moviendo el `viewBox`: rueda, pellizco, arrastre y botones. Un
+  arrastre que empieza sobre una butaca mueve el plano y no la selecciona, y el plano no se puede
+  sacar de su encuadre. En el tope del zoom, la rueda vuelve a desplazar la página.
 - **El trazo se declara una vez** con `<symbol>` y se instancia con `<use>`. Una sala de 94 butacas
   tiene un `<path>`, no 94.
 - **Las áreas de clic son contiguas y no se solapan**: cada butaca es sensible en su celda entera,
@@ -34,6 +35,11 @@ bien en una maqueta y se rompe en cuanto la sala crece. Aquí el plano es **un �
 Cada butaca es un `checkbox` con su etiqueta —*«Fila A, butaca 3»*, *«Mesa 2, lugar 1, ocupada»*—.
 Se recorre el plano con las flechas, que se mueven por coordenadas, y se elige con Enter o Espacio.
 El `tabindex` es móvil: hay un solo alto de tabulación para todo el plano, no uno por butaca.
+El total y los avisos están en regiones vivas, así que un lector de pantalla los anuncia al cambiar.
+
+El estado no depende solo del color: la butaca seleccionada lleva una palomita, la ocupada un aspa
+y la bloqueada una raya. Todos los estados contrastan al menos 3:1 con el fondo del plano, y la
+leyenda reutiliza los mismos `<symbol>` que el dibujo.
 
 ## Los datos
 
@@ -50,6 +56,9 @@ identificadores sueltos.
 
 **El SVG se genera al mostrar; nunca se almacena un SVG.** Con datos puedes consultar ocupación,
 precio y disponibilidad. Con un blob de SVG no puedes hacer un `WHERE`.
+
+La selección también es un dato: un conjunto de identificadores. El DOM la refleja, pero nunca se
+lee de vuelta del DOM.
 
 ## La rejilla de la sala
 
@@ -73,8 +82,45 @@ del plano, y eso es lo que las hace comparables.
 
 Al cambiar de disposición la selección se conserva **por identificador, no por posición**: la
 identidad es `fila` + `numero` y es estable; solo cambia la columna. Lo que no sobrevive es una
-butaca que la nueva disposición ya no tiene, porque el pasillo se llevó su lugar. Esas se sueltan
-con un aviso que las nombra, en vez de desaparecer en silencio.
+butaca que la nueva disposición ya no tiene, porque el pasillo se llevó su lugar, o una que sigue
+existiendo pero ahí no está libre. Esas se sueltan con un aviso que las nombra, en vez de
+desaparecer en silencio.
+
+## Modo editor
+
+Dos modos, con los botones de arriba del plano:
+
+- **Previsualizar**: el plano como lo ve quien compra. Se eligen butacas.
+- **Editar plano**: se colocan las mesas. Las butacas no se eligen.
+
+La sala se trata como una tabla de celdas. Cada mesa ocupa **6 celdas (2 × 3)**: dos lugares
+arriba, la mesa en las dos de en medio y dos lugares abajo. Al arrastrarla, una sombra marca el
+destino encajado en la rejilla: verde si cabe, roja y con contorno discontinuo si no. Al soltar en
+un sitio que no vale, la mesa se queda donde estaba y un aviso dice por qué (*«cae sobre un
+pasillo»*, *«choca con Mesa 3»*, *«choca con la fila G»*).
+
+Una mesa cabe si sus 6 celdas están dentro de la sala, libres y fuera de los pasillos: sigue siendo
+imposible partir una mesa con un pasillo. Con teclado, Tab lleva a las mesas y las flechas mueven
+la mesa al **siguiente hueco libre** en esa dirección, saltando pasillos y otras mesas. Esc cancela
+un arrastre.
+
+La posición es un dato (`{ M1: { x, y }, … }`) y el plano se regenera desde ella. Los lugares se
+llaman `M1-1`, `M1-2`… por la mesa, no por la posición, así que mover una mesa conserva la
+selección. Cada disposición de pasillos guarda sus propias posiciones, y «Restablecer mesas»
+devuelve las de esa disposición a su sitio automático. Las posiciones viven en memoria: en una
+aplicación real se guardarían con el plano del recinto, y el servidor volvería a validarlas.
+
+## Pruebas
+
+```bash
+node --test pruebas.mjs
+```
+
+Cubren la rejilla, el reparto de mesas, el aforo de la tabla anterior, la conciliación de la
+selección al cambiar de disposición y las reglas del editor: dónde cabe una mesa y cómo busca
+hueco el teclado. No hay copia del código: `pruebas.mjs` lee `index.html` y
+evalúa la parte del script anterior a la marca *«Fin de la parte sin DOM»*, así que el proyecto
+sigue siendo un solo archivo. Requiere Node 18 o posterior.
 
 ## Qué no incluye
 
