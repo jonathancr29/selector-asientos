@@ -47,6 +47,10 @@
   .aviso { margin: 8px 0 0; font-size: 12px; color: #fbbf24; }
   /* Sin display:none: una region viva oculta asi no siempre se anuncia al llenarse. */
   .aviso:empty { margin: 0; }
+  .estado { margin: 8px 0 0; font-size: 12px; color: #cbd5e1; }
+  .estado:empty { margin: 0; }
+  .modos { display: inline-flex; gap: 4px; }
+  .herramientas button[aria-pressed="true"] { background: #1d4ed8; border-color: #3b82f6; color: #fff; }
 
   /* --- El plano ---
      Un solo <svg> con viewBox. De ahi salen tres cosas que una rejilla de <div>
@@ -77,6 +81,24 @@
   .butaca:not(.elegida) .marca-elegida { display: none; }
   .butaca:focus { outline: none; }
   .butaca:focus-visible .toque { fill: none; stroke: #93c5fd; stroke-width: 1.2; }
+
+  /* --- Modo editor ---
+     Las butacas no responden: el clic atraviesa hasta la pieza o el fondo. */
+  #plano.editando .butaca { pointer-events: none; }
+  .pieza { fill: transparent; stroke: #93c5fd; stroke-width: .8; stroke-dasharray: 2 1.5; cursor: grab; }
+  .pieza:hover { fill: rgba(147, 197, 253, .1); }
+  .pieza:focus { outline: none; }
+  .pieza:focus-visible { stroke-dasharray: none; stroke-width: 1.4; }
+  #plano.moviendo-mesa, #plano.moviendo-mesa .pieza { cursor: grabbing; }
+  .levantada { opacity: .3; }
+  /* La sombra marca el destino. Verde si cabe; si no, roja y con contorno
+     discontinuo, para no depender solo del color. */
+  .sombra { color: #22c55e; fill: currentColor; pointer-events: none; }
+  .sombra.invalida { color: #ef4444; }
+  .sombra .contorno { fill-opacity: .15; stroke: currentColor; stroke-width: 1; }
+  .sombra.invalida .contorno { stroke-dasharray: 3 2; }
+  .sombra .tablero { fill: none; stroke: currentColor; stroke-width: .8; }
+  .oculta { display: none; }
 
   .mueble { fill: #26262f; stroke: #3a3a46; stroke-width: .6; }
   .rotulo { fill: #94a3b8; font-size: 4.2px; text-anchor: middle; dominant-baseline: middle; }
@@ -112,6 +134,11 @@
   </ul>
 
   <div class="herramientas">
+    <span class="modos" role="group" aria-label="Modo">
+      <button type="button" id="modo-vista" aria-pressed="true">Previsualizar</button>
+      <button type="button" id="modo-editor" aria-pressed="false">Editar plano</button>
+    </span>
+    <span class="separador" aria-hidden="true"></span>
     <button type="button" id="acercar" aria-label="Acercar">+</button>
     <button type="button" id="alejar" aria-label="Alejar">−</button>
     <button type="button" id="ajustar">Ajustar</button>
@@ -124,8 +151,9 @@
         <option value="ninguno">Sin pasillos</option>
       </select>
     </label>
+    <button type="button" id="restablecer" hidden>Restablecer mesas</button>
   </div>
-  <p class="pista">Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer</p>
+  <p class="pista" id="pista">Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer</p>
   <p class="aforo" id="aforo"></p>
 
   <div class="lienzo">
@@ -144,10 +172,12 @@
       </defs>
       <g id="muebles"></g>
       <g id="butacas"></g>
+      <g id="piezas"></g>   <!-- solo en modo editor: una zona movible por mesa -->
     </svg>
   </div>
 
   <p class="aviso" id="aviso" role="status"></p>
+  <p class="estado" id="estado" role="status"></p>
 
   <p class="resumen" aria-live="polite">
     Seleccionadas: <strong id="cuenta">0</strong> · Total <strong id="total">$0.00</strong>
@@ -269,11 +299,17 @@ function agregarFilas({ etiquetas, columnas, y, zona, ocupadas = {} }) {
   });
 }
 
-// Una mesa: dos lugares arriba, dos abajo, y la mesa dibujada en medio.
-// El grupo es una identidad real, no un hueco visual.
+// Una mesa ocupa 2 x 3 celdas: dos lugares arriba, la mesa en las dos celdas
+// de en medio y dos lugares abajo. (x, y) es su esquina superior izquierda.
+// El grupo es una identidad real, no un hueco visual: los lugares se llaman
+// M2-1, M2-2... por la mesa, no por la posicion, asi que moverla no los renombra.
+const MESA = { ancho: 2, alto: 3, lugares: [[0, 0], [1, 0], [0, 2], [1, 2]] };
+const mesas = [];     // {id, nombre, x, y}: las piezas que el editor puede mover
+
 function agregarMesa({ id, nombre, x, y, ocupadas = [] }) {
-  muebles.push({ tipo: 'mesa', x, y: y + 1, w: 2, h: 1, texto: nombre });
-  [[0, 0], [1, 0], [0, 2], [1, 2]].forEach(([dx, dy], i) => {
+  mesas.push({ id, nombre, x, y });
+  muebles.push({ tipo: 'mesa', mesa: id, x, y: y + 1, w: 2, h: 1, texto: nombre });
+  MESA.lugares.forEach(([dx, dy], i) => {
     const numero = i + 1;
     butacas.push({
       id: id + '-' + numero, fila: id, numero, x: x + dx, y: y + dy,
@@ -283,9 +319,24 @@ function agregarMesa({ id, nombre, x, y, ocupadas = [] }) {
   });
 }
 
-function generarPlano(disposicion) {
+const MESAS_OCUPADAS = { M2: [3, 4] };
+
+// Posicion automatica: tres mesas por banda, repartidas por los bloques.
+function mesasAutomaticas(sala) {
+  const lista = [];
+  repartirMesas(sala, 3).forEach((x, i) => {
+    lista.push({ id: 'M' + (i + 1), x, y: 7 });
+    lista.push({ id: 'M' + (i + 4), x, y: 11 });
+  });
+  return lista;
+}
+
+// 'posiciones' ({ M1: {x, y}, ... }) es lo que guarda el editor. Una mesa sin
+// posicion guardada va a su sitio automatico.
+function generarPlano(disposicion, posiciones = {}) {
   butacas.length = 0;
   muebles.length = 0;
+  mesas.length = 0;
   const sala = rejillaDeSala({ ancho: ANCHO_SALA, pasillos: disposicion });
 
   // El escenario abarca la rejilla completa, no un tramo suelto.
@@ -294,11 +345,11 @@ function generarPlano(disposicion) {
   agregarFilas({ etiquetas: ['A', 'B', 'C'], columnas: sala.columnas, y: 2, zona: 'luneta',
                  ocupadas: { B: [5, 6], C: [11] } });
 
-  repartirMesas(sala, 3).forEach((x, i) => {
-    agregarMesa({ id: 'M' + (i + 1), nombre: 'Mesa ' + (i + 1), x, y: 7,
-                  ocupadas: i === 1 ? [3, 4] : [] });
-    agregarMesa({ id: 'M' + (i + 4), nombre: 'Mesa ' + (i + 4), x, y: 11 });
-  });
+  for (const auto of mesasAutomaticas(sala)) {
+    const { x, y } = posiciones[auto.id] || auto;
+    agregarMesa({ id: auto.id, nombre: 'Mesa ' + auto.id.slice(1), x, y,
+                  ocupadas: MESAS_OCUPADAS[auto.id] });
+  }
 
   agregarFilas({ etiquetas: ['G', 'H'], columnas: sala.columnas, y: 15, zona: 'general',
                  ocupadas: { G: [1, 2, 3] } });
@@ -307,7 +358,62 @@ function generarPlano(disposicion) {
   butacas.filter((b) => b.fila === 'H' && b.numero > ultimas)
          .forEach((b) => { b.estado = 'bloqueada'; });
 
+  // Filas de la rejilla donde puede haber mesas: de la primera a la ultima fila de butacas.
+  const ysDeFila = butacas.filter((b) => !b.grupo).map((b) => b.y);
+  sala.filas = { min: Math.min(...ysDeFila), max: Math.max(...ysDeFila) };
   return sala;
+}
+
+// ---------------------------------------------------------------------------
+// Editor: mover mesas por la rejilla.
+//
+// La sala se trata como una tabla de celdas. Cada celda esta libre o la ocupa
+// algo: una butaca de fila, una mesa (sus 6 celdas) o un pasillo. Una mesa cabe
+// en (x, y) si sus 6 celdas estan dentro de la sala y libres.
+// ---------------------------------------------------------------------------
+const celda = (x, y) => x + ',' + y;
+
+// Celda -> quien la ocupa, en palabras para el aviso. 'excluir' es la mesa que
+// se esta moviendo: sus propias celdas no le estorban.
+function celdasOcupadas(excluir) {
+  const ocupadas = new Map();
+  for (const b of butacas) {
+    if (!b.grupo) ocupadas.set(celda(b.x, b.y), 'la fila ' + b.fila);
+  }
+  for (const m of mesas) {
+    if (m.id === excluir) continue;
+    for (let dy = 0; dy < MESA.alto; dy++) {
+      for (let dx = 0; dx < MESA.ancho; dx++) ocupadas.set(celda(m.x + dx, m.y + dy), m.nombre);
+    }
+  }
+  return ocupadas;
+}
+
+// Devuelve null si la mesa cabe, o el motivo por el que no.
+function motivoNoCabe(sala, ocupadas, x, y) {
+  for (let dy = 0; dy < MESA.alto; dy++) {
+    for (let dx = 0; dx < MESA.ancho; dx++) {
+      const cx = x + dx, cy = y + dy;
+      if (cx < 1 || cx > sala.ancho || cy < sala.filas.min || cy > sala.filas.max) {
+        return 'se sale de la sala';
+      }
+      // La regla de siempre: una mesa nunca queda partida por un pasillo.
+      if (!sala.columnas.includes(cx)) return 'cae sobre un pasillo';
+      const quien = ocupadas.get(celda(cx, cy));
+      if (quien) return 'choca con ' + quien;
+    }
+  }
+  return null;
+}
+
+// Para el teclado: el primer sitio donde cabe avanzando en (dx, dy). Salta por
+// encima de pasillos y otras mesas, que con el raton se cruzan sin mas.
+function buscarHueco(sala, ocupadas, x, y, dx, dy) {
+  for (let paso = 1; ; paso++) {
+    const nx = x + dx * paso, ny = y + dy * paso;
+    if (nx < 1 || nx > sala.ancho || ny < sala.filas.min || ny > sala.filas.max) return null;
+    if (!motivoNoCabe(sala, ocupadas, nx, ny)) return { x: nx, y: ny };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -340,6 +446,7 @@ function conciliarSeleccion(ids, lista) {
 const svg = document.getElementById('plano');
 const capaMuebles = document.getElementById('muebles');
 const capaButacas = document.getElementById('butacas');
+const capaPiezas = document.getElementById('piezas');
 const formatoDinero = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 const dinero = (centavos) => formatoDinero.format(centavos / 100);
 const porId = new Map();   // id -> butaca, para no recorrer la lista en cada interaccion
@@ -366,10 +473,11 @@ function dibujarMuebles() {
       capaMuebles.appendChild(texto('escenario-texto',
         (m.x + m.w / 2) * PASO, (m.y + m.h / 2) * PASO, 'ESCENARIO'));
     } else if (m.tipo === 'mesa') {
-      capaMuebles.appendChild(nodo('rect', { class: 'mueble', x: m.x * PASO + 1, y: m.y * PASO + 1,
-        width: m.w * PASO - 2, height: m.h * PASO - 2, rx: 4 }));
-      capaMuebles.appendChild(texto('rotulo',
-        (m.x + m.w / 2) * PASO, (m.y + m.h / 2) * PASO, m.texto));
+      const rect = nodo('rect', { class: 'mueble', x: m.x * PASO + 1, y: m.y * PASO + 1,
+        width: m.w * PASO - 2, height: m.h * PASO - 2, rx: 4 });
+      const rotulo = texto('rotulo', (m.x + m.w / 2) * PASO, (m.y + m.h / 2) * PASO, m.texto);
+      rect.dataset.mesa = rotulo.dataset.mesa = m.mesa;
+      capaMuebles.append(rect, rotulo);
     } else if (m.tipo === 'rotulo') {
       capaMuebles.appendChild(texto('rotulo', (m.x + 0.5) * PASO, (m.y + 0.5) * PASO, m.texto));
     }
@@ -386,10 +494,12 @@ function dibujarButacas() {
       role: 'checkbox',
       'aria-checked': String(elegida),
       'aria-label': etiquetaDe(b) + (seleccionable ? '' : ', ' + b.estado),
-      tabindex: indice === 0 ? '0' : '-1',   // tabindex movil: un solo punto de tabulacion
+      // tabindex movil: un solo punto de tabulacion. En el editor, ninguno: se tabula por mesas.
+      tabindex: modo === 'vista' && indice === 0 ? '0' : '-1',
     });
     if (!seleccionable) g.setAttribute('aria-disabled', 'true');
     g.dataset.id = b.id;
+    if (b.grupo) g.dataset.mesa = b.grupo.id;
     // El area sensible es la celda entera: contigua con sus vecinas y sin solaparlas.
     g.appendChild(nodo('rect', { class: 'toque', x: b.x * PASO, y: b.y * PASO,
       width: PASO, height: PASO, rx: 2 }));
@@ -405,6 +515,33 @@ function dibujarButacas() {
     b.nodo = g;
     porId.set(b.id, b);
   });
+}
+
+// Solo en el editor: una zona por mesa que cubre sus 6 celdas. Es lo que se
+// agarra con el raton y lo que recibe el foco con el teclado.
+const etiquetaMesa = (m) => m.nombre + ', columna ' + m.x + ', fila ' + m.y;
+
+function dibujarPiezas() {
+  if (modo !== 'editor') return;
+  mesas.forEach((m, indice) => {
+    const pieza = nodo('rect', {
+      class: 'pieza', x: m.x * PASO + 0.5, y: m.y * PASO + 0.5,
+      width: MESA.ancho * PASO - 1, height: MESA.alto * PASO - 1, rx: 3,
+      role: 'button', 'aria-label': etiquetaMesa(m), 'aria-describedby': 'pista',
+      tabindex: indice === 0 ? '0' : '-1',
+    });
+    pieza.dataset.mesa = m.id;
+    capaPiezas.appendChild(pieza);
+  });
+}
+
+function dibujarTodo() {
+  capaMuebles.textContent = '';
+  capaButacas.textContent = '';
+  capaPiezas.textContent = '';
+  dibujarMuebles();
+  dibujarButacas();
+  dibujarPiezas();
 }
 
 // ---------------------------------------------------------------------------
@@ -486,6 +623,13 @@ svg.addEventListener('pointerdown', (e) => {
   punteros.set(e.pointerId, { x: e.clientX, y: e.clientY });
   svg.setPointerCapture(e.pointerId);
   if (punteros.size === 1) {
+    // En el editor, agarrar una mesa la mueve; agarrar el fondo mueve el plano.
+    if (arrastreMesa) terminarArrastreMesa(false);   // nunca dos arrastres de mesa a la vez
+    const pieza = modo === 'editor' && e.target.closest('.pieza');
+    if (pieza) {
+      arrastreMesa = iniciarArrastreMesa(pieza, e);
+      return;
+    }
     arrastre = {
       x: e.clientX, y: e.clientY, movido: 0,
       // La butaca se anota AQUI, no en pointerup: setPointerCapture retargetea al
@@ -493,11 +637,19 @@ svg.addEventListener('pointerdown', (e) => {
       // e.target ya es el <svg> y closest('.butaca') devuelve null.
       butaca: e.target.closest('.butaca'),
     };
-  } else if (arrastre) {
-    arrastre.movido = Infinity;   // un segundo dedo convierte el toque en gesto
+  } else {
+    // Un segundo dedo convierte el toque en gesto de plano: si se movia una
+    // mesa, se cancela y el pellizco sigue normal.
+    if (arrastreMesa) terminarArrastreMesa(false);
+    if (arrastre) arrastre.movido = Infinity;
+    else arrastre = { x: e.clientX, y: e.clientY, movido: Infinity, butaca: null };
   }
 });
 svg.addEventListener('pointermove', (e) => {
+  if (arrastreMesa) {
+    if (e.pointerId === arrastreMesa.pointerId) moverSombra(e);
+    return;
+  }
   if (!arrastre || !punteros.has(e.pointerId)) return;
   // Incremental: se compara el centro antes y despues de ESTE movimiento. Asi
   // poner o levantar un dedo no hace saltar el plano.
@@ -522,6 +674,10 @@ svg.addEventListener('pointermove', (e) => {
 function soltarPuntero(e, cancelado) {
   if (!punteros.delete(e.pointerId)) return;
   if (svg.hasPointerCapture(e.pointerId)) svg.releasePointerCapture(e.pointerId);
+  if (arrastreMesa) {
+    terminarArrastreMesa(!cancelado);
+    return;
+  }
   if (punteros.size) return;   // queda un dedo: el gesto sigue
   svg.classList.remove('arrastrando');
   // Un arrastre no debe contar como clic sobre la butaca que quedo debajo.
@@ -544,6 +700,7 @@ document.getElementById('ajustar').addEventListener('click', () => {
 const porNodo = (elemento) => porId.get(elemento.dataset.id);
 
 function alternar(elemento) {
+  if (modo !== 'vista') return;   // en el editor no se elige, se coloca
   const b = elemento && porNodo(elemento);
   if (!b || b.estado !== 'libre') return;
   const elegida = !elegidas.delete(b.id);
@@ -569,34 +726,51 @@ function moverFoco(desde, dx, dy) {
   destino.nodo.focus();   // el tabindex y el encuadre los ajusta 'focusin'
 }
 
-// Desplaza el viewBox lo justo para que la celda de la butaca quede dentro,
-// con media celda de margen. Sin esto, con zoom, el foco podia irse fuera de vista.
-function asegurarVisible(b) {
+// Desplaza el viewBox lo justo para que la caja (en celdas) quede dentro, con
+// media celda de margen. Sin esto, con zoom, el foco podia irse fuera de vista.
+function asegurarVisible({ x: cx, y: cy, w = 1, h = 1 }) {
   const margen = PASO / 2;
-  const x = b.x * PASO, y = b.y * PASO;
+  const x = cx * PASO, y = cy * PASO, ancho = w * PASO, alto = h * PASO;
   if (x - margen < vista.x) vista.x = x - margen;
-  else if (x + PASO + margen > vista.x + vista.w) vista.x = x + PASO + margen - vista.w;
+  else if (x + ancho + margen > vista.x + vista.w) vista.x = x + ancho + margen - vista.w;
   if (y - margen < vista.y) vista.y = y - margen;
-  else if (y + PASO + margen > vista.y + vista.h) vista.y = y + PASO + margen - vista.h;
+  else if (y + alto + margen > vista.y + vista.h) vista.y = y + alto + margen - vista.h;
   aplicarVista();
 }
 
-// El foco puede llegar por flechas o por clic: en ambos casos la butaca
-// enfocada pasa a ser el unico punto de tabulacion del plano.
+// El foco puede llegar por flechas o por clic: en ambos casos el elemento
+// enfocado pasa a ser el unico punto de tabulacion de su capa (butacas en la
+// previsualizacion, mesas en el editor).
 svg.addEventListener('focusin', (e) => {
-  const elemento = e.target.closest('.butaca');
+  const elemento = e.target.closest('.butaca, .pieza');
   if (!elemento) return;
-  for (const n of capaButacas.querySelectorAll('.butaca[tabindex="0"]')) {
+  for (const n of elemento.parentNode.querySelectorAll('[tabindex="0"]')) {
     if (n !== elemento) n.setAttribute('tabindex', '-1');
   }
   elemento.setAttribute('tabindex', '0');
   // Durante un clic no se reencuadra: moveria el plano bajo el puntero y el
   // arrastre, que parte de la vista anterior, lo haria saltar.
-  const b = porNodo(elemento);
-  if (b && !arrastre) asegurarVisible(b);
+  if (arrastre || arrastreMesa) return;
+  const m = elemento.dataset.mesa && elemento.classList.contains('pieza') && mesaPorId(elemento.dataset.mesa);
+  const caja = m ? { x: m.x, y: m.y, w: MESA.ancho, h: MESA.alto } : porNodo(elemento);
+  if (caja) asegurarVisible(caja);
 });
 
 svg.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && arrastreMesa) {
+    e.preventDefault();
+    terminarArrastreMesa(false);
+    anunciar('Movimiento cancelado.');
+    return;
+  }
+  const pieza = e.target.closest('.pieza');
+  if (pieza) {
+    const flecha = FLECHAS[e.key];
+    if (!flecha) return;
+    e.preventDefault();
+    moverMesaConTeclado(pieza.dataset.mesa, flecha);
+    return;
+  }
   const elemento = e.target.closest('.butaca');
   if (!elemento) return;
   if (e.key === 'Enter' || e.key === ' ') {
@@ -604,11 +778,159 @@ svg.addEventListener('keydown', (e) => {
     alternar(elemento);
     return;
   }
-  const flechas = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
-  if (flechas[e.key]) {
+  const flecha = FLECHAS[e.key];
+  if (flecha) {
     e.preventDefault();
-    moverFoco(elemento, flechas[e.key][0], flechas[e.key][1]);
+    moverFoco(elemento, flecha.dx, flecha.dy);
   }
+});
+
+const FLECHAS = {
+  ArrowLeft:  { dx: -1, dy: 0, hacia: 'la izquierda' },
+  ArrowRight: { dx: 1,  dy: 0, hacia: 'la derecha' },
+  ArrowUp:    { dx: 0, dy: -1, hacia: 'arriba' },
+  ArrowDown:  { dx: 0, dy: 1,  hacia: 'abajo' },
+};
+
+// ---------------------------------------------------------------------------
+// Modo editor: arrastrar y soltar mesas, encajadas en la rejilla.
+// ---------------------------------------------------------------------------
+let modo = 'vista';        // 'vista' (previsualizar, como quien compra) o 'editor'
+let arrastreMesa = null;
+let disposicionActual, salaActual;
+// Posiciones guardadas por disposicion: { ambos: { M1: {x, y}, ... } }. Cada
+// disposicion tiene su propio plano; mover mesas en una no toca las otras.
+const posiciones = {};
+
+const mesaPorId = (id) => mesas.find((m) => m.id === id);
+const anunciar = (mensaje) => { document.getElementById('estado').textContent = mensaje; };
+
+// Sombra del destino: contorno de 6 celdas, mesa y 4 lugares. Se crea una vez
+// y se desplaza con transform.
+const sombra = nodo('g', { class: 'sombra oculta', 'aria-hidden': 'true' });
+sombra.appendChild(nodo('rect', { class: 'contorno', x: 0.5, y: 0.5,
+  width: MESA.ancho * PASO - 1, height: MESA.alto * PASO - 1, rx: 3 }));
+sombra.appendChild(nodo('rect', { class: 'tablero', x: 1, y: PASO + 1,
+  width: MESA.ancho * PASO - 2, height: PASO - 2, rx: 4 }));
+for (const [dx, dy] of MESA.lugares) {
+  sombra.appendChild(nodo('use', { href: '#butaca',
+    x: dx * PASO + (PASO - GLIFO) / 2, y: dy * PASO + (PASO - GLIFO) / 2, width: GLIFO, height: GLIFO }));
+}
+svg.appendChild(sombra);
+
+// Atenua la mesa original (tablero, rotulo y lugares) mientras se arrastra.
+// Al soltar se limpia todo el plano, no solo esa mesa: no pueden quedar restos.
+function levantar(id, si) {
+  const selector = si ? '[data-mesa="' + id + '"]:not(.pieza)' : '.levantada';
+  for (const n of svg.querySelectorAll(selector)) n.classList.toggle('levantada', si);
+}
+
+const celdaBajo = (e) => {
+  const u = enUnidades(e);
+  return { x: Math.floor(u.x / PASO), y: Math.floor(u.y / PASO) };
+};
+
+function iniciarArrastreMesa(pieza, e) {
+  const mesa = mesaPorId(pieza.dataset.mesa);
+  const agarrada = celdaBajo(e);
+  return {
+    mesa, pointerId: e.pointerId, x: e.clientX, y: e.clientY, movido: 0, destino: null,
+    // En que celda de la mesa se agarro: asi no salta a la esquina del puntero.
+    agarre: { dx: agarrada.x - mesa.x, dy: agarrada.y - mesa.y },
+    ocupadas: celdasOcupadas(mesa.id),
+  };
+}
+
+function moverSombra(e) {
+  const a = arrastreMesa;
+  a.movido = Math.max(a.movido, Math.abs(e.clientX - a.x) + Math.abs(e.clientY - a.y));
+  if (a.movido <= 4) return;   // un clic no es un arrastre
+  const c = celdaBajo(e);
+  const x = c.x - a.agarre.dx, y = c.y - a.agarre.dy;
+  if (a.destino && a.destino.x === x && a.destino.y === y) return;
+  a.destino = { x, y, motivo: motivoNoCabe(salaActual, a.ocupadas, x, y) };
+  sombra.setAttribute('transform', 'translate(' + x * PASO + ' ' + y * PASO + ')');
+  sombra.classList.toggle('invalida', Boolean(a.destino.motivo));
+  sombra.classList.remove('oculta');
+  svg.classList.add('moviendo-mesa');
+  levantar(a.mesa.id, true);
+}
+
+function terminarArrastreMesa(confirmar) {
+  const a = arrastreMesa;
+  arrastreMesa = null;
+  sombra.classList.add('oculta');
+  svg.classList.remove('moviendo-mesa');
+  levantar(a.mesa.id, false);
+  if (!confirmar || !a.destino) return;
+  const { x, y, motivo } = a.destino;
+  if (x === a.mesa.x && y === a.mesa.y) return;
+  if (motivo) {
+    anunciar(a.mesa.nombre + ' no se movió: ' + motivo + '.');
+    return;
+  }
+  moverMesa(a.mesa.id, x, y);
+}
+
+function moverMesaConTeclado(id, { dx, dy, hacia }) {
+  const m = mesaPorId(id);
+  const hueco = buscarHueco(salaActual, celdasOcupadas(id), m.x, m.y, dx, dy);
+  if (!hueco) {
+    anunciar(m.nombre + ' no tiene hueco libre hacia ' + hacia + '.');
+    return;
+  }
+  moverMesa(id, hueco.x, hueco.y);
+  // El DOM se rehizo: el foco vuelve a la misma mesa, y 'focusin' la encuadra.
+  capaPiezas.querySelector('[data-mesa="' + id + '"]').focus();
+}
+
+// La posicion es un dato: se guarda y el plano se regenera desde ella. Los
+// lugares conservan su id, asi que la seleccion y las reservas no se pierden.
+function moverMesa(id, x, y) {
+  if (!posiciones[disposicionActual]) {
+    posiciones[disposicionActual] = Object.fromEntries(mesas.map((m) => [m.id, { x: m.x, y: m.y }]));
+  }
+  posiciones[disposicionActual][id] = { x, y };
+  salaActual = generarPlano(disposicionActual, posiciones[disposicionActual]);
+  dibujarTodo();
+  actualizarResumen();
+  const m = mesaPorId(id);
+  anunciar(m.nombre + ' movida a columna ' + x + ', fila ' + y + '.');
+}
+
+const PISTAS = {
+  vista: 'Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer',
+  editor: 'Arrastra una mesa para moverla · con teclado, Tab hasta la mesa y flechas ' +
+          'para llevarla al siguiente hueco libre · Esc cancela',
+};
+
+function cambiarModo(nuevo) {
+  if (nuevo === modo) return;
+  if (arrastreMesa) terminarArrastreMesa(false);
+  modo = nuevo;
+  const editando = modo === 'editor';
+  svg.classList.toggle('editando', editando);
+  document.getElementById('modo-vista').setAttribute('aria-pressed', String(!editando));
+  document.getElementById('modo-editor').setAttribute('aria-pressed', String(editando));
+  document.getElementById('restablecer').hidden = !editando;
+  document.getElementById('pista').textContent = PISTAS[modo];
+  // En el editor las butacas son decorado: el lector de pantalla recorre mesas.
+  if (editando) capaButacas.setAttribute('aria-hidden', 'true');
+  else capaButacas.removeAttribute('aria-hidden');
+  dibujarTodo();
+  anunciar(editando
+    ? 'Modo editor: arrastra las mesas para colocarlas.'
+    : 'Previsualización: el plano como lo verá quien compra.');
+}
+
+document.getElementById('modo-vista').addEventListener('click', () => cambiarModo('vista'));
+document.getElementById('modo-editor').addEventListener('click', () => cambiarModo('editor'));
+document.getElementById('restablecer').addEventListener('click', () => {
+  delete posiciones[disposicionActual];
+  salaActual = generarPlano(disposicionActual);
+  dibujarTodo();
+  actualizarResumen();
+  anunciar('Mesas en su posición automática.');
 });
 
 // ---------------------------------------------------------------------------
@@ -644,13 +966,13 @@ function actualizarResumen() {
 // Cambio de disposicion
 // ---------------------------------------------------------------------------
 function redibujar(disposicion) {
-  const sala = generarPlano(disposicion);
+  if (arrastreMesa) terminarArrastreMesa(false);
+  disposicionActual = disposicion;
+  const sala = salaActual = generarPlano(disposicion, posiciones[disposicion]);
   // Antes de dibujar: asi el DOM nace ya con la seleccion que sobrevive.
   const { ausentes, noLibres } = conciliarSeleccion(elegidas, butacas);
-  capaMuebles.textContent = '';
-  capaButacas.textContent = '';
-  dibujarMuebles();
-  dibujarButacas();
+  dibujarTodo();
+  anunciar('');
 
   calcularEncuadre();
   actualizarResumen();

@@ -86,14 +86,39 @@ butaca que la nueva disposición ya no tiene, porque el pasillo se llevó su lug
 existiendo pero ahí no está libre. Esas se sueltan con un aviso que las nombra, en vez de
 desaparecer en silencio.
 
+## Modo editor
+
+Dos modos, con los botones de arriba del plano:
+
+- **Previsualizar**: el plano como lo ve quien compra. Se eligen butacas.
+- **Editar plano**: se colocan las mesas. Las butacas no se eligen.
+
+La sala se trata como una tabla de celdas. Cada mesa ocupa **6 celdas (2 × 3)**: dos lugares
+arriba, la mesa en las dos de en medio y dos lugares abajo. Al arrastrarla, una sombra marca el
+destino encajado en la rejilla: verde si cabe, roja y con contorno discontinuo si no. Al soltar en
+un sitio que no vale, la mesa se queda donde estaba y un aviso dice por qué (*«cae sobre un
+pasillo»*, *«choca con Mesa 3»*, *«choca con la fila G»*).
+
+Una mesa cabe si sus 6 celdas están dentro de la sala, libres y fuera de los pasillos: sigue siendo
+imposible partir una mesa con un pasillo. Con teclado, Tab lleva a las mesas y las flechas mueven
+la mesa al **siguiente hueco libre** en esa dirección, saltando pasillos y otras mesas. Esc cancela
+un arrastre.
+
+La posición es un dato (`{ M1: { x, y }, … }`) y el plano se regenera desde ella. Los lugares se
+llaman `M1-1`, `M1-2`… por la mesa, no por la posición, así que mover una mesa conserva la
+selección. Cada disposición de pasillos guarda sus propias posiciones, y «Restablecer mesas»
+devuelve las de esa disposición a su sitio automático. Las posiciones viven en memoria: en una
+aplicación real se guardarían con el plano del recinto, y el servidor volvería a validarlas.
+
 ## Pruebas
 
 ```bash
 node --test pruebas.mjs
 ```
 
-Cubren la rejilla, el reparto de mesas, el aforo de la tabla anterior y la conciliación de la
-selección al cambiar de disposición. No hay copia del código: `pruebas.mjs` lee `index.html` y
+Cubren la rejilla, el reparto de mesas, el aforo de la tabla anterior, la conciliación de la
+selección al cambiar de disposición y las reglas del editor: dónde cabe una mesa y cómo busca
+hueco el teclado. No hay copia del código: `pruebas.mjs` lee `index.html` y
 evalúa la parte del script anterior a la marca *«Fin de la parte sin DOM»*, así que el proyecto
 sigue siendo un solo archivo. Requiere Node 18 o posterior.
 
