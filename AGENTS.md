@@ -50,9 +50,13 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    `ESTILOS` (lados, cruz, barra), `agregarMesa`, `mesasAutomaticas`. `generarPlano(tipo, plano)`
    apila las bandas y rellena `butacas`, `muebles` y `mesas`; la sala devuelta trae `bandas` (con
    `y`, `alto` y `nombre`), `alto` y `filas` (rango de filas de rejilla donde caben mesas).
-5. **Editor sin DOM:** `celdasOcupadas`, `motivoNoCabe`, `buscarHueco`, `colocarCerca`, `girarMesa`,
-   `anclarTablero`, `cambiarLargo`, `alternarCabeceras`, `alternarUnLado`, `buscarSitioLibre`, `primeraMesaQueNoCabe`. Reciben y devuelven
-   configuraciones (`{ id, x, y, largo, cabeceras, unLado, giro }`); nunca modifican la actual.
+   **Bloques de filas:** `geometriaBloqueFilas`, `agregarBloqueFilas`, `huellaDe` (huella de cualquier
+   pieza), `numerarFilas` (etiquetas por zona) y `letraDeFila`.
+5. **Editor sin DOM:** `celdasOcupadas`, `motivoNoCabe`, `buscarHueco`, `colocarCerca`, `girarPieza`,
+   `anclarTablero`, `cambiarLargo`, `alternarCabeceras`, `alternarUnLado`, `anclarPrimeraButaca`,
+   `cambiarAncho`, `cambiarFilasBloque`, `buscarSitioLibre`, `primeraPiezaQueNoCabe`. Reciben y
+   devuelven configuraciones de pieza (mesa `{ id, x, y, largo, cabeceras, unLado, giro }` o bloque
+   `{ id, tipo: 'filas', x, y, ancho, filas, zona, giro, nombre? }`); nunca modifican la actual.
    **Bandas y columnas:** `planoDesdeSala`, `cambiarDistribucion`, `redimensionarBanda`, `moverBanda`, `eliminarBanda`, `agregarBanda`,
    `cambiarZonaBanda`. Devuelven un plano nuevo o `{ motivo }`.
    **Bloqueos y mapas:** `idsBloqueadosPorBandas`, `alternarBloqueada`, `mapaDesdePlano`,
@@ -91,13 +95,19 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   Nunca por banda: es lo que mantiene las filas alineadas. Al cambiarlas, `cambiarDistribucion`
   recoloca las mesas y `aplicarBandas` rechaza el cambio si alguna no cabe.
 - **Las mesas pueden ir en cualquier hueco libre de la sala**, no solo en una zona de mesas.
-- **Ningún cambio de bandas deja una mesa que no cabe:** `aplicarBandas` genera, comprueba con
-  `primeraMesaQueNoCabe` y, si falla, vuelve al plano anterior.
-- **Los ids son estables.** Filas: banda + fila + número (`luneta-A1`), porque cada banda empieza su
-  secuencia en A. Mesas: mesa + lado (`M2-N1`, `M2-S2`,
+- **Ningún cambio de bandas o columnas deja una pieza que no cabe:** `aplicarBandas` genera,
+  comprueba con `primeraPiezaQueNoCabe` (mesas y bloques) y, si falla, vuelve al plano anterior.
+- **Id estable, etiqueta calculada.** `id` no depende de la posición: la selección, las reservas y
+  las bloqueadas usan solo el id. `fila`, `numero` y `seccion` se recalculan en `numerarFilas`: por
+  zona y de izquierda a derecha para lo que mira al escenario; con secuencia propia para bloques
+  girados. Nunca uses la etiqueta como clave.
+- **Una mesa respeta los pasillos; un bloque de filas no:** en un bloque, los pasillos son el espacio
+  entre bloques.
+- **Los ids son estables.** Bloques: bloque + fila + butaca locales (`F1-2-3`). Filas de banda: banda + fila + número dentro de la banda
+  (`luneta-A1`), aunque la etiqueta visible siga la numeración por zona. Mesas: mesa + lado (`M2-N1`, `M2-S2`,
   `M2-C1`), nunca un número de orden. Mover, girar o cambiar de sala mixta no renombra lugares;
   alargar solo añade. El número que se muestra («lugar 3») es solo presentación.
-- **Los ids de mesa y banda no se reutilizan.** `siguiente` y `siguienteBanda` solo crecen.
+- **Los ids de mesa, banda y bloque no se reutilizan.** `siguiente`, `siguienteBanda` y `siguienteBloque` solo crecen.
 - **Las esquinas vacías de una mesa están reservadas:** la huella es el rectángulo completo.
 - **Nada desaparece en silencio.** Si se suelta una butaca elegida, el aviso la nombra y dice por
   qué. Si una mesa no cabe, se anuncia el motivo. Si acortar, quitar cabeceras o eliminar quita

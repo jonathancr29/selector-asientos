@@ -4,9 +4,37 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Columnas libres y filas mirando al escenario
+## Sin publicar — Bloques de filas libres (fase 1)
 
-Rama `claude/filas-miran-escenario`.
+Rama `claude/bloques-de-filas`.
+
+### Añadido
+
+- **Bloques de filas libres:** rectángulos de butacas (butacas por fila × filas) que se agregan,
+  arrastran, mueven con flechas, giran y redimensionan como las mesas. Cada uno elige su zona y
+  puede tener nombre. Pueden ocupar columnas de pasillo de las bandas; no pueden pisar filas, mesas
+  ni otros bloques.
+- **Numeración de teatro:** lo que mira al escenario se numera por zona, con la fila más cercana como
+  A y las butacas de izquierda a derecha a través de bandas y bloques (A1–A5 y A6–A7). Los bloques
+  girados llevan su nombre y su propia secuencia.
+- **Ids estables separados de la etiqueta visible:** mover o girar un bloque no cambia los ids de sus
+  butacas (`F1-2-3`), así que se conservan la selección, las reservas y las bloqueadas.
+- **Editor:** botón «Bloque de filas», acciones «+ fila» y «− fila» (atajos `]` y `[`), y campos
+  Zona y Nombre para el bloque activo. Los mapas guardan los bloques.
+- Pruebas de geometría, numeración por zona, ids estables, choques, crecimiento, giro, bandas, mapas
+  y letras después de la Z (56 en total).
+
+### Cambiado
+
+- **Dos bandas de la misma zona ya no reinician en A:** la segunda continúa la secuencia. Los rótulos
+  de las bandas muestran la letra de su zona.
+- **`girarMesa` y `primeraMesaQueNoCabe` pasan a `girarPieza` y `primeraPiezaQueNoCabe`**: valen para
+  mesas y bloques.
+
+## 2026-09-16 — PR #5: columnas libres y filas mirando al escenario
+
+[PR #5](https://github.com/jonathancr29/selector-asientos/pull/5), fusionado en `main` con el
+commit `f420bdf`.
 
 ### Añadido
 

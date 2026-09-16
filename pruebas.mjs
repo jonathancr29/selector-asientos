@@ -18,11 +18,12 @@ assert.ok(inicio > 0 && fin > inicio, 'no se encontro la parte sin DOM en index.
 const cargar = () => new Function(html.slice(inicio, fin) +
   '\nreturn { ANCHO_SALA, LARGO_MAXIMO, ESTILOS, rejillaDeSala, repartirMesas, generarPlano, butacas,' +
   ' muebles, mesas, conciliarSeleccion, geometriaMesa, celdasOcupadas, motivoNoCabe, buscarHueco,' +
-  ' colocarCerca, girarMesa, cambiarLargo, alternarCabeceras, alternarUnLado, buscarSitioLibre,' +
-  ' TIPOS_DE_SALA, primeraMesaQueNoCabe, redimensionarBanda, moverBanda, eliminarBanda, agregarBanda,' +
+  ' colocarCerca, girarPieza, cambiarLargo, alternarCabeceras, alternarUnLado, buscarSitioLibre,' +
+  ' TIPOS_DE_SALA, primeraPiezaQueNoCabe, redimensionarBanda, moverBanda, eliminarBanda, agregarBanda,' +
   ' cambiarZonaBanda, planoDesdeSala, alternarBloqueada, mapaDesdePlano, validarMapa, registrarMapa,' +
   ' claveDeMapa, nombreDeArchivo, FORMATO_MAPA, rejillaDeBloques, distribucionDePasillos, distribucionDeSala,' +
-  ' leerDistribucion, cambiarDistribucion };')();
+  ' leerDistribucion, cambiarDistribucion, geometriaBloqueFilas, bloquesFilas, cambiarAncho,' +
+  ' cambiarFilasBloque, letraDeFila };')();
 
 const DISPOSICIONES = ['ninguno', 'izquierda', 'derecha', 'ambos'];
 const rango = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
@@ -212,13 +213,13 @@ test('los lugares se llaman por lado, se numeran en sentido horario y conservan 
 });
 
 test('girar y alargar no renombran los lugares existentes', () => {
-  const { generarPlano, butacas, mesas, girarMesa, cambiarLargo } = cargar();
+  const { generarPlano, butacas, mesas, girarPieza, cambiarLargo } = cargar();
   const idsDe = (id) => butacas.filter((b) => b.grupo?.id === id).map((b) => b.id).sort();
   generarPlano('mixta-ambos');
   const base = mesas.map(({ id, x, y, largo, cabeceras, unLado, giro }) => ({ id, x, y, largo, cabeceras, unLado, giro }));
   const antes = idsDe('M1');
 
-  generarPlano('mixta-ambos', { mesas: base.map((c) => (c.id === 'M1' ? girarMesa(c) : c)) });
+  generarPlano('mixta-ambos', { mesas: base.map((c) => (c.id === 'M1' ? girarPieza(c) : c)) });
   assert.deepEqual(idsDe('M1'), antes);
 
   generarPlano('mixta-ambos', { mesas: base.map((c) => (c.id === 'M1' ? cambiarLargo(c, 1) : c)) });
@@ -231,7 +232,7 @@ test('girar y alargar no renombran los lugares existentes', () => {
 // --- Operaciones del editor --------------------------------------------------
 
 test('cuatro giros dejan la mesa exactamente donde estaba, y dos la dejan en su huella', () => {
-  const { girarMesa, ESTILOS } = cargar();
+  const { girarPieza, ESTILOS } = cargar();
   const casos = [
     { ...ESTILOS.lados }, { ...ESTILOS.cruz }, { ...ESTILOS.barra },
     { largo: 3, cabeceras: false, unLado: false }, { largo: 4, cabeceras: true, unLado: false },
@@ -241,14 +242,14 @@ test('cuatro giros dejan la mesa exactamente donde estaba, y dos la dejan en su 
     const mesa = { id: 'M9', x: 6, y: 9, giro: 0, ...forma };
     let m = mesa;
     const giros = [];
-    for (let i = 0; i < 4; i++) { m = girarMesa(m); giros.push(m.giro); }
+    for (let i = 0; i < 4; i++) { m = girarPieza(m); giros.push(m.giro); }
     assert.deepEqual(giros, [90, 180, 270, 0], JSON.stringify(forma));
     assert.deepEqual(m, mesa, JSON.stringify(forma));
-    const mediaVuelta = girarMesa(girarMesa(mesa));
+    const mediaVuelta = girarPieza(girarPieza(mesa));
     assert.deepEqual([mediaVuelta.x, mediaVuelta.y], [6, 9], JSON.stringify(forma));
   }
   // La cruz es cuadrada: girar no la desplaza.
-  const cruz = girarMesa({ id: 'M9', x: 6, y: 9, giro: 0, ...ESTILOS.cruz });
+  const cruz = girarPieza({ id: 'M9', x: 6, y: 9, giro: 0, ...ESTILOS.cruz });
   assert.deepEqual([cruz.x, cruz.y], [6, 9]);
 });
 
@@ -348,11 +349,11 @@ test('buscarHueco salta pasillos, no atraviesa filas y se detiene en el borde', 
 });
 
 test('colocarCerca busca el sitio mas proximo y, si no hay, devuelve el motivo', () => {
-  const { generarPlano, celdasOcupadas, colocarCerca, girarMesa } = cargar();
+  const { generarPlano, celdasOcupadas, colocarCerca, girarPieza } = cargar();
   const sala = generarPlano('mixta-ambos');
   const m1 = { id: 'M1', x: 2, y: 7, largo: 2, cabeceras: false, giro: 0 };
   // Girada sobre su centro queda en (1, 7), columnas 1 a 3: cabe sin moverse.
-  assert.deepEqual(colocarCerca(sala, celdasOcupadas('M1'), girarMesa(m1)),
+  assert.deepEqual(colocarCerca(sala, celdasOcupadas('M1'), girarPieza(m1)),
     { ...m1, giro: 90, x: 1, y: 7 });
   // En (4, 7) cae sobre el pasillo; a una celda, (3, 7) si cabe.
   assert.deepEqual(colocarCerca(sala, celdasOcupadas('M1'), { ...m1, x: 4 }), { ...m1, x: 3 });
@@ -446,7 +447,7 @@ test('redimensionar una banda desplaza lo de debajo y detecta mesas que dejan de
   const masLuneta = api.redimensionarBanda(plano, sala, 'luneta', 1);
   assert.deepEqual(posiciones(masLuneta.mesas), { M1: 8, M2: 8, M3: 8, M4: 12, M5: 12, M6: 12 });
   api.generarPlano('mixta-ambos', masLuneta);
-  assert.equal(api.primeraMesaQueNoCabe(api.generarPlano('mixta-ambos', masLuneta)), null);
+  assert.equal(api.primeraPiezaQueNoCabe(api.generarPlano('mixta-ambos', masLuneta)), null);
   assert.ok(api.butacas.some((b) => b.id === 'luneta-D1'));
 
   // La zona de mesas baja de 13 a 8 filas: la General sube a la 13 y pisa la segunda fila de mesas.
@@ -455,8 +456,8 @@ test('redimensionar una banda desplaza lo de debajo y detecta mesas que dejan de
     menos = api.redimensionarBanda(menos, salaMenos, 'mesas', -1);
     salaMenos = api.generarPlano('mixta-ambos', menos);
   }
-  const fallo = api.primeraMesaQueNoCabe(salaMenos);
-  assert.deepEqual([fallo.mesa.id, fallo.motivo], ['M4', 'choca con la fila A de General']);
+  const fallo = api.primeraPiezaQueNoCabe(salaMenos);
+  assert.deepEqual([fallo.pieza.id, fallo.motivo], ['M4', 'choca con la fila A de General']);
 
   assert.deepEqual(api.redimensionarBanda(plano, sala, 'escenario', 1), { motivo: 'el escenario tiene un alto fijo' });
   assert.deepEqual(api.redimensionarBanda(plano, sala, 'general', -2), { motivo: 'ya tiene el mínimo' });
@@ -470,7 +471,7 @@ test('mover una banda lleva consigo sus mesas y no pasa por encima del escenario
   const salaSubida = api.generarPlano('mixta-ambos', subida);
   assert.deepEqual(resumenBandas(salaSubida), ['Escenario@0+2', 'Luneta@2+3', 'General@5+2', 'Zona de mesas@7+13']);
   assert.deepEqual(posiciones(subida.mesas), { M1: 9, M2: 9, M3: 9, M4: 13, M5: 13, M6: 13 });
-  assert.equal(api.primeraMesaQueNoCabe(salaSubida), null);
+  assert.equal(api.primeraPiezaQueNoCabe(salaSubida), null);
 
   assert.deepEqual(api.moverBanda(plano, sala, 'luneta', -1), { motivo: 'ya está arriba del todo' });
   assert.deepEqual(api.moverBanda(plano, sala, 'general', 1), { motivo: 'ya está abajo del todo' });
@@ -486,7 +487,7 @@ test('eliminar una banda quita sus mesas y sube lo de debajo', () => {
   const sinLuneta = api.eliminarBanda(plano, sala, 'luneta');
   assert.deepEqual(posiciones(sinLuneta.mesas), { M1: 4, M2: 4, M3: 4, M4: 8, M5: 8, M6: 8 });
   const salaSinLuneta = api.generarPlano('mixta-ambos', sinLuneta);
-  assert.equal(api.primeraMesaQueNoCabe(salaSinLuneta), null);
+  assert.equal(api.primeraPiezaQueNoCabe(salaSinLuneta), null);
   assert.ok(!api.butacas.some((b) => b.banda === 'luneta'));
 
   assert.deepEqual(api.eliminarBanda(plano, sala, 'escenario'), { motivo: 'el escenario no se puede eliminar' });
@@ -705,7 +706,7 @@ test('una sala con columnas propias: pasillos vacios, escenario al ancho y aforo
   assert.deepEqual([5, 12, 13].filter((c) => usadas.has(c)), [], 'las columnas de pasillo quedan vacias');
   assert.equal(api.butacas.filter((b) => b.banda === 'luneta').length, 3 * 14);
   assert.equal(api.muebles.find((m) => m.tipo === 'escenario').w, 17);
-  assert.equal(api.primeraMesaQueNoCabe(otra), null);
+  assert.equal(api.primeraPiezaQueNoCabe(otra), null);
 });
 
 test('al cambiar las columnas cada mesa se queda en su bloque', () => {
@@ -715,18 +716,18 @@ test('al cambiar las columnas cada mesa se queda en su bloque', () => {
   const ancho = api.cambiarDistribucion(plano, sala, { bloques: [6, 6, 6], pasillos: [2, 2] });
   // Despues: bloques 1-6, 9-14, 17-22. Misma distancia al inicio: 2, 10 y 18.
   assert.deepEqual(ancho.mesas.filter((m) => m.y === 7).map((m) => m.x), [2, 10, 18]);
-  assert.equal(api.primeraMesaQueNoCabe(api.generarPlano('mixta-ambos', ancho)), null);
+  assert.equal(api.primeraPiezaQueNoCabe(api.generarPlano('mixta-ambos', ancho)), null);
 
   // Con bloques mas estrechos, la mesa se corre dentro del bloque para no salirse.
   const estrecho = api.cambiarDistribucion(plano, sala, { bloques: [2, 2, 2], pasillos: [1, 1] });
   assert.deepEqual(estrecho.mesas.filter((m) => m.y === 7).map((m) => m.x), [1, 4, 7]);
-  assert.equal(api.primeraMesaQueNoCabe(api.generarPlano('mixta-ambos', estrecho)), null);
+  assert.equal(api.primeraPiezaQueNoCabe(api.generarPlano('mixta-ambos', estrecho)), null);
 
   // Si cambia el numero de bloques, cada mesa conserva su posicion relativa en la
   // sala y se ajusta al bloque mas cercano: al quitar pasillos no se amontonan.
   const unBloque = api.cambiarDistribucion(plano, sala, { bloques: [12], pasillos: [] });
   assert.deepEqual(unBloque.mesas.filter((m) => m.y === 7).map((m) => m.x), [2, 6, 10]);
-  assert.equal(api.primeraMesaQueNoCabe(api.generarPlano('mixta-ambos', unBloque)), null);
+  assert.equal(api.primeraPiezaQueNoCabe(api.generarPlano('mixta-ambos', unBloque)), null);
   const dosBloques = api.cambiarDistribucion(plano, sala, { bloques: [6, 6], pasillos: [2] });
   // La del centro caeria en el pasillo (columnas 7-8): pasa al bloque mas cercano, el primero.
   assert.deepEqual(dosBloques.mesas.filter((m) => m.y === 7).map((m) => m.x), [2, 5, 12]);
@@ -734,13 +735,13 @@ test('al cambiar las columnas cada mesa se queda en su bloque', () => {
   const deUno = api.generarPlano('mixta-ambos', unBloque);
   const tres = api.cambiarDistribucion(unBloque, deUno, { bloques: [8, 8, 8], pasillos: [2, 2] });
   assert.deepEqual(tres.mesas.filter((m) => m.y === 7).map((m) => m.x), [3, 13, 22]);
-  assert.equal(api.primeraMesaQueNoCabe(api.generarPlano('mixta-ambos', tres)), null);
-  assert.equal(api.primeraMesaQueNoCabe(api.generarPlano('mixta-ambos', dosBloques)), null);
+  assert.equal(api.primeraPiezaQueNoCabe(api.generarPlano('mixta-ambos', tres)), null);
+  assert.equal(api.primeraPiezaQueNoCabe(api.generarPlano('mixta-ambos', dosBloques)), null);
 
   // Un bloque de 1 butaca no cabe una mesa de 2 columnas.
   const angosto = api.cambiarDistribucion(plano, sala, { bloques: [1, 4, 4], pasillos: [1, 1] });
-  const falloAngosto = api.primeraMesaQueNoCabe(api.generarPlano('mixta-ambos', angosto));
-  assert.deepEqual([falloAngosto.mesa.id, falloAngosto.motivo], ['M1', 'cae sobre un pasillo']);
+  const falloAngosto = api.primeraPiezaQueNoCabe(api.generarPlano('mixta-ambos', angosto));
+  assert.deepEqual([falloAngosto.pieza.id, falloAngosto.motivo], ['M1', 'cae sobre un pasillo']);
 });
 
 test('un mapa guarda las columnas y un mapa de la version 1 se sigue leyendo', () => {
@@ -765,5 +766,185 @@ test('un mapa guarda las columnas y un mapa de la version 1 se sigue leyendo', (
   assert.equal(convertido.version, 2);
   assert.deepEqual(convertido.distribucion, { bloques: [4, 9], pasillos: [1] });
   assert.equal(convertido.pasillos, undefined);
+});
+
+// --- Bloques de filas libres (fase 1) -----------------------------------------
+
+const bloque = (id, x, y, extra = {}) => ({ id, tipo: 'filas', x, y, ancho: 5, filas: 2, zona: 'luneta', giro: 0, ...extra });
+const conBloques = (api, tipo, ...bloques) => {
+  const { plano } = planoDe(api, tipo);
+  plano.bloquesFilas = bloques;
+  plano.siguienteBloque = bloques.length + 1;
+  return { plano, sala: api.generarPlano(tipo, plano) };
+};
+const etiqueta = (api, id) => {
+  const b = api.butacas.find((x) => x.id === id);
+  return b.seccion + ' ' + b.fila + b.numero;
+};
+
+test('geometria de un bloque: filas de delante arriba, mirando al escenario, y girado', () => {
+  const { geometriaBloqueFilas } = cargar();
+  const g = geometriaBloqueFilas({ ancho: 3, filas: 2, giro: 0 });
+  assert.deepEqual([g.ancho, g.alto, g.tablero], [3, 2, null]);
+  assert.deepEqual(g.lugares.map((l) => [l.fila, l.columna, l.dx, l.dy, l.mira]),
+    [[0, 0, 0, 0, 180], [0, 1, 1, 0, 180], [0, 2, 2, 0, 180], [1, 0, 0, 1, 180], [1, 1, 1, 1, 180], [1, 2, 2, 1, 180]]);
+  // Girado 90: 2 de ancho y 3 de alto; la fila de delante queda a la derecha y mira a la derecha.
+  const lateral = geometriaBloqueFilas({ ancho: 3, filas: 2, giro: 90 });
+  assert.deepEqual([lateral.ancho, lateral.alto], [2, 3]);
+  const delante = lateral.lugares.filter((l) => l.fila === 0);
+  assert.ok(delante.every((l) => l.dx === 1 && l.mira === 270));
+});
+
+test('las filas se numeran por zona, de izquierda a derecha, a traves de bloques y bandas', () => {
+  const api = cargar();
+  // «ambos»: Luneta en las filas 2-4 (A-C). Dos bloques de Luneta en la franja libre (fila 14):
+  // uno de 5 butacas y, dejando dos columnas libres, otro de 2.
+  conBloques(api, 'mixta-ambos', bloque('F1', 1, 14), bloque('F2', 8, 14, { ancho: 2 }));
+  assert.equal(etiqueta(api, 'luneta-A1'), 'Luneta A1');
+  assert.equal(etiqueta(api, 'luneta-C12'), 'Luneta C12');
+  assert.deepEqual(['F1-1-1', 'F1-1-5', 'F2-1-1', 'F2-1-2'].map((id) => etiqueta(api, id)),
+    ['Luneta D1', 'Luneta D5', 'Luneta D6', 'Luneta D7']);
+  assert.deepEqual(['F1-2-1', 'F2-2-2'].map((id) => etiqueta(api, id)), ['Luneta E1', 'Luneta E7']);
+  // General sigue con su propia secuencia.
+  assert.equal(etiqueta(api, 'general-A1'), 'General A1');
+});
+
+test('un bloque de General a la altura de la banda General comparte fila y sigue la numeracion', () => {
+  const api = cargar();
+  // Quitando las ultimas columnas de General no hay hueco en su fila; se usa «solo mesas» con una banda
+  // de General agregada y un bloque de General al lado de la misma fila.
+  const { plano } = planoDe(api, 'solo-mesas');
+  let conGeneral = api.agregarBanda(plano, 'filas');
+  conGeneral.bandas.at(-1).zona = 'general';
+  // La banda se agrega abajo (fila 22-23). Un bloque de General en la fila 20, encima.
+  conGeneral.bloquesFilas = [bloque('F1', 5, 20, { zona: 'general', ancho: 3, filas: 1 })];
+  api.generarPlano('solo-mesas', conGeneral);
+  assert.deepEqual(['F1-1-1', 'F1-1-3', 'banda1-A1', 'banda1-B14'].map((id) => etiqueta(api, id)),
+    ['General A1', 'General A3', 'General B1', 'General C14']);
+});
+
+test('dos bandas de la misma zona continuan la secuencia en lugar de reiniciar en A', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const conOtra = api.agregarBanda(plano, 'filas');   // otra de General, al final
+  api.generarPlano('mixta-ambos', conOtra);
+  assert.deepEqual(['general-A1', 'general-B1', 'banda1-A1', 'banda1-B1'].map((id) => etiqueta(api, id)),
+    ['General A1', 'General B1', 'General C1', 'General D1']);
+  // El rotulo de la banda muestra la letra de su zona.
+  const rotulos = api.muebles.filter((m) => m.tipo === 'rotulo' && m.banda === 'banda1').map((m) => m.texto);
+  assert.deepEqual(rotulos, ['C', 'D']);
+});
+
+test('un bloque girado lleva su nombre y su propia secuencia', () => {
+  const api = cargar();
+  conBloques(api, 'mixta-ambos', bloque('F1', 1, 14, { giro: 90, ancho: 3, filas: 2, nombre: 'Lateral izquierdo' }));
+  assert.deepEqual(['F1-1-1', 'F1-1-3', 'F1-2-2'].map((id) => etiqueta(api, id)),
+    ['Lateral izquierdo A1', 'Lateral izquierdo A3', 'Lateral izquierdo B2']);
+  // Sin nombre propio, se llama «Bloque N».
+  conBloques(api, 'mixta-ambos', bloque('F4', 1, 14, { giro: 270 }));
+  assert.equal(etiqueta(api, 'F4-1-1'), 'Bloque 4 A1');
+});
+
+test('mover o girar un bloque no cambia los ids, aunque cambie la etiqueta', () => {
+  const api = cargar();
+  const ids = () => api.butacas.filter((b) => b.bloque === 'F1').map((b) => b.id).sort();
+  conBloques(api, 'mixta-ambos', bloque('F1', 1, 14));
+  const antes = ids();
+  assert.equal(etiqueta(api, 'F1-1-1'), 'Luneta D1');
+  conBloques(api, 'mixta-ambos', bloque('F1', 6, 16));
+  assert.deepEqual(ids(), antes);
+  assert.equal(etiqueta(api, 'F1-1-1'), 'Luneta D1');
+  conBloques(api, 'mixta-ambos', api.girarPieza(bloque('F1', 6, 14)));
+  assert.deepEqual(ids(), antes);
+  assert.equal(etiqueta(api, 'F1-1-1'), 'Bloque 1 A1');
+});
+
+test('un bloque puede ocupar columnas de pasillo pero no pisar filas, mesas ni otros bloques', () => {
+  const api = cargar();
+  const { sala } = conBloques(api, 'mixta-ambos', bloque('F1', 1, 14));
+  const libre = api.celdasOcupadas('F9');
+  // «ambos» tiene pasillos en 5 y 10: un bloque de 5 desde la columna 4 los cruza sin problema.
+  assert.equal(api.motivoNoCabe(sala, api.celdasOcupadas('F2'), bloque('F2', 6, 16)), null);
+  assert.equal(api.motivoNoCabe(sala, api.celdasOcupadas('F2'), bloque('F2', 4, 14)), 'choca con la fila D de Luneta');
+  assert.equal(api.motivoNoCabe(sala, libre, bloque('F2', 2, 12)), 'choca con Mesa 4');
+  assert.equal(api.motivoNoCabe(sala, libre, bloque('F2', 1, 3)), 'choca con la fila B de Luneta');
+  assert.equal(api.motivoNoCabe(sala, libre, bloque('F2', 12, 14)), 'se sale de la sala');
+  // Y una mesa no puede ir encima de un bloque.
+  const mesa = { id: 'M9', x: 2, y: 13, largo: 2, cabeceras: false, unLado: false, giro: 0 };
+  assert.equal(api.motivoNoCabe(sala, api.celdasOcupadas('M9'), mesa), 'choca con Mesa 4');
+  assert.equal(api.motivoNoCabe(sala, api.celdasOcupadas('M9'), { ...mesa, y: 15 }), 'choca con la fila E de Luneta');
+});
+
+test('crecer o encoger un bloque no mueve su primera butaca', () => {
+  const api = cargar();
+  const primera = (b) => {
+    const l = api.geometriaBloqueFilas(b).lugares.find((x) => x.fila === 0 && x.columna === 0);
+    return [b.x + l.dx, b.y + l.dy];
+  };
+  for (const giro of [0, 90, 180, 270]) {
+    const b = bloque('F1', 10, 10, { giro });
+    for (const cambio of [(x) => api.cambiarAncho(x, 1), (x) => api.cambiarAncho(x, -1),
+                          (x) => api.cambiarFilasBloque(x, 1), (x) => api.cambiarFilasBloque(x, -1)]) {
+      assert.deepEqual(primera(cambio(b)), primera(b), 'giro ' + giro);
+    }
+  }
+  assert.equal(api.cambiarAncho(bloque('F1', 1, 1, { ancho: 1 }), -1), null);
+  assert.equal(api.cambiarFilasBloque(bloque('F1', 1, 1, { filas: 26 }), 1), null);
+  assert.equal(api.cambiarAncho(bloque('F1', 1, 1, { ancho: 40 }), 1), null);
+});
+
+test('cuatro giros dejan un bloque donde estaba', () => {
+  const { girarPieza } = cargar();
+  for (const [ancho, filas] of [[5, 2], [2, 2], [4, 3], [1, 6]]) {
+    const b = bloque('F1', 8, 9, { ancho, filas });
+    let g = b;
+    for (let i = 0; i < 4; i++) g = girarPieza(g);
+    assert.deepEqual(g, b, ancho + 'x' + filas);
+  }
+});
+
+test('las bandas desplazan y eliminan los bloques como a las mesas', () => {
+  const api = cargar();
+  const { plano, sala } = conBloques(api, 'mixta-ambos', bloque('F1', 1, 14), bloque('F2', 8, 5, { ancho: 2, filas: 1 }));
+  const masLuneta = api.redimensionarBanda(plano, sala, 'luneta', 1);
+  assert.deepEqual(masLuneta.bloquesFilas.map((b) => b.y), [15, 6]);
+  const sinMesas = api.eliminarBanda(plano, sala, 'mesas');
+  assert.deepEqual(sinMesas.bloquesFilas, []);
+  assert.deepEqual(api.primeraPiezaQueNoCabe(api.generarPlano('mixta-ambos', masLuneta)), null);
+  // Estrechar la sala a 8 columnas deja fuera el bloque de las columnas 8-9: se detecta.
+  const estrecha = api.cambiarDistribucion(plano, sala, { bloques: [2, 2, 2], pasillos: [1, 1] });
+  const fallo = api.primeraPiezaQueNoCabe(api.generarPlano('mixta-ambos', estrecha));
+  assert.deepEqual([fallo.pieza.id, fallo.motivo], ['F2', 'se sale de la sala']);
+});
+
+test('los bloques se guardan en el mapa, con nombre propio, y se validan al leer', () => {
+  const api = cargar();
+  const { plano } = conBloques(api, 'mixta-ambos', bloque('F1', 1, 14), bloque('F3', 9, 14, { giro: 90, ancho: 3, nombre: 'Lateral' }));
+  const extraido = api.planoDesdeSala('mixta-ambos', api.generarPlano('mixta-ambos', plano));
+  assert.deepEqual(extraido.bloquesFilas.map((b) => [b.id, b.nombre]), [['F1', undefined], ['F3', 'Lateral']]);
+  assert.equal(extraido.siguienteBloque, 4);
+
+  const mapa = JSON.parse(JSON.stringify(api.mapaDesdePlano('Con bloques', extraido, null)));
+  const { mapa: leido, errores } = api.validarMapa(mapa);
+  assert.equal(errores, undefined);
+  assert.equal(leido.bloquesFilas.length, 2);
+  assert.equal(leido.siguienteBloque, 4);
+  const clave = api.registrarMapa(leido);
+  api.generarPlano(clave);
+  assert.equal(etiqueta(api, 'F3-1-1'), 'Lateral A1');
+
+  const con = (cambio) => { const m = JSON.parse(JSON.stringify(mapa)); cambio(m); return api.validarMapa(m).errores || []; };
+  assert.ok(con((m) => { m.bloquesFilas[0].id = 'X1'; }).includes('bloque 1: id no válido o repetido'));
+  assert.ok(con((m) => { m.bloquesFilas[0].ancho = 0; }).includes('F1: butacas por fila fuera de rango'));
+  assert.ok(con((m) => { m.bloquesFilas[0].zona = 'vip'; }).includes('F1: zona desconocida'));
+  assert.ok(con((m) => { m.bloquesFilas[0].giro = 45; }).includes('F1: giro no válido'));
+  assert.deepEqual(con((m) => { m.bloquesFilas[0].y = 2; }), ['Bloque 1 choca con la fila A de Luneta']);
+  // Un mapa sin bloques (los anteriores) sigue siendo valido.
+  assert.equal(con((m) => { delete m.bloquesFilas; delete m.siguienteBloque; }).length, 0);
+});
+
+test('letraDeFila sigue con AA, AB... despues de la Z', () => {
+  const { letraDeFila } = cargar();
+  assert.deepEqual([0, 25, 26, 27, 51, 52].map(letraDeFila), ['A', 'Z', 'AA', 'AB', 'AZ', 'BA']);
 });
 
