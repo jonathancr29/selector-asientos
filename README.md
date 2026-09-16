@@ -126,7 +126,7 @@ columnas. Cada banda empieza donde acaba la anterior:
 
 | Banda | Alto | Contenido |
 |---|---|---|
-| `escenario` | 2 filas de rejilla | El escenario. Siempre la primera. |
+| `escenario` | 2 filas de rejilla | La franja inicial, donde está el escenario por defecto. Siempre la primera. |
 | `filas` | `filas` | Filas de butacas de una zona (Luneta o General). Las letras siguen la numeración por zona (ver *Bloques de filas*). |
 | `mesas` | `alto` | Espacio libre, con `filasDeMesas` filas de mesas automáticas. |
 
@@ -191,8 +191,8 @@ giro (`mira`): 0° el lado norte, 180° el sur, 90° y 270° las cabeceras, más
 marcas de estado (palomita, aspa, raya) se quedan derechas en sillas a 0° o 180°, y giran con la silla
 a 90° o 270°, porque ahí el hueco del icono es vertical y una marca horizontal no cabe.
 
-**Las butacas de fila miran al escenario.** Como el escenario es siempre la primera banda, arriba,
-todas giran 180°: respaldo abajo, mirando hacia arriba.
+**Las butacas de fila miran al escenario.** Con el escenario arriba giran 180° (respaldo abajo,
+mirando hacia arriba); si se mueve por debajo de una banda, sus filas miran hacia abajo.
 
 El giro es de cuartos de vuelta, y no solo horizontal o vertical, porque una mesa de un lado tiene
 cuatro posiciones distintas: sus lugares pueden quedar abajo, a la izquierda, arriba o a la derecha.
@@ -283,15 +283,36 @@ rectángulo de butacas que se agrega, arrastra, gira y redimensiona como una mes
 girar su bloque (`F1-2-3` es la fila 2, butaca 3 del bloque F1). Es el que usan la selección, las
 reservas y las bloqueadas. La **etiqueta visible** se calcula:
 
-- **Bandas y bloques que miran al escenario** se numeran **por zona**. En cada zona, la fila más
+- **Bandas y bloques que miran al escenario de frente** se numeran **por zona**. En cada zona, la fila más
   cercana al escenario es la A, y todas las butacas de esa zona a esa altura se numeran de izquierda
   a derecha a través de bandas y bloques: A1–A5 en un bloque y A6–A7 en el de al lado. Dos bandas
   de la misma zona no reinician en A: la segunda continúa.
-- **Bloques girados** llevan su nombre (o «Bloque N») y su propia secuencia: «Lateral izquierdo,
-  fila B, butaca 2».
+- **Bloques que no miran al escenario de frente** (girados de lado o de espaldas) llevan su nombre
+  (o «Bloque N») y su propia secuencia: «Lateral izquierdo, fila B, butaca 2».
 
 Como la etiqueta depende de la posición, mover un bloque puede cambiar las etiquetas de su zona (A6
 pasa a B3), pero nunca los ids.
+
+### El escenario
+
+El escenario es una pieza más: `{ x, y, ancho, alto }` en celdas. Por defecto ocupa la franja inicial
+a todo el ancho de la sala (2 filas de alto), pero en el editor se agarra y se edita como una mesa:
+
+| Acción | Botón | Tecla |
+|---|---|---|
+| Mover | — (arrastrar) | Flechas |
+| Girar 90° (intercambia ancho y alto) | Girar 90° | R |
+| Ancho | Alargar / Acortar | + / − |
+| Alto | + fila / − fila | ] / [ |
+
+- **No se elimina** y no puede pisar filas, mesas ni bloques (ni ellos a él). Puede cruzar pasillos.
+- **Las filas y la numeración se miden desde donde esté:** las bandas miran hacia él y, en cada zona,
+  la fila más cercana es la A. Si se baja el escenario, la fila de abajo pasa a ser la A y los
+  rótulos cambian con ella.
+- **Los bloques nuevos se crean mirando hacia el escenario** (girados 180° si está debajo, 90° o
+  270° si está a un lado).
+- **Al cambiar las columnas,** un escenario a todo el ancho sigue a todo el ancho.
+- Si el escenario sale de la franja inicial, esas filas quedan libres para otras piezas.
 
 ### Butacas bloqueadas
 

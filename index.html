@@ -520,9 +520,11 @@ const altoDeBanda = (banda) =>
 // La butaca n de la fila va a columnas[n-1]: nunca a la columna n a secas.
 // Es lo que mantiene todas las bandas en la misma rejilla.
 //
-// Las butacas de fila miran al escenario. El escenario es siempre la primera
-// banda, arriba, asi que se giran 180 grados: respaldo abajo, mirando hacia arriba.
+// Las butacas de fila miran al escenario. Con el escenario arriba (lo normal) se
+// giran 180 grados: respaldo abajo, mirando hacia arriba. Si el escenario se mueve
+// debajo de una banda, sus filas miran hacia abajo (0): ver miraHaciaEscenario.
 const MIRA_ESCENARIO = 180;
+const MIRA_ABAJO = 0;
 
 function agregarFilas(banda, columnas) {
   const { id, nombre, zona, y, filas, ocupadas = {} } = banda;
@@ -662,7 +664,8 @@ function geometriaBloqueFilas({ ancho, filas, giro = 0 }) {
 }
 
 // La huella de cualquier pieza: mesa o bloque de filas.
-const huellaDe = (pieza) => (esBloqueFilas(pieza) ? geometriaBloqueFilas(pieza) : geometriaMesa(pieza));
+const huellaDe = (pieza) => (esEscenario(pieza) ? { ancho: pieza.ancho, alto: pieza.alto, tablero: null, lugares: [] }
+  : esBloqueFilas(pieza) ? geometriaBloqueFilas(pieza) : geometriaMesa(pieza));
 
 function agregarBloqueFilas(config) {
   const geo = geometriaBloqueFilas(config);
@@ -679,24 +682,79 @@ function agregarBloqueFilas(config) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// El escenario.
+//
+// Es una pieza: { x, y, ancho, alto } en celdas, que se mueve y cambia de tamaño
+// como una mesa. Por defecto ocupa la franja de la banda «escenario» a todo el
+// ancho de la sala. Las filas miran hacia el y la numeracion se mide desde el.
+// ---------------------------------------------------------------------------
+const ESCENARIO_ANCHO_MAXIMO = 60;
+const ESCENARIO_ALTO_MAXIMO = 10;
+const escenario = { id: 'escenario', tipo: 'escenario', nombre: 'Escenario', x: 1, y: 0, ancho: 1, alto: 2 };
+const esEscenario = (pieza) => Boolean(pieza) && pieza.tipo === 'escenario';
+const centroDelEscenario = () => ({ x: escenario.x + escenario.ancho / 2, y: escenario.y + escenario.alto / 2 });
+
+// Hacia donde miran las butacas de una fila en la altura y: arriba si el escenario
+// esta por encima (o a su altura), abajo si esta por debajo.
+const miraHaciaEscenario = (y) => (centroDelEscenario().y > y + 1 ? MIRA_ABAJO : MIRA_ESCENARIO);
+
+// Si una butaca mira al escenario de frente: su giro es vertical y apunta hacia el.
+// Las que miran de lado (90 o 270) o de espaldas llevan secuencia propia.
+function miraDeFrente(butaca) {
+  const centro = centroDelEscenario().y;
+  if (butaca.mira === MIRA_ESCENARIO) return centro <= butaca.y + 0.5;
+  if (butaca.mira === MIRA_ABAJO) return centro > butaca.y + 0.5;
+  return false;
+}
+
+// Giro con el que un bloque nuevo en (x, y) mira hacia el escenario.
+function giroHaciaEscenario(x, y) {
+  const c = centroDelEscenario();
+  const dx = c.x - x, dy = c.y - y;
+  if (Math.abs(dy) >= Math.abs(dx)) return dy <= 0 ? 0 : 180;
+  return dx > 0 ? 90 : 270;
+}
+
+// Gira el escenario 90 grados sobre su centro: intercambia ancho y alto. Con el
+// mismo redondeo que las mesas, girar dos veces lo deja donde estaba.
+function girarEscenario(e) {
+  const despues = { ...e, ancho: e.alto, alto: e.ancho };
+  const redondear = despues.alto > despues.ancho ? Math.floor : Math.ceil;
+  return {
+    ...despues,
+    x: redondear(e.x + (e.ancho - despues.ancho) / 2),
+    y: redondear(e.y + (e.alto - despues.alto) / 2),
+  };
+}
+
+// Cambia el ancho o el alto del escenario desde su esquina superior izquierda.
+function cambiarTamanoEscenario(e, dAncho, dAlto) {
+  const ancho = e.ancho + dAncho, alto = e.alto + dAlto;
+  if (ancho < 1 || ancho > ESCENARIO_ANCHO_MAXIMO || alto < 1 || alto > ESCENARIO_ALTO_MAXIMO) return null;
+  return { ...e, ancho, alto };
+}
+
 // Letra de la fila n (0 = A). Despues de la Z siguen AA, AB...
 const letraDeFila = (n) => (n < LETRAS.length ? LETRAS[n]
   : LETRAS[Math.floor(n / LETRAS.length) - 1] + LETRAS[n % LETRAS.length]);
 
 // La etiqueta visible de las butacas de fila, como en un teatro:
-// - Las que miran al escenario (bandas y bloques sin girar) se numeran por zona.
-//   En cada zona, la fila mas cercana al escenario es la A; todas las butacas de
-//   esa zona a esa altura, de cualquier banda o bloque, se numeran de izquierda
-//   a derecha: A1-A5 en un bloque y A6-A7 en el de al lado.
-// - Las de un bloque girado llevan el nombre del bloque y su propia secuencia:
-//   fila A la de delante, numeradas en el orden del bloque.
+// - Las que miran al escenario de frente (las bandas siempre; los bloques cuyo giro
+//   apunta hacia el) se numeran por zona. En cada zona, la fila mas cercana al
+//   escenario es la A; todas las butacas de esa zona a esa altura, de cualquier
+//   banda o bloque, se numeran de izquierda a derecha: A1-A5 y A6-A7.
+// - Las de un bloque que no mira al escenario de frente (girado de lado o de
+//   espaldas) llevan el nombre del bloque y su propia secuencia: fila A la de
+//   delante, numeradas en el orden del bloque.
 function numerarFilas() {
   const bloquePorId = new Map(bloquesFilas.map((b) => [b.id, b]));
   const porZona = new Map();
+  const centro = centroDelEscenario().y;
   for (const b of butacas) {
     if (b.grupo) continue;
     const bloque = b.bloque && bloquePorId.get(b.bloque);
-    if (bloque && bloque.giro) {
+    if (bloque && !miraDeFrente(b)) {
       Object.assign(b, { fila: letraDeFila(b.filaLocal), numero: b.numeroLocal, seccion: bloque.nombre });
       continue;
     }
@@ -704,7 +762,9 @@ function numerarFilas() {
     porZona.get(b.zona).push(b);
   }
   for (const [zona, lista] of porZona) {
-    const alturas = [...new Set(lista.map((b) => b.y))].sort((a, c) => a - c);
+    // Por distancia al escenario; a igual distancia, primero la de arriba.
+    const distancia = (y) => Math.abs(y + 0.5 - centro);
+    const alturas = [...new Set(lista.map((b) => b.y))].sort((a, c) => distancia(a) - distancia(c) || a - c);
     alturas.forEach((y, i) => {
       lista.filter((b) => b.y === y).sort((a, c) => a.x - c.x).forEach((b, k) => {
         Object.assign(b, { fila: letraDeFila(i), numero: k + 1, seccion: zonas[zona].nombre });
@@ -766,12 +826,23 @@ function generarPlano(tipo, plano = null) {
     }
     const colocada = { ...banda, nombre: nombre || 'Escenario', y, alto: altoDeBanda(banda) };
     sala.bandas.push(colocada);
-    // El escenario abarca la rejilla completa, no un tramo suelto.
-    if (banda.tipo === 'escenario') muebles.push({ tipo: 'escenario', x: 1, y, w: sala.ancho, h: 1.2 });
     if (banda.tipo === 'filas') agregarFilas(colocada, sala.columnas);
     y += colocada.alto;
   }
   sala.alto = y;
+
+  // El escenario: el del plano o el del mapa; si no hay, la franja de la banda
+  // «escenario» a todo el ancho de la sala.
+  const franja = sala.bandas.find((b) => b.tipo === 'escenario');
+  Object.assign(escenario, { x: 1, y: franja ? franja.y : 0, ancho: sala.ancho, alto: franja ? franja.alto : 2 },
+                (plano && plano.escenario) || definicion.escenario || {});
+  sala.escenarioPorDefecto = !((plano && plano.escenario) || definicion.escenario);
+  // Se dibuja con algo de aire abajo: con 2 celdas de alto, 1,2 de rectangulo.
+  muebles.push({ tipo: 'escenario', x: escenario.x, y: escenario.y, w: escenario.ancho,
+                 h: Math.max(0.8, escenario.alto - 0.8) });
+  escenario.geo = huellaDe(escenario);
+  // Las filas de las bandas miran hacia donde este el escenario.
+  for (const b of butacas) if (b.banda) b.mira = miraHaciaEscenario(b.y);
 
   const ocupadasDeMesas = definicion.mesasOcupadas || {};
   for (const config of plano ? plano.mesas : definicion.mesas || mesasAutomaticas(sala)) {
@@ -787,9 +858,9 @@ function generarPlano(tipo, plano = null) {
   for (const b of butacas) if (bloqueadas.has(b.id)) b.estado = 'bloqueada';
   numerarFilas();
 
-  // Filas de la rejilla donde puede haber mesas: toda la sala bajo el escenario.
-  const primera = sala.bandas.find((b) => b.tipo !== 'escenario');
-  sala.filas = { min: primera ? primera.y : y, max: y - 1 };
+  // Filas de la rejilla donde puede haber piezas: toda la sala. El escenario
+  // ocupa sus celdas, asi que nada se le pone encima.
+  sala.filas = { min: 0, max: y - 1 };
   return sala;
 }
 
@@ -817,6 +888,11 @@ function celdasOcupadas(excluir) {
       for (let dx = 0; dx < m.geo.ancho; dx++) ocupadas.set(celda(m.x + dx, m.y + dy), m.nombre);
     }
   }
+  if (excluir !== 'escenario') {
+    for (let dy = 0; dy < escenario.alto; dy++) {
+      for (let dx = 0; dx < escenario.ancho; dx++) ocupadas.set(celda(escenario.x + dx, escenario.y + dy), 'el escenario');
+    }
+  }
   return ocupadas;
 }
 
@@ -825,7 +901,8 @@ function celdasOcupadas(excluir) {
 // ocupar columnas de pasillo: sus pasillos son el espacio que se deja entre bloques.
 function motivoNoCabe(sala, ocupadas, pieza) {
   const { ancho, alto } = huellaDe(pieza);
-  const respetaPasillos = !esBloqueFilas(pieza);
+  // Solo las mesas respetan los pasillos; los bloques y el escenario pueden cruzarlos.
+  const respetaPasillos = !esBloqueFilas(pieza) && !esEscenario(pieza);
   for (let dy = 0; dy < alto; dy++) {
     for (let dx = 0; dx < ancho; dx++) {
       const cx = pieza.x + dx, cy = pieza.y + dy;
@@ -937,7 +1014,7 @@ function buscarSitioLibre(sala, ocupadas, config) {
 // Tras cambiar bandas o columnas, la primera pieza (mesa o bloque) que ya no cabe
 // (se sale, choca con una fila u otra pieza), o null si todas caben.
 function primeraPiezaQueNoCabe(sala) {
-  for (const pieza of [...mesas, ...bloquesFilas]) {
+  for (const pieza of [escenario, ...mesas, ...bloquesFilas]) {
     const motivo = motivoNoCabe(sala, celdasOcupadas(pieza.id), pieza);
     if (motivo) return { pieza, motivo };
   }
@@ -953,14 +1030,15 @@ function primeraPiezaQueNoCabe(sala) {
 const copiarPlano = (plano) => ({
   ...plano, bandas: plano.bandas.map((b) => ({ ...b })), mesas: plano.mesas.map((m) => ({ ...m })),
   bloquesFilas: (plano.bloquesFilas || []).map((b) => ({ ...b })),
+  ...(plano.escenario ? { escenario: { ...plano.escenario } } : {}),
 });
-const piezasDe = (plano) => [...plano.mesas, ...plano.bloquesFilas];
+const piezasDe = (plano) => [...plano.mesas, ...plano.bloquesFilas, ...(plano.escenario ? [plano.escenario] : [])];
 const bandaDe = (sala, id) => sala.bandas.find((b) => b.id === id);
 const dentroDeBanda = (banda, mesa) => mesa.y >= banda.y && mesa.y < banda.y + banda.alto;
 
 function redimensionarBanda(plano, sala, id, delta) {
   const banda = bandaDe(sala, id);
-  if (banda.tipo === 'escenario') return { motivo: 'el escenario tiene un alto fijo' };
+  if (banda.tipo === 'escenario') return { motivo: 'la franja del escenario tiene un alto fijo; cambia el tamaño del escenario en el plano' };
   const clave = banda.tipo === 'filas' ? 'filas' : 'alto';
   const valor = banda[clave] + delta;
   const maximo = banda.tipo === 'filas' ? FILAS_MAXIMAS : ALTO_MAXIMO;
@@ -1028,6 +1106,7 @@ function planoDesdeSala(tipo, sala) {
     })),
     mesas: mesas.map(({ id, x, y, largo, cabeceras, unLado, giro }) => ({ id, x, y, largo, cabeceras, unLado, giro })),
     bloquesFilas: bloquesFilas.map(configDeBloque),
+    escenario: configDeEscenario(escenario),
     distribucion: distribucionDeSala(sala),
     bloqueadas: butacas.filter((b) => b.estado === 'bloqueada').map((b) => b.id),
     siguiente: Math.max(definicion.siguiente || 0, ...mesas.map((m) => Number(m.id.slice(1)) + 1), 1),
@@ -1035,6 +1114,8 @@ function planoDesdeSala(tipo, sala) {
     siguienteBloque: Math.max(definicion.siguienteBloque || 1, ...bloquesFilas.map((b) => Number(b.id.slice(1)) + 1), 1),
   };
 }
+
+const configDeEscenario = ({ x, y, ancho, alto }) => ({ x, y, ancho, alto });
 
 // La configuracion guardable de un bloque: sin geometria ni nombre por defecto.
 const configDeBloque = ({ id, x, y, ancho, filas, zona, giro, nombrePropio }) =>
@@ -1080,6 +1161,7 @@ function mapaDesdePlano(nombre, plano, guardado, idsExistentes = null) {
     bandas: plano.bandas.map(({ ocupadas, bloqueadasAlFinal, filasDeMesas, ...banda }) => banda),
     mesas: plano.mesas.map(({ id, x, y, largo, cabeceras, unLado, giro }) => ({ id, x, y, largo, cabeceras, unLado, giro })),
     bloquesFilas: (plano.bloquesFilas || []).map((b) => ({ ...b })),
+    ...(plano.escenario ? { escenario: { ...plano.escenario } } : {}),
     bloqueadas: (plano.bloqueadas || []).filter((id) => !idsExistentes || idsExistentes.has(id)),
     siguiente: plano.siguiente,
     siguienteBanda: plano.siguienteBanda,
@@ -1089,7 +1171,7 @@ function mapaDesdePlano(nombre, plano, guardado, idsExistentes = null) {
 
 const definicionDeMapa = (mapa) => ({
   nombre: mapa.nombre, grupo: GRUPO_MAPAS, distribucion: mapa.distribucion, bandas: mapa.bandas,
-  mesas: mapa.mesas, bloquesFilas: mapa.bloquesFilas, bloqueadas: mapa.bloqueadas,
+  mesas: mapa.mesas, bloquesFilas: mapa.bloquesFilas, escenario: mapa.escenario, bloqueadas: mapa.bloqueadas,
   siguiente: mapa.siguiente, siguienteBanda: mapa.siguienteBanda, siguienteBloque: mapa.siguienteBloque,
 });
 
@@ -1195,6 +1277,18 @@ function validarMapa(dato) {
     return limpio;
   });
 
+  // Escenario: opcional (sin el, la franja de la banda «escenario» a todo el ancho).
+  let escenarioLimpio;
+  if (dato.escenario !== undefined) {
+    const e = dato.escenario;
+    if (!e || !esEntero(e.x, 0, 999) || !esEntero(e.y, 0, 999) ||
+        !esEntero(e.ancho, 1, ESCENARIO_ANCHO_MAXIMO) || !esEntero(e.alto, 1, ESCENARIO_ALTO_MAXIMO)) {
+      errores.push('el escenario no es válido');
+    } else {
+      escenarioLimpio = { x: e.x, y: e.y, ancho: e.ancho, alto: e.alto };
+    }
+  }
+
   const bloqueadas = dato.bloqueadas === undefined ? [] : dato.bloqueadas;
   if (!Array.isArray(bloqueadas) || !bloqueadas.every((id) => typeof id === 'string' && id.length <= 60)) {
     errores.push('la lista de butacas bloqueadas no es válida');
@@ -1206,7 +1300,9 @@ function validarMapa(dato) {
   const mapa = {
     formato: FORMATO_MAPA, version: VERSION_MAPA, nombre,
     guardado: typeof dato.guardado === 'string' ? dato.guardado.slice(0, 40) : null,
-    distribucion, bandas, mesas: mesasLimpias, bloquesFilas: bloquesLimpios, bloqueadas: [...new Set(bloqueadas)],
+    distribucion, bandas, mesas: mesasLimpias, bloquesFilas: bloquesLimpios,
+    ...(escenarioLimpio ? { escenario: escenarioLimpio } : {}),
+    bloqueadas: [...new Set(bloqueadas)],
     siguiente: Math.max(esEntero(dato.siguiente, 1, 1e6) ? dato.siguiente : 1, maximo(idsMesa, /^M(\d+)$/) + 1),
     siguienteBanda: Math.max(esEntero(dato.siguienteBanda, 1, 1e6) ? dato.siguienteBanda : 1,
                              maximo(idsBanda, /^banda(\d+)$/) + 1),
@@ -1230,6 +1326,10 @@ function cambiarDistribucion(plano, sala, distribucion) {
   const nueva = rejillaDeBloques(distribucion);
   const nuevo = copiarPlano(plano);
   nuevo.distribucion = { bloques: [...distribucion.bloques], pasillos: [...distribucion.pasillos] };
+  // Un escenario a todo el ancho sigue a todo el ancho.
+  if (nuevo.escenario && nuevo.escenario.x === 1 && nuevo.escenario.ancho === sala.ancho) {
+    nuevo.escenario.ancho = nueva.ancho;
+  }
   const dentro = (bloque, x, ancho) => bloque[0] + Math.max(0, Math.min(x - bloque[0], bloque.length - ancho));
   for (const m of nuevo.mesas) {
     const i = sala.bloques.findIndex((b) => b.includes(m.x));
@@ -1309,10 +1409,13 @@ function texto(clase, x, y, contenido) {
 function dibujarMuebles() {
   for (const m of muebles) {
     if (m.tipo === 'escenario') {
-      capaMuebles.appendChild(nodo('rect', { class: 'escenario', x: m.x * PASO, y: m.y * PASO,
-        width: m.w * PASO, height: m.h * PASO, rx: 3 }));
-      capaMuebles.appendChild(texto('escenario-texto',
-        (m.x + m.w / 2) * PASO, (m.y + m.h / 2) * PASO, 'ESCENARIO'));
+      const rect = nodo('rect', { class: 'escenario', x: m.x * PASO, y: m.y * PASO,
+        width: m.w * PASO, height: m.h * PASO, rx: 3 });
+      const cx = (m.x + m.w / 2) * PASO, cy = (m.y + m.h / 2) * PASO;
+      const rotulo = texto('escenario-texto', cx, cy, 'ESCENARIO');
+      if (m.h > m.w) rotulo.setAttribute('transform', `rotate(-90 ${cx} ${cy})`);
+      rect.dataset.pieza = rotulo.dataset.pieza = 'escenario';
+      capaMuebles.append(rect, rotulo);
     } else if (m.tipo === 'mesa') {
       const rect = nodo('rect', { class: 'mueble', x: m.x * PASO + 1, y: m.y * PASO + 1,
         width: m.w * PASO - 2, height: m.h * PASO - 2, rx: 4 });
@@ -1390,7 +1493,9 @@ function dibujarButacas() {
 
 // Solo en el editor: una zona por pieza (mesa o bloque de filas) que cubre toda su
 // huella. Es lo que se agarra con el raton y lo que recibe el foco con el teclado.
-const etiquetaPieza = (m) => (esBloqueFilas(m)
+const etiquetaPieza = (m) => (esEscenario(m)
+  ? 'Escenario, ' + m.ancho + ' × ' + m.alto + ' celdas'
+  : esBloqueFilas(m)
   ? m.nombre + ', bloque de ' + m.filas + ' × ' + m.ancho + ' butacas, zona ' + zonas[m.zona].nombre +
     (m.giro ? ', girado ' + m.giro + '°' : '')
   : m.nombre + ', ' + m.geo.lugares.length + ' lugares' +
@@ -1399,7 +1504,7 @@ const etiquetaPieza = (m) => (esBloqueFilas(m)
 
 function dibujarPiezas() {
   if (modo !== 'editor' || herramienta === 'bloquear') return;
-  const piezas = [...mesas, ...bloquesFilas];
+  const piezas = [escenario, ...mesas, ...bloquesFilas];
   // Si la pieza activa ya no existe (se elimino), el punto de tabulacion va a la primera.
   const hayActiva = piezas.some((m) => m.id === mesaActiva);
   piezas.forEach((m, indice) => {
@@ -1465,7 +1570,7 @@ function dibujarBandas() {
     detalle.className = 'banda-detalle';
     li.append(nombre, detalle);
     if (banda.tipo === 'escenario') {
-      detalle.textContent = 'Fijo, arriba';
+      detalle.textContent = 'Franja inicial · el escenario se mueve y cambia de tamaño en el plano';
       listaBandas.appendChild(li);
       return;
     }
@@ -1871,14 +1976,16 @@ let tipoActual, salaActual;
 const planos = {};
 
 // 'mesaActiva' guarda el id de la pieza activa: una mesa (M3) o un bloque de filas (F2).
-const piezaPorId = (id) => mesas.find((m) => m.id === id) || bloquesFilas.find((b) => b.id === id);
+const piezaPorId = (id) => (id === 'escenario' ? escenario
+  : mesas.find((m) => m.id === id) || bloquesFilas.find((b) => b.id === id));
 const anunciar = (mensaje) => { document.getElementById('estado').textContent = mensaje; };
 const configDe = ({ id, x, y, largo, cabeceras, unLado, giro }) =>
   ({ id, x, y, largo, cabeceras, unLado, giro });
-const configDePieza = (p) => (esBloqueFilas(p) ? configDeBloque(p) : configDe(p));
+const configDePieza = (p) => (esEscenario(p) ? { id: 'escenario', tipo: 'escenario', ...configDeEscenario(p) }
+  : esBloqueFilas(p) ? configDeBloque(p) : configDe(p));
 // Concordancia: «Mesa 3 movida», «Bloque 2 movido».
-const genero = (p) => (esBloqueFilas(p) ? 'o' : 'a');
-const resumenDePieza = (p) => (esBloqueFilas(p)
+const genero = (p) => (esBloqueFilas(p) || esEscenario(p) ? 'o' : 'a');
+const resumenDePieza = (p) => (esEscenario(p) ? p.ancho + ' × ' + p.alto + ' celdas' : esBloqueFilas(p)
   ? p.filas + ' × ' + p.ancho + ' butacas'
   : p.geo.lugares.length + ' lugares');
 
@@ -1915,8 +2022,10 @@ const botonesDeMesa = () => document.querySelectorAll('#herramientas-editor [dat
 const ACCIONES_DE = {
   mesa: new Set(['girar', 'alargar', 'acortar', 'cabeceras', 'unlado', 'eliminar']),
   bloque: new Set(['girar', 'alargar', 'acortar', 'masfilas', 'menosfilas', 'eliminar']),
+  escenario: new Set(['girar', 'alargar', 'acortar', 'masfilas', 'menosfilas']),
 };
-const aplica = (accion, p) => ACCIONES_DE[esBloqueFilas(p) ? 'bloque' : 'mesa'].has(accion);
+const tipoDePieza = (p) => (esEscenario(p) ? 'escenario' : esBloqueFilas(p) ? 'bloque' : 'mesa');
+const aplica = (accion, p) => ACCIONES_DE[tipoDePieza(p)].has(accion);
 
 function actualizarControles() {
   const m = mesaActiva && piezaPorId(mesaActiva);
@@ -1926,13 +2035,16 @@ function actualizarControles() {
   const bloque = esBloqueFilas(m);
   for (const boton of botonesDeMesa()) {
     const accion = boton.dataset.accion;
-    const largo = bloque ? m.ancho : m && m.largo;
-    const maximo = bloque ? ANCHO_BLOQUE_MAXIMO : LARGO_MAXIMO;
+    const deEscenario = esEscenario(m);
+    const largo = bloque || deEscenario ? m.ancho : m && m.largo;
+    const maximo = deEscenario ? ESCENARIO_ANCHO_MAXIMO : bloque ? ANCHO_BLOQUE_MAXIMO : LARGO_MAXIMO;
+    const filas = deEscenario ? m.alto : m && m.filas;
+    const filasMaximas = deEscenario ? ESCENARIO_ALTO_MAXIMO : FILAS_MAXIMAS;
     boton.disabled = !m || !aplica(accion, m) ||
       (accion === 'alargar' && largo >= maximo) ||
       (accion === 'acortar' && largo <= 1) ||
-      (accion === 'masfilas' && m.filas >= FILAS_MAXIMAS) ||
-      (accion === 'menosfilas' && m.filas <= 1);
+      (accion === 'masfilas' && filas >= filasMaximas) ||
+      (accion === 'menosfilas' && filas <= 1);
     if (accion === 'cabeceras') boton.setAttribute('aria-pressed', String(Boolean(m && m.cabeceras)));
     if (accion === 'unlado') boton.setAttribute('aria-pressed', String(Boolean(m && m.unLado)));
   }
@@ -2050,6 +2162,10 @@ function regenerar(mensaje, antes = fotoDeButacas()) {
 
 function reemplazarMesa(config) {
   const plano = planoEditable();
+  if (esEscenario(config)) {
+    plano.escenario = configDeEscenario(config);
+    return;
+  }
   const lista = esBloqueFilas(config) ? 'bloquesFilas' : 'mesas';
   plano[lista] = plano[lista].map((c) => (c.id === config.id ? config : c));
 }
@@ -2068,21 +2184,26 @@ const posicionTexto = (antes, despues) =>
 // Girar, alargar, acortar y cabeceras: se calcula la configuracion nueva, se
 // coloca en su sitio o en el mas cercano, y si no cabe se anuncia por que.
 const TRANSFORMACIONES = {
-  girar:     { calcular: girarPieza,
+  girar:     { calcular: (c) => (esEscenario(c) ? girarEscenario(c) : girarPieza(c)),
                fallo: (m) => 'No se pudo girar ' + m.nombre,
-               hecho: (m) => (m.giro ? 'girad' + genero(m) + ' ' + m.giro + '°' : 'de vuelta a su posición original') },
-  alargar:   { calcular: (c) => (esBloqueFilas(c) ? cambiarAncho(c, 1) : cambiarLargo(c, 1)),
+               hecho: (m) => (esEscenario(m) ? 'girado 90°'
+                 : m.giro ? 'girad' + genero(m) + ' ' + m.giro + '°' : 'de vuelta a su posición original') },
+  alargar:   { calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, 1, 0)
+                 : esBloqueFilas(c) ? cambiarAncho(c, 1) : cambiarLargo(c, 1)),
                tope: 'el largo máximo',
                fallo: (m) => 'No se pudo alargar ' + m.nombre,
                hecho: (m) => 'alargad' + genero(m) },
-  acortar:   { calcular: (c) => (esBloqueFilas(c) ? cambiarAncho(c, -1) : cambiarLargo(c, -1)),
+  acortar:   { calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, -1, 0)
+                 : esBloqueFilas(c) ? cambiarAncho(c, -1) : cambiarLargo(c, -1)),
                tope: 'el largo mínimo',
                fallo: (m) => 'No se pudo acortar ' + m.nombre,
                hecho: (m) => 'acortad' + genero(m) },
-  masfilas:  { calcular: (c) => cambiarFilasBloque(c, 1), tope: 'el máximo de filas',
+  masfilas:  { calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, 0, 1) : cambiarFilasBloque(c, 1)),
+               tope: 'el máximo de filas',
                fallo: (m) => 'No se pudo agregar una fila a ' + m.nombre,
                hecho: () => 'con una fila más' },
-  menosfilas:{ calcular: (c) => cambiarFilasBloque(c, -1), tope: 'una sola fila',
+  menosfilas:{ calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, 0, -1) : cambiarFilasBloque(c, -1)),
+               tope: 'una sola fila',
                fallo: (m) => 'No se pudo quitar una fila a ' + m.nombre,
                hecho: () => 'con una fila menos' },
   cabeceras: { calcular: alternarCabeceras,
@@ -2135,8 +2256,13 @@ function agregarMesaNueva(estilo) {
 function agregarBloqueNuevo() {
   const plano = planoEditable();
   const id = 'F' + plano.siguienteBloque;
-  const config = { id, tipo: 'filas', x: 0, y: 0, ancho: 5, filas: 2, zona: 'general', giro: 0 };
-  const sitio = buscarSitioLibre(salaActual, celdasOcupadas(null), config);
+  const base = { id, tipo: 'filas', x: 0, y: 0, ancho: 5, filas: 2, zona: 'general', giro: 0 };
+  // Se busca sitio sin girar, se orienta hacia el escenario desde ahi y se vuelve
+  // a buscar con ese giro. Si girado no cabe en ningun sitio, se queda sin girar.
+  const ocupadas = celdasOcupadas(null);
+  const primero = buscarSitioLibre(salaActual, ocupadas, base);
+  const giro = primero ? giroHaciaEscenario(primero.x + 2.5, primero.y + 1) : 0;
+  const sitio = (giro && buscarSitioLibre(salaActual, ocupadas, { ...base, giro })) || primero;
   if (!sitio) {
     anunciar('No hay sitio libre para un bloque de 5 × 2. Haz espacio o agrega una zona de mesas.');
     return;
@@ -2161,7 +2287,8 @@ function ejecutarAccion(accion, id = mesaActiva) {
   const pieza = id && piezaPorId(id);
   if (!pieza) return;
   if (!aplica(accion, pieza)) {
-    anunciar(esBloqueFilas(pieza) ? 'Esa acción es solo para mesas.' : 'Esa acción es solo para bloques de filas.');
+    anunciar(esEscenario(pieza) ? 'El escenario no admite esa acción.'
+      : esBloqueFilas(pieza) ? 'Esa acción no es para bloques de filas.' : 'Esa acción no es para mesas.');
     return;
   }
   if (accion === 'eliminar') eliminarMesa(id);
@@ -2208,10 +2335,10 @@ const PISTAS = {
   bloquear: 'Haz clic en una butaca, o Enter sobre ella, para bloquearla o desbloquearla · ' +
             'flechas para recorrer · las bloqueadas se guardan con el mapa',
   vista: 'Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer',
-  editor: 'Arrastra una mesa o un bloque de filas para moverlo · con teclado, Tab hasta la ' +
-          'pieza: flechas la mueven, R la gira, + y − cambian su largo, ] y [ agregan o quitan ' +
-          'filas a un bloque, C pone o quita cabeceras, U alterna uno o dos lados, Supr la ' +
-          'elimina · Esc cancela un arrastre',
+  editor: 'Arrastra el escenario, una mesa o un bloque de filas para moverlo · con teclado, Tab ' +
+          'hasta la pieza: flechas la mueven, R la gira, + y − cambian su largo, ] y [ agregan o ' +
+          'quitan filas (o alto, en el escenario), C pone o quita cabeceras, U alterna uno o dos ' +
+          'lados, Supr la elimina · Esc cancela un arrastre',
 };
 
 function cambiarModo(nuevo) {
