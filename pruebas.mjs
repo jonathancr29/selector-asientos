@@ -25,7 +25,7 @@ const cargar = () => new Function(html.slice(inicio, fin) +
   ' leerDistribucion, cambiarDistribucion, geometriaBloqueFilas, bloquesFilas, cambiarAncho,' +
   ' cambiarFilasBloque, letraDeFila, escenario, girarEscenario, cambiarTamanoEscenario,' +
   ' giroHaciaEscenario, disponerBandas, hojasDe, ubicar, agregarVertical, cambiarAnchoVertical,' +
-  ' agregarBandaEnVertical };')();
+  ' agregarBandaEnVertical, duplicarPieza, duplicarBanda, renombrarBanda, capasDe, bandaEnCelda };')();
 
 const DISPOSICIONES = ['ninguno', 'izquierda', 'derecha', 'ambos'];
 const rango = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
@@ -1222,3 +1222,153 @@ test('una franja dividida se guarda en el mapa y se valida al leer', () => {
     .includes('banda 5, vertical 2: id no válido o repetido'));
 });
 
+// --- Duplicar, nombres y capas -------------------------------------------------
+
+test('duplicar una mesa: id nuevo, misma forma, junto a la original y con sus bloqueadas', () => {
+  const api = cargar();
+  const { plano, sala } = planoDe(api, 'mixta-ambos');
+  plano.bloqueadas = [...plano.bloqueadas, 'M1-N1'];
+  // A la derecha de M1 hay un pasillo y debajo esta M4: va al sitio libre mas cercano.
+  const copia = api.duplicarPieza(plano, sala, 'M1');
+  assert.deepEqual(copia.mesas.at(-1), { id: 'M7', x: 2, y: 14, largo: 2, cabeceras: false, unLado: false, giro: 0 });
+  assert.equal(copia.siguiente, 8);
+  assert.ok(copia.bloqueadas.includes('M1-N1') && copia.bloqueadas.includes('M7-N1'));
+  assert.equal(plano.mesas.length, 6);   // no toca el plano de entrada
+  assert.equal(api.primeraPiezaQueNoCabe(api.generarPlano('mixta-ambos', copia)), null);
+  assert.equal(api.butacas.find((b) => b.id === 'M7-N1').estado, 'bloqueada');
+  assert.deepEqual(api.duplicarPieza(plano, sala, 'escenario'), { motivo: 'el escenario no se puede duplicar' });
+});
+
+test('duplicar un bloque: a su derecha si cabe, con «(copia)» en su nombre propio', () => {
+  const api = cargar();
+  const { plano, sala } = conBloques(api, 'mixta-ambos', bloque('F1', 1, 14, { ancho: 3, nombre: 'Palco' }));
+  const copia = api.duplicarPieza(plano, sala, 'F1');
+  assert.deepEqual(copia.bloquesFilas.map((b) => [b.id, b.x, b.y, b.nombre]), [['F1', 1, 14, 'Palco'], ['F2', 4, 14, 'Palco (copia)']]);
+  assert.equal(copia.siguienteBloque, 3);
+  // Un nombre largo se recorta para que quepa el sufijo.
+  const largo = conBloques(api, 'mixta-ambos', bloque('F1', 1, 14, { ancho: 3, nombre: 'x'.repeat(40) }));
+  const nombre = api.duplicarPieza(largo.plano, largo.sala, 'F1').bloquesFilas[1].nombre;
+  assert.deepEqual([nombre.length, nombre.endsWith(' (copia)')], [40, true]);
+});
+
+test('duplicar una banda de filas: debajo de la original, ids nuevos y la numeracion sigue', () => {
+  const api = cargar();
+  const { plano, sala } = planoDe(api, 'mixta-ambos');
+  const copia = api.duplicarBanda(plano, sala, 'general');
+  assert.deepEqual(copia.bandas.map((b) => b.id), ['escenario', 'luneta', 'mesas', 'general', 'banda1']);
+  assert.equal(copia.siguienteBanda, 2);
+  assert.deepEqual(copia.bloqueadas, ['general-B11', 'general-B12', 'banda1-B11', 'banda1-B12']);
+  const salaCopia = api.generarPlano('mixta-ambos', copia);
+  assert.deepEqual(resumenBandas(salaCopia).slice(-2), ['General@18+2', 'General 2@20+2']);
+  // La ocupacion no se copia; la etiqueta sigue siendo la de la zona.
+  assert.ok(api.butacas.filter((b) => b.banda === 'banda1').every((b) => b.estado !== 'ocupada'));
+  assert.deepEqual(['banda1-A1', 'banda1-B12'].map((id) => etiqueta(api, id)), ['General C1', 'General D12']);
+  // La luneta, arriba del todo: lo de debajo baja con sus mesas.
+  const luneta = api.duplicarBanda(plano, sala, 'luneta');
+  assert.deepEqual(posiciones(luneta.mesas), { M1: 10, M2: 10, M3: 10, M4: 14, M5: 14, M6: 14 });
+  assert.deepEqual(api.duplicarBanda(plano, sala, 'escenario'), { motivo: 'la franja del escenario no se puede duplicar' });
+});
+
+test('duplicar una zona de mesas copia sus mesas a la misma distancia', () => {
+  const api = cargar();
+  const { plano, sala } = planoDe(api, 'mixta-ambos');
+  const copia = api.duplicarBanda(plano, sala, 'mesas');
+  assert.deepEqual(posiciones(copia.mesas), { M1: 7, M2: 7, M3: 7, M4: 11, M5: 11, M6: 11,
+                                              M7: 20, M8: 20, M9: 20, M10: 24, M11: 24, M12: 24 });
+  assert.deepEqual(copia.mesas.slice(6).map((m) => m.x), [2, 7, 12, 2, 7, 12]);
+  assert.equal(copia.siguiente, 13);
+  const salaCopia = api.generarPlano('mixta-ambos', copia);
+  assert.deepEqual([salaCopia.alto, api.primeraPiezaQueNoCabe(salaCopia)], [33, null]);
+});
+
+test('duplicar una franja o una vertical copia todo lo de dentro con ids nuevos', () => {
+  const api = cargar();
+  const { plano, sala } = conFranja(api, (p) => ({ ...p, mesas: [...p.mesas, mesa('M9', 6, 20)], siguiente: 10,
+    bloquesFilas: [bloque('F1', 8, 22, { ancho: 3, filas: 2, zona: 'general', nombre: 'Palco' })], siguienteBloque: 2,
+    bloqueadas: ['F1-1-1', 'banda5-A2', 'M9-N1'] }));
+
+  const franja = api.duplicarBanda(plano, sala, 'banda1');
+  assert.deepEqual(api.hojasDe(franja.bandas).map((b) => b.id).slice(-4), ['banda3', 'banda5', 'banda8', 'banda10']);
+  assert.deepEqual(franja.bandas.at(-1).verticales.map((v) => [v.id, v.ancho]), [['banda7', 7], ['banda9', undefined]]);
+  assert.deepEqual(franja.mesas.slice(-2).map((m) => [m.id, m.x, m.y]), [['M9', 6, 20], ['M10', 6, 24]]);
+  assert.deepEqual(franja.bloquesFilas.map((b) => [b.id, b.x, b.y, b.nombre]),
+    [['F1', 8, 22, 'Palco'], ['F2', 8, 26, 'Palco (copia)']]);
+  assert.deepEqual(franja.bloqueadas, ['F1-1-1', 'banda5-A2', 'M9-N1', 'F2-1-1', 'banda10-A2', 'M10-N1']);
+  assert.equal(api.primeraPiezaQueNoCabe(api.generarPlano('mixta-ambos', franja)), null);
+
+  // La ultima vertical (7 columnas) se parte entre ella y su copia.
+  const ultima = api.duplicarBanda(plano, sala, 'banda4');
+  assert.deepEqual(ultima.bandas.at(-1).verticales.map((v) => [v.id, v.ancho]), [['banda2', 7], ['banda4', 3], ['banda6', undefined]]);
+  assert.deepEqual(ultima.bloquesFilas.map((b) => [b.id, b.x, b.y]), [['F1', 8, 22], ['F2', 11, 22]]);
+  assert.equal(api.primeraPiezaQueNoCabe(api.generarPlano('mixta-ambos', ultima)), null);
+});
+
+test('una vertical con 1 columna o una franja llena de verticales no se duplican', () => {
+  const api = cargar();
+  const { plano, sala } = conFranja(api);
+  const angosta = api.cambiarAnchoVertical(plano, sala, 'banda2', 6);   // 13 y 1 columnas
+  assert.deepEqual(api.duplicarBanda(angosta, api.generarPlano('mixta-ambos', angosta), 'banda4'),
+    { motivo: 'no queda ancho para la copia: Vertical 2 mide 1 columna' });
+  let llena = api.cambiarAnchoVertical(plano, sala, 'banda2', -6);   // 1 y 13 columnas
+  for (let i = 0; i < 4; i++) llena = api.agregarVertical(llena, api.generarPlano('mixta-ambos', llena), 'banda1');
+  assert.deepEqual(api.duplicarBanda(llena, api.generarPlano('mixta-ambos', llena), 'banda2'),
+    { motivo: 'ya tiene el máximo de bandas verticales (6)' });
+});
+
+test('renombrar bandas y verticales: se guarda, se limpia y sobrevive al cambio de zona', () => {
+  const api = cargar();
+  const { plano } = conFranja(api);
+  let nuevo = api.renombrarBanda(plano, 'banda4', '  Palcos derechos  ');
+  nuevo = api.renombrarBanda(nuevo, 'general', 'Gradas');
+  nuevo = api.cambiarZonaBanda(nuevo, 'general', 'luneta');
+  const salaNueva = api.generarPlano('mixta-ambos', nuevo);
+  assert.equal(salaNueva.bandas.at(-1).verticales[1].nombre, 'Palcos derechos');
+  assert.equal(api.ubicar(salaNueva.bandas, 'general').item.nombre, 'Gradas');
+  // La etiqueta de las butacas sigue siendo la de la zona.
+  assert.equal(etiqueta(api, 'general-A1'), 'Luneta D1');
+  // planoDesdeSala conserva los nombres propios, no los de por defecto.
+  const extraido = api.planoDesdeSala('mixta-ambos', salaNueva);
+  assert.deepEqual([extraido.bandas[3].nombre, extraido.bandas[4].nombre, extraido.bandas[4].verticales[1].nombre],
+    ['Gradas', undefined, 'Palcos derechos']);
+  // Vacio: vuelve al nombre por defecto. El escenario no lleva nombre.
+  const sinNombre = api.generarPlano('mixta-ambos', api.renombrarBanda(nuevo, 'banda4', '   '));
+  assert.equal(sinNombre.bandas.at(-1).verticales[1].nombre, 'Vertical 2');
+  assert.equal(api.renombrarBanda(nuevo, 'nada', 'a').motivo, 'esa banda ya no existe');
+  assert.equal(api.renombrarBanda(plano, 'mesas', 'y'.repeat(60)).bandas[2].nombre.length, 40);
+  assert.deepEqual(api.renombrarBanda(plano, 'escenario', 'a'), { motivo: 'la franja del escenario no lleva nombre' });
+  // Y se guarda en el mapa.
+  const mapa = JSON.parse(JSON.stringify(api.mapaDesdePlano('Nombres', nuevo, null)));
+  const { mapa: leido } = api.validarMapa(mapa);
+  assert.equal(api.generarPlano(api.registrarMapa(leido)).bandas.at(-1).verticales[1].nombre, 'Palcos derechos');
+});
+
+test('subtitulos: las bandas de la sala en el margen, las verticales en su borde', () => {
+  const api = cargar();
+  const { plano, sala } = conFranja(api);
+  const subtitulos = api.muebles.filter((m) => m.tipo === 'subtitulo');
+  assert.deepEqual(subtitulos.map((m) => [m.lugar, m.banda, m.texto, m.x, m.y]), [
+    ['margen', 'luneta', 'Luneta', -2, 2],
+    ['margen', 'mesas', 'Zona de mesas', -3, 5],
+    ['margen', 'general', 'General', -2, 18],
+    ['margen', 'banda1', 'Franja dividida', -3, 20],
+    ['borde', 'banda3', 'Vertical 1 · Zona de mesas 2', 1, 20],
+    ['borde', 'banda5', 'Vertical 2 · General 2', 8, 20],
+  ]);
+  // Una segunda banda dentro de una vertical lleva su propio subtitulo.
+  api.generarPlano('mixta-ambos', api.agregarBandaEnVertical(plano, sala, 'banda4', 'mesas'));
+  assert.deepEqual(api.muebles.filter((m) => m.tipo === 'subtitulo').at(-1),
+    { tipo: 'subtitulo', lugar: 'borde', banda: 'banda6', texto: 'Zona de mesas 3', x: 8, y: 22 });
+});
+
+test('capas y seleccion de bandas por celda: clic a clic se sube por el arbol', () => {
+  const api = cargar();
+  const { sala } = conFranja(api);
+  assert.deepEqual(api.capasDe(sala.bandas),
+    ['luneta', 'mesas', 'general', 'banda1', 'banda2', 'banda3', 'banda4', 'banda5']);
+  // Celda (9, 20): filas de la vertical derecha.
+  assert.deepEqual([null, 'banda5', 'banda4', 'banda1'].map((actual) => api.bandaEnCelda(sala, 9, 20, actual)),
+    ['banda5', 'banda4', 'banda1', null]);
+  assert.equal(api.bandaEnCelda(sala, 9, 23), 'banda4');           // espacio libre bajo las filas
+  assert.equal(api.bandaEnCelda(sala, 3, 0), null);                // la franja del escenario
+  assert.equal(api.bandaEnCelda(sala, 3, 3, 'mesas'), 'luneta');   // con otra seleccionada, la de la celda
+});

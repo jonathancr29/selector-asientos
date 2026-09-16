@@ -92,6 +92,30 @@
   /* Limite entre bandas, solo en el editor. */
   .limite-banda { stroke: #3f4f6b; stroke-width: .5; stroke-dasharray: 2 2; }
   .limite-vertical { stroke: #56709a; stroke-width: .6; stroke-dasharray: 3 2; }
+  /* Subtitulos: el nombre de cada banda, en el margen o en su borde superior. */
+  .subtitulo { fill: #94a3b8; font-size: 4px; text-anchor: end; dominant-baseline: middle; }
+  .subtitulo-borde rect { fill: #17171c; stroke: #3a3a46; stroke-width: .4; }
+  .subtitulo-borde text { fill: #cbd5e1; font-size: 3.2px; dominant-baseline: middle; }
+  #plano.editando .subtitulo, #plano.editando .subtitulo-borde { cursor: pointer; }
+  /* Van sobre las butacas para leerse; fuera del editor de piezas no capturan clics. */
+  #plano:not(.editando) .subtitulo-borde, #plano.bloqueando .subtitulo-borde { pointer-events: none; }
+  /* La banda seleccionada lleva el color de su capa (--capa). No depende solo del
+     color: contorno continuo y grueso, y su nombre pasa a una etiqueta rellena en su
+     borde inferior, sobre todo lo demas (piezas incluidas). */
+  .contorno-banda { fill: var(--capa); fill-opacity: .07; stroke: var(--capa); stroke-width: 1.4; pointer-events: none; }
+  #rotulo-seleccion { pointer-events: none; }
+  .rotulo-seleccion rect { fill: var(--capa); stroke: #17171c; stroke-width: .6; }
+  .rotulo-seleccion text { fill: #17171c; font-size: 4px; font-weight: 700; dominant-baseline: middle; }
+  .muestra-capa { width: 12px; height: 12px; flex: none; border-radius: 3px; background: var(--capa); }
+  .banda-nombre input {
+    height: 28px; width: 150px; padding: 0 8px; font: inherit; font-size: 13px; color: #e2e8f0;
+    background: #17171c; border: 1px solid #3a3a46; border-radius: 6px;
+  }
+  .banda-nombre input::placeholder { color: #94a3b8; }
+  .banda-nombre input:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+  .banda.activa > .banda-nombre input { border-color: var(--capa); border-width: 2px; font-weight: 700; }
+  .banda-seleccionada { display: none; font-size: 12px; color: var(--capa); }
+  .banda.activa > .banda-seleccionada { display: inline; }
   .mesa-activa { font-size: 12px; color: #cbd5e1; min-width: 150px; }
   #nombre-pieza { min-width: 150px; width: 150px; }
   .herramientas select:disabled, .herramientas input:disabled { opacity: .45; }
@@ -224,6 +248,7 @@
     <button type="button" data-accion="menosfilas" aria-keyshortcuts="[">− fila</button>
     <button type="button" data-accion="cabeceras" aria-pressed="false" aria-keyshortcuts="C">Cabeceras</button>
     <button type="button" data-accion="unlado" aria-pressed="false" aria-keyshortcuts="U">Un solo lado</button>
+    <button type="button" data-accion="duplicar" aria-keyshortcuts="Control+D Meta+D">Duplicar</button>
     <button type="button" data-accion="eliminar" aria-keyshortcuts="Delete">Eliminar</button>
     <label class="campo" for="zona-pieza">Zona</label>
     <select id="zona-pieza" disabled>
@@ -266,7 +291,10 @@
       </defs>
       <g id="muebles"></g>
       <g id="butacas"></g>
+      <g id="subtitulos"></g>        <!-- nombres en el borde de verticales y bandas interiores, sobre las butacas -->
+      <g id="seleccion-banda"></g>   <!-- solo en modo editor: el contorno de la banda seleccionada -->
       <g id="piezas"></g>   <!-- solo en modo editor: una zona movible por mesa -->
+      <g id="rotulo-seleccion"></g>   <!-- el nombre de la banda seleccionada, encima de todo -->
     </svg>
   </div>
 
@@ -594,7 +622,8 @@ function disponerBandas(bandas, anchoSala) {
   const pila = (lista, x, y, ancho, profundidad) => {
     let cursor = y;
     const colocadas = lista.map((banda) => {
-      const colocada = { ...banda, nombre: nombreDe(banda), x, y: cursor, anchoOcupado: ancho, profundidad };
+      const colocada = { ...banda, nombre: nombreDe(banda), nombrePropio: banda.nombre || null,
+                         x, y: cursor, anchoOcupado: ancho, profundidad };
       if (esDivision(banda)) {
         const n = banda.verticales.length;
         const resto = ancho - banda.verticales.slice(0, -1).reduce((s, v) => s + v.ancho, 0);
@@ -603,7 +632,8 @@ function disponerBandas(bandas, anchoSala) {
         colocada.verticales = banda.verticales.map((v, i) => {
           const w = i < n - 1 ? v.ancho : Math.max(1, resto);
           const interior = pila(v.bandas, vx, cursor, w, profundidad + 2);
-          const colV = { ...v, nombre: v.nombre || 'Vertical ' + (i + 1), x: vx, y: cursor, anchoOcupado: w,
+          const colV = { ...v, nombre: v.nombre || 'Vertical ' + (i + 1), nombrePropio: v.nombre || null,
+                         x: vx, y: cursor, anchoOcupado: w,
                          profundidad: profundidad + 1, bandas: interior.colocadas, altoPila: interior.alto };
           vx += w;
           return colV;
@@ -956,6 +986,29 @@ function mesasAutomaticas(sala) {
   return lista;
 }
 
+// El nombre de cada banda como subtitulo del plano, sin pisar butacas:
+// - Las de la sala (filas, mesas, franjas), en el margen izquierdo, a la altura de
+//   su primera fila. 'x' y 'w' reservan su ancho aproximado para el encuadre.
+// - Las verticales y las bandas de dentro, en su borde superior. La primera banda
+//   de una vertical empieza en el mismo borde: comparten subtitulo («Vertical 1 ·
+//   General 2»), que al editarse lleva a la banda.
+const ANCHO_LETRA_SUBTITULO = 2.2;   // unidades del viewBox por caracter, aproximado
+function agregarSubtitulos(bandas) {
+  for (const banda of bandas) {
+    if (banda.tipo === 'escenario') continue;
+    const w = Math.ceil((banda.nombre.length * ANCHO_LETRA_SUBTITULO + 3) / PASO);
+    muebles.push({ tipo: 'subtitulo', lugar: 'margen', banda: banda.id, texto: banda.nombre, x: -w, y: banda.y, w, h: 1 });
+    for (const v of banda.verticales || []) {
+      const [primera, ...resto] = v.bandas;
+      muebles.push({ tipo: 'subtitulo', lugar: 'borde', banda: primera ? primera.id : v.id, vertical: v.id,
+                     texto: v.nombre + (primera ? ' · ' + primera.nombre : ''), x: v.x, y: v.y });
+      for (const b of resto) {
+        muebles.push({ tipo: 'subtitulo', lugar: 'borde', banda: b.id, texto: b.nombre, x: b.x, y: b.y });
+      }
+    }
+  }
+}
+
 // 'tipo' es la clave de TIPOS_DE_SALA o directamente una definicion. 'plano' es
 // lo que guarda el editor para ese tipo: { bandas, mesas, bloquesFilas, bloqueadas,
 // distribucion, siguiente, siguienteBanda, siguienteBloque }. Sin plano, se usan las bandas del tipo y sus mesas (las
@@ -982,6 +1035,7 @@ function generarPlano(tipo, plano = null) {
   for (const banda of hojasDe(sala.bandas)) {
     if (banda.tipo === 'filas') agregarFilas(banda, columnasDeBanda(sala, banda), sala.ancho);
   }
+  agregarSubtitulos(sala.bandas);
   const y = sala.alto;
 
   // El escenario: el del plano o el del mapa; si no hay, la franja de la banda
@@ -1313,27 +1367,16 @@ function cambiarAnchoVertical(plano, sala, verticalId, delta) {
 // Las bloqueadas pasan a ser una lista de ids: asi se pueden editar una a una.
 function planoDesdeSala(tipo, sala) {
   const definicion = typeof tipo === 'string' ? TIPOS_DE_SALA[tipo] : tipo;
-  const conNombre = new Set();
-  const anotarNombres = (lista) => {
-    for (const b of lista) {
-      if (b.nombre) conNombre.add(b.id);
-      for (const v of b.verticales || []) {
-        if (v.nombre) conNombre.add(v.id);
-        anotarNombres(v.bandas);
-      }
-    }
-  };
-  anotarNombres(definicion.bandas);
   // Quita lo calculado al disponer (posicion, alto calculado, nombre por defecto).
-  const limpiar = (lista) => lista.map(({ x, y, alto, anchoOcupado, profundidad, altoPila, nombre,
+  const limpiar = (lista) => lista.map(({ x, y, alto, anchoOcupado, profundidad, altoPila, nombre, nombrePropio,
                                           bloqueadasAlFinal, verticales, ...banda }) => ({
     ...banda,
     ...(banda.tipo === 'mesas' ? { alto } : {}),
-    ...(conNombre.has(banda.id) ? { nombre } : {}),
+    ...(nombrePropio ? { nombre: nombrePropio } : {}),
     ...(verticales ? {
       verticales: verticales.map(({ x: _x, y: _y, alto: _a, anchoOcupado: _w, profundidad: _p, altoPila: _h,
-                                   nombre: nombreV, bandas, ...v }) => ({
-        ...v, ...(conNombre.has(v.id) ? { nombre: nombreV } : {}), bandas: limpiar(bandas),
+                                   nombre: _n, nombrePropio: propioV, bandas, ...v }) => ({
+        ...v, ...(propioV ? { nombre: propioV } : {}), bandas: limpiar(bandas),
       })),
     } : {}),
   }));
@@ -1627,9 +1670,177 @@ function cambiarDistribucion(plano, sala, distribucion) {
 function cambiarZonaBanda(plano, id, zona) {
   const nuevo = copiarPlano(plano);
   const banda = ubicar(nuevo.bandas, id).item;
-  banda.zona = zona;
-  delete banda.nombre;   // el nombre por defecto sigue a la zona
+  banda.zona = zona;   // un nombre puesto a mano se queda; el de por defecto sigue a la zona
   return nuevo;
+}
+
+// ---------------------------------------------------------------------------
+// Nombres, duplicar y capas.
+//
+// Cada banda, vertical y franja puede llevar un nombre propio: se dibuja como
+// subtitulo en el plano, pero la etiqueta de las butacas sigue siendo la de su
+// zona («Luneta, fila C»). Duplicar crea ids nuevos para todo lo copiado; nunca
+// copia la ocupacion, si las bloqueadas (son parte del diseño).
+// ---------------------------------------------------------------------------
+const NOMBRE_MAXIMO = 40;
+const plural = (n, uno, varios) => n + ' ' + (n === 1 ? uno : varios);
+const SUFIJO_COPIA = ' (copia)';
+const nombreDeCopia = (nombre) => nombre.slice(0, NOMBRE_MAXIMO - SUFIJO_COPIA.length) + SUFIJO_COPIA;
+
+// Pone o quita (con texto vacio) el nombre propio de una banda, vertical o franja.
+function renombrarBanda(plano, id, nombre) {
+  const nuevo = copiarPlano(plano);
+  const u = ubicar(nuevo.bandas, id);
+  if (!u) return { motivo: 'esa banda ya no existe' };
+  if (u.item.tipo === 'escenario') return { motivo: 'la franja del escenario no lleva nombre' };
+  const limpio = String(nombre).trim().slice(0, NOMBRE_MAXIMO);
+  if (limpio) u.item.nombre = limpio;
+  else delete u.item.nombre;
+  return nuevo;
+}
+
+// Copia las butacas bloqueadas de unas piezas o bandas a sus copias. 'ids' es un
+// Map de id original -> id de la copia; el id de una butaca empieza por el suyo.
+function copiarBloqueadas(bloqueadas = [], ids) {
+  const copias = [];
+  for (const id of bloqueadas) {
+    const guion = id.indexOf('-');
+    const nuevo = guion > 0 && ids.get(id.slice(0, guion));
+    if (nuevo) copias.push(nuevo + id.slice(guion));
+  }
+  return [...bloqueadas, ...copias];
+}
+
+// La copia de una mesa o bloque, con id nuevo, junto a la original: a su derecha,
+// si no debajo, y si no en el sitio libre mas cercano. Usa las celdas de la sala
+// generada desde 'plano' (butacas, mesas y bloques actuales). Devuelve el plano
+// nuevo (el id de la copia es el siguiente del contador) o { motivo }.
+function duplicarPieza(plano, sala, id) {
+  if (id === 'escenario') return { motivo: 'el escenario no se puede duplicar' };
+  const nuevo = copiarPlano(plano);
+  const esBloque = nuevo.bloquesFilas.some((b) => b.id === id);
+  const lista = esBloque ? nuevo.bloquesFilas : nuevo.mesas;
+  const original = lista.find((p) => p.id === id);
+  if (!original) return { motivo: 'esa pieza ya no existe' };
+  const copia = { ...original, id: esBloque ? 'F' + nuevo.siguienteBloque : 'M' + nuevo.siguiente };
+  if (copia.nombre) copia.nombre = nombreDeCopia(copia.nombre);
+  const sitio = sitioParaCopia(sala, celdasOcupadas(null), copia);
+  if (!sitio) return { motivo: 'no hay sitio libre para la copia' };
+  lista.push(sitio);
+  if (esBloque) nuevo.siguienteBloque++;
+  else nuevo.siguiente++;
+  nuevo.bloqueadas = copiarBloqueadas(nuevo.bloqueadas, new Map([[id, copia.id]]));
+  return nuevo;
+}
+
+function sitioParaCopia(sala, ocupadas, pieza) {
+  const { ancho, alto } = huellaDe(pieza);
+  const cabe = (x, y) => !motivoNoCabe(sala, ocupadas, { ...pieza, x, y });
+  if (cabe(pieza.x + ancho, pieza.y)) return { ...pieza, x: pieza.x + ancho };
+  if (cabe(pieza.x, pieza.y + alto)) return { ...pieza, y: pieza.y + alto };
+  let mejor = null;
+  for (let y = sala.filas.min; y <= sala.filas.max; y++) {
+    for (let x = 1; x <= sala.ancho; x++) {
+      const d = Math.abs(x - pieza.x) + Math.abs(y - pieza.y);
+      if ((!mejor || d < mejor.d) && cabe(x, y)) mejor = { x, y, d };
+    }
+  }
+  return mejor && { ...pieza, x: mejor.x, y: mejor.y };
+}
+
+// Duplica una banda, una vertical o una franja entera, con todo lo que tiene
+// dentro (bandas, verticales, mesas y bloques) y ids nuevos. La copia va justo
+// despues de la original: debajo, o a su derecha si es una vertical. El id de la
+// copia es 'banda' + el contador de antes. Devuelve el plano nuevo o { motivo }.
+function duplicarBanda(plano, sala, id) {
+  const nuevo = copiarPlano(plano);
+  const u = ubicar(nuevo.bandas, id);
+  if (!u) return { motivo: 'esa banda ya no existe' };
+  if (u.item.tipo === 'escenario') return { motivo: 'la franja del escenario no se puede duplicar' };
+  const ids = new Map();
+  const nuevoId = (viejo) => {
+    const n = 'banda' + nuevo.siguienteBanda++;
+    ids.set(viejo, n);
+    return n;
+  };
+  // Sin ocupacion de ejemplo ni mesas automaticas: solo el diseño.
+  const copiar = ({ ocupadas, bloqueadasAlFinal, filasDeMesas, ...b }) => ({
+    ...b, id: nuevoId(b.id),
+    ...(b.verticales ? { verticales: b.verticales.map(copiar) } : {}),
+    ...(b.bandas ? { bandas: b.bandas.map(copiar) } : {}),
+  });
+  const copia = copiar(u.item);
+  if (copia.nombre) copia.nombre = nombreDeCopia(copia.nombre);
+
+  if (u.esVertical) {
+    if (u.lista.length >= VERTICALES_MAXIMAS) {
+      return { motivo: 'ya tiene el máximo de bandas verticales (' + VERTICALES_MAXIMAS + ')' };
+    }
+    // Los anchos se fijan desde lo que ocupan ahora. La copia mide lo mismo que la
+    // original si la ultima vertical puede cederle ese ancho; si no (o si la
+    // original es la ultima), la original se parte por la mitad entre las dos.
+    const colocadas = bandaDe(sala, u.padre.id).verticales;
+    u.lista.forEach((v, i) => { v.ancho = colocadas[i].anchoOcupado; });
+    const ancho = colocadas[u.indice].anchoOcupado;
+    const esUltima = u.indice === u.lista.length - 1;
+    if (!esUltima && u.lista.at(-1).ancho - ancho >= 1) {
+      copia.ancho = ancho;
+    } else {
+      if (ancho < 2) return { motivo: 'no queda ancho para la copia: ' + colocadas[u.indice].nombre + ' mide 1 columna' };
+      u.item.ancho = Math.floor(ancho / 2);
+      copia.ancho = ancho - u.item.ancho;
+    }
+    u.lista.splice(u.indice + 1, 0, copia);
+    delete u.lista.at(-1).ancho;   // la ultima ocupa el resto
+  } else {
+    u.lista.splice(u.indice + 1, 0, copia);
+  }
+
+  const resultado = reanclarPiezas(plano, nuevo, sala.ancho, sala.ancho);
+  // Las piezas que empezaban dentro de la original se copian a la misma distancia
+  // de la copia.
+  const antes = disponerBandas(plano.bandas, sala.ancho).regiones.find((r) => r.id === id);
+  const destino = disponerBandas(resultado.bandas, sala.ancho).regiones.find((r) => r.id === copia.id);
+  const dentro = (p) => p.x >= antes.x && p.x < antes.x + antes.ancho && p.y >= antes.y && p.y < antes.y + antes.alto;
+  const trasladar = (p, nuevoIdPieza) => {
+    ids.set(p.id, nuevoIdPieza);
+    return { ...p, id: nuevoIdPieza, x: destino.x + (p.x - antes.x), y: destino.y + (p.y - antes.y),
+             ...(p.nombre ? { nombre: nombreDeCopia(p.nombre) } : {}) };
+  };
+  for (const m of plano.mesas.filter(dentro)) resultado.mesas.push(trasladar(m, 'M' + resultado.siguiente++));
+  for (const b of (plano.bloquesFilas || []).filter(dentro)) {
+    resultado.bloquesFilas.push(trasladar(b, 'F' + resultado.siguienteBloque++));
+  }
+  resultado.bloqueadas = copiarBloqueadas(resultado.bloqueadas, ids);
+  return resultado;
+}
+
+// Las capas de la sala: franjas, verticales y bandas (sin el escenario), en orden
+// de arbol. Cada capa tiene su color de seleccion por su posicion en esta lista.
+function capasDe(bandas) {
+  const ids = [];
+  for (const b of bandas) {
+    if (b.tipo === 'escenario') continue;
+    ids.push(b.id);
+    for (const v of b.verticales || []) {
+      ids.push(v.id);
+      ids.push(...capasDe(v.bandas));
+    }
+  }
+  return ids;
+}
+
+// Que banda se selecciona con un clic en la celda (x, y): la mas concreta que la
+// contiene. Si esa ya estaba seleccionada (o una de dentro), la que la contiene;
+// despues de la de fuera, ninguna. Asi, clic a clic, se sube por el arbol.
+function bandaEnCelda(sala, x, y, actual = null) {
+  const cadena = sala.regiones
+    .filter((r) => r.tipo !== 'resto' && r.id !== 'escenario' &&
+                   x >= r.x && x < r.x + r.ancho && y >= r.y && y < r.y + r.alto)
+    .sort((a, b) => b.profundidad - a.profundidad)
+    .map((r) => r.id);
+  const i = cadena.indexOf(actual);
+  return i < 0 ? cadena[0] || null : cadena[i + 1] || null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1664,6 +1875,9 @@ const svg = document.getElementById('plano');
 const capaMuebles = document.getElementById('muebles');
 const capaButacas = document.getElementById('butacas');
 const capaPiezas = document.getElementById('piezas');
+const capaSeleccion = document.getElementById('seleccion-banda');
+const capaSubtitulos = document.getElementById('subtitulos');
+const capaRotuloSeleccion = document.getElementById('rotulo-seleccion');
 const formatoDinero = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 const dinero = (centavos) => formatoDinero.format(centavos / 100);
 const porId = new Map();   // id -> butaca, para no recorrer la lista en cada interaccion
@@ -1704,6 +1918,8 @@ function dibujarMuebles() {
       capaMuebles.append(rect, rotulo);
     } else if (m.tipo === 'rotulo') {
       capaMuebles.appendChild(texto('rotulo', (m.x + 0.5) * PASO, (m.y + 0.5) * PASO, m.texto));
+    } else if (m.tipo === 'subtitulo') {
+      (m.lugar === 'margen' ? capaMuebles : capaSubtitulos).appendChild(dibujarSubtitulo(m));
     }
   }
   if (modo !== 'editor') return;
@@ -1720,6 +1936,59 @@ function dibujarMuebles() {
         x2: r.x * PASO, y2: (r.y + r.alto) * PASO }));
     }
   }
+}
+
+// En el margen, texto alineado a la derecha antes de la columna de rotulos. En un
+// borde, una etiqueta con fondo sobre la linea, para que se lea encima del limite.
+function dibujarSubtitulo(m) {
+  if (m.lugar === 'margen') {
+    const t = texto('subtitulo', -1, (m.y + 0.5) * PASO, m.texto);
+    t.dataset.subtitulo = m.banda;
+    return t;
+  }
+  const g = nodo('g', { class: 'subtitulo-borde' });
+  g.append(nodo('rect', { x: m.x * PASO + 1.5, y: m.y * PASO - 2, width: m.texto.length * 1.8 + 3, height: 4, rx: 1.2 }),
+           texto('', m.x * PASO + 3, m.y * PASO, m.texto));
+  g.dataset.subtitulo = m.banda;
+  if (m.vertical) g.dataset.vertical = m.vertical;
+  return g;
+}
+
+// Cada capa (banda, vertical o franja) tiene su color, por su orden en el arbol.
+// Todos pasan 3:1 contra el fondo del plano y ninguno es el azul de las piezas,
+// el rojo de ocupada ni el verde de la sombra.
+const COLORES_DE_CAPA = ['#fbbf24', '#a78bfa', '#2dd4bf', '#f472b6', '#fb923c', '#22d3ee', '#bef264', '#e879f9'];
+function colorDeCapa(id) {
+  const i = capasDe(salaActual.bandas).indexOf(id);
+  return i < 0 ? null : COLORES_DE_CAPA[i % COLORES_DE_CAPA.length];
+}
+
+// Contorno de la banda seleccionada y su subtitulo resaltado. Solo en el editor.
+// Su nombre se muda a una etiqueta rellena en el borde inferior, en la capa mas
+// alta del plano: no la tapan butacas, mesas ni piezas. El subtitulo de siempre se
+// oculta mientras (salvo uno compartido con su vertical, que tambien nombra a la otra).
+function dibujarSeleccionBanda() {
+  capaSeleccion.textContent = '';
+  capaRotuloSeleccion.textContent = '';
+  const activa = modo === 'editor' ? bandaActiva : null;
+  const color = activa && colorDeCapa(activa);
+  for (const n of svg.querySelectorAll('[data-subtitulo]')) {
+    const compartido = Boolean(n.dataset.vertical) && n.dataset.vertical !== n.dataset.subtitulo;
+    n.classList.toggle('oculta', Boolean(color) && !compartido && n.dataset.subtitulo === activa);
+  }
+  const r = color && salaActual.regiones.find((region) => region.id === activa && region.tipo !== 'resto');
+  if (!r) return;
+  const contorno = nodo('rect', { class: 'contorno-banda', x: r.x * PASO + 0.7, y: r.y * PASO + 0.7,
+    width: r.ancho * PASO - 1.4, height: r.alto * PASO - 1.4, rx: 2 });
+  contorno.style.setProperty('--capa', color);
+  capaSeleccion.appendChild(contorno);
+  const nombre = bandaDe(salaActual, activa).nombre;
+  const abajo = (r.y + r.alto) * PASO;
+  const rotulo = nodo('g', { class: 'rotulo-seleccion', 'aria-hidden': 'true' });
+  rotulo.append(nodo('rect', { x: r.x * PASO + 1.5, y: abajo - 3, width: nombre.length * 2.3 + 4, height: 6, rx: 1.5 }),
+                texto('', r.x * PASO + 3.5, abajo, nombre));
+  rotulo.style.setProperty('--capa', color);
+  capaRotuloSeleccion.appendChild(rotulo);
 }
 
 // El icono de butaca en la celda (x, y), girado 'mira' grados sobre su centro:
@@ -1809,11 +2078,13 @@ function dibujarPiezas() {
 function dibujarTodo() {
   capaMuebles.textContent = '';
   capaButacas.textContent = '';
+  capaSubtitulos.textContent = '';
   capaPiezas.textContent = '';
   dibujarMuebles();
   dibujarButacas();
   dibujarPiezas();
   dibujarBandas();
+  dibujarSeleccionBanda();
 }
 
 // ---------------------------------------------------------------------------
@@ -1853,16 +2124,47 @@ function dibujarBandas() {
 }
 
 // Una lista de bandas (de la sala o de una vertical) como elementos <li>.
+// El principio de la fila de una banda o vertical: muestra de su color, su nombre
+// (un campo; vacio, el de por defecto) y la marca de seleccionada.
+function inicioDeFila(item, clase) {
+  const li = document.createElement('li');
+  li.className = clase;
+  li.dataset.banda = item.id;
+  const detalle = document.createElement('span');
+  detalle.className = 'banda-detalle';
+  const nombre = document.createElement('span');
+  nombre.className = 'banda-nombre';
+  if (item.tipo === 'escenario') {
+    nombre.textContent = item.nombre;
+    li.append(nombre, detalle);
+    return { li, detalle };
+  }
+  li.style.setProperty('--capa', colorDeCapa(item.id));
+  if (item.id === bandaActiva) {
+    li.classList.add('activa');
+    li.setAttribute('aria-current', 'true');
+  }
+  const muestra = document.createElement('span');
+  muestra.className = 'muestra-capa';
+  muestra.setAttribute('aria-hidden', 'true');
+  const campo = document.createElement('input');
+  Object.assign(campo, { type: 'text', maxLength: NOMBRE_MAXIMO, autocomplete: 'off',
+                         value: item.nombrePropio || '', placeholder: item.nombre });
+  campo.setAttribute('aria-label', 'Nombre de ' + item.nombre);
+  campo.dataset.op = 'nombre';
+  campo.dataset.banda = item.id;
+  nombre.appendChild(campo);
+  const marca = document.createElement('span');
+  marca.className = 'banda-seleccionada';
+  marca.textContent = '● seleccionada';
+  marca.setAttribute('aria-hidden', 'true');   // aria-current ya lo dice
+  li.append(muestra, nombre, marca, detalle);
+  return { li, detalle };
+}
+
 function filasDeBandas(bandas, enVertical) {
   return bandas.map((banda, i) => {
-    const li = document.createElement('li');
-    li.className = 'banda';
-    const nombre = document.createElement('span');
-    nombre.className = 'banda-nombre';
-    nombre.textContent = banda.nombre;
-    const detalle = document.createElement('span');
-    detalle.className = 'banda-detalle';
-    li.append(nombre, detalle);
+    const { li, detalle } = inicioDeFila(banda, 'banda');
     const n = banda.nombre;
     if (banda.tipo === 'escenario') {
       detalle.textContent = 'Franja inicial · el escenario se mueve y cambia de tamaño en el plano';
@@ -1898,6 +2200,7 @@ function filasDeBandas(bandas, enVertical) {
     li.append(
       boton('↑', 'Subir ' + n, 'subir', banda.id, !anterior || anterior.tipo === 'escenario'),
       boton('↓', 'Bajar ' + n, 'bajar', banda.id, i === bandas.length - 1),
+      boton('Duplicar', 'Duplicar ' + n, 'duplicar', banda.id),
       boton('Eliminar', 'Eliminar ' + n, 'eliminar', banda.id));
     if (esDivision(banda)) {
       const ol = document.createElement('ol');
@@ -1910,23 +2213,18 @@ function filasDeBandas(bandas, enVertical) {
 }
 
 function filaDeVertical(v, k, verticales) {
-  const li = document.createElement('li');
-  li.className = 'banda banda-vertical';
-  const nombre = document.createElement('span');
-  nombre.className = 'banda-nombre';
-  nombre.textContent = v.nombre;
-  const detalle = document.createElement('span');
-  detalle.className = 'banda-detalle';
+  const { li, detalle } = inicioDeFila(v, 'banda banda-vertical');
   const ultima = k === verticales.length - 1;
   detalle.textContent = plural(v.anchoOcupado, 'columna', 'columnas') + (ultima ? ' (el resto)' : '');
   const n = v.nombre;
-  li.append(nombre, detalle,
+  li.append(
     boton('−', 'Quitar una columna de ancho a ' + n, 'angosta', v.id, ultima || v.anchoOcupado <= 1),
     boton('+', 'Agregar una columna de ancho a ' + n, 'ancha', v.id, ultima),
     boton('←', 'Mover ' + n + ' a la izquierda', 'izquierda', v.id, k === 0),
     boton('→', 'Mover ' + n + ' a la derecha', 'derecha', v.id, ultima),
     boton('+ filas', 'Agregar una banda de filas en ' + n, 'agregar-filas-en', v.id),
     boton('+ mesas', 'Agregar una zona de mesas en ' + n, 'agregar-mesas-en', v.id),
+    boton('Duplicar', 'Duplicar ' + n, 'duplicar', v.id, verticales.length >= VERTICALES_MAXIMAS),
     boton('Eliminar', 'Eliminar ' + n, 'eliminar', v.id, verticales.length === 1));
   const ol = document.createElement('ol');
   ol.setAttribute('aria-label', 'Bandas de ' + n);
@@ -1940,7 +2238,7 @@ function filaDeVertical(v, k, verticales) {
 function aplicarBandas(resultado, mensaje) {
   if (resultado.motivo) {
     anunciar('No se pudo: ' + resultado.motivo + '.');
-    return;
+    return false;
   }
   const antes = fotoDeButacas();
   const mesasAntes = new Map([...mesas, ...bloquesFilas].map((m) => [m.id, m.nombre]));
@@ -1953,12 +2251,55 @@ function aplicarBandas(resultado, mensaje) {
     planos[tipoActual] = previo;
     salaActual = generarPlano(tipoActual, previo);
     anunciar('No se pudo: ' + (errorDeBandas || fallo.pieza.nombre + ' ' + fallo.motivo) + '.');
-    return;
+    return false;
   }
   const quitadas = [...mesasAntes].filter(([id]) => !piezasDe(resultado).some((m) => m.id === id))
                                   .map(([, nombre]) => nombre);
   regenerar(mensaje + (quitadas.length ? ' Se quitaron con ella: ' + quitadas.join(', ') + '.' : ''), antes);
   calcularEncuadre();
+  return true;
+}
+
+// Duplica una banda, vertical o franja y selecciona la copia. Si el foco estaba en
+// el panel, pasa al mismo control de la copia.
+function duplicarBandaPorId(id) {
+  const banda = bandaDe(salaActual, id);
+  if (!banda) return;
+  const plano = planoEditable();
+  const nuevoId = 'banda' + plano.siguienteBanda;
+  const esVertical = ubicar(salaActual.bandas, id).esVertical;
+  const op = listaBandas.contains(document.activeElement) && document.activeElement.dataset.op;
+  if (!aplicarBandas(duplicarBanda(plano, salaActual, id), '')) return;
+  const copia = bandaDe(salaActual, nuevoId);
+  const destino = op && listaBandas.querySelector('[data-op="' + op + '"][data-banda="' + nuevoId + '"]');
+  if (destino && !destino.disabled) destino.focus();
+  marcarBandaActiva(nuevoId);
+  anunciar(banda.nombre + ' duplicada: ' + copia.nombre + (esVertical ? ', a su derecha.' : ', debajo.') +
+           ' Queda seleccionada.');
+}
+
+function aplicarNombreDeBanda(campo) {
+  const id = campo.dataset.banda;
+  const banda = bandaDe(salaActual, id);
+  if (!banda) return;
+  const nombre = campo.value.trim().slice(0, NOMBRE_MAXIMO);
+  if (nombre === (banda.nombrePropio || '')) return;
+  aplicarBandas(renombrarBanda(planoEditable(), id, nombre),
+    nombre ? banda.nombre + ' se llama ahora «' + nombre + '».' : banda.nombre + ' vuelve a su nombre por defecto.');
+}
+
+// Selecciona una banda (o ninguna, con null): contorno en el plano y fila marcada
+// en el panel. Sin redibujar, para no perder el foco ni lo que se escribe.
+function marcarBandaActiva(id) {
+  bandaActiva = id;
+  if (id && mesaActiva) marcarActiva(null);
+  for (const li of listaBandas.querySelectorAll('li[data-banda]')) {
+    const si = li.dataset.banda === id;
+    li.classList.toggle('activa', si);
+    if (si) li.setAttribute('aria-current', 'true');
+    else li.removeAttribute('aria-current');
+  }
+  dibujarSeleccionBanda();
 }
 
 listaBandas.addEventListener('click', (e) => {
@@ -1990,12 +2331,36 @@ listaBandas.addEventListener('click', (e) => {
     const tipo = op === 'agregar-filas-en' ? 'filas' : 'mesas';
     aplicarBandas(agregarBandaEnVertical(plano, salaActual, id, tipo),
                   (tipo === 'filas' ? 'Banda de 2 filas' : 'Zona de mesas de 4 filas') + ' agregada en ' + n + '.');
+  } else if (op === 'duplicar') {
+    duplicarBandaPorId(id);
   } else if (op === 'eliminar') {
     aplicarBandas(eliminarBanda(plano, salaActual, id), n + ' eliminada.');
   }
 });
 
+// Tocar cualquier control de una banda la selecciona.
+listaBandas.addEventListener('focusin', (e) => {
+  const li = e.target.closest('li[data-banda]');
+  if (li && li.dataset.banda !== 'escenario' && li.dataset.banda !== bandaActiva) marcarBandaActiva(li.dataset.banda);
+});
+
+listaBandas.addEventListener('keydown', (e) => {
+  const campo = e.target.closest('input[data-op="nombre"]');
+  if (!campo) return;
+  if (e.key === 'Enter') {
+    aplicarNombreDeBanda(campo);
+  } else if (e.key === 'Escape') {
+    const banda = bandaDe(salaActual, campo.dataset.banda);
+    campo.value = (banda && banda.nombrePropio) || '';
+  }
+});
+
 listaBandas.addEventListener('change', (e) => {
+  const campo = e.target.closest('input[data-op="nombre"]');
+  if (campo) {
+    aplicarNombreDeBanda(campo);
+    return;
+  }
   const control = e.target.closest('select[data-op="zona"]');
   if (!control) return;
   const antes = bandaDe(salaActual, control.dataset.banda).nombre;
@@ -2129,6 +2494,7 @@ svg.addEventListener('pointerdown', (e) => {
       // <svg> todos los eventos de puntero siguientes, asi que al soltar el boton
       // e.target ya es el <svg> y closest('.butaca') devuelve null.
       butaca: e.target.closest('.butaca'),
+      celda: modo === 'editor' ? celdaBajo(e) : null,
     };
   } else {
     // Un segundo dedo convierte el toque en gesto de plano: si se movia una
@@ -2175,14 +2541,40 @@ function soltarPuntero(e, cancelado) {
   svg.classList.remove('arrastrando');
   // Un arrastre no debe contar como clic sobre la butaca que quedo debajo.
   if (!cancelado && arrastre && arrastre.movido <= 4) {
-    // En el editor, un clic en el fondo deselecciona la mesa activa; con la
-    // herramienta de bloqueo, el clic en una butaca la bloquea o desbloquea.
-    if (modo === 'editor' && herramienta !== 'bloquear') marcarActiva(null);
+    // En el editor, un clic en el fondo selecciona la banda de debajo (y otro clic,
+    // la que la contiene); con la herramienta de bloqueo, el clic en una butaca la
+    // bloquea o desbloquea.
+    if (modo === 'editor' && herramienta !== 'bloquear') seleccionarBandaEnPlano(arrastre.celda);
     else alternar(arrastre.butaca);
   }
   arrastre = null;
 }
 svg.addEventListener('pointerup', (e) => soltarPuntero(e, false));
+
+function seleccionarBandaEnPlano(c) {
+  const id = c && Number.isFinite(c.x) ? bandaEnCelda(salaActual, c.x, c.y, bandaActiva) : null;
+  if (!id) {
+    marcarActiva(null);
+    marcarBandaActiva(null);
+    return;
+  }
+  marcarBandaActiva(id);
+  anunciar(bandaDe(salaActual, id).nombre + ' seleccionada.');
+}
+
+// Doble clic en un subtitulo: selecciona su banda y lleva a su nombre en el panel.
+svg.addEventListener('dblclick', (e) => {
+  if (modo !== 'editor' || herramienta === 'bloquear') return;
+  const subtitulo = e.target.closest('[data-subtitulo]');
+  if (!subtitulo) return;
+  const id = subtitulo.dataset.subtitulo;
+  marcarBandaActiva(id);
+  const campo = listaBandas.querySelector('input[data-op="nombre"][data-banda="' + id + '"]');
+  if (campo) {
+    campo.focus();
+    campo.select();
+  }
+});
 svg.addEventListener('pointercancel', (e) => soltarPuntero(e, true));
 
 document.getElementById('acercar').addEventListener('click', () => escalar(1 / 1.3));
@@ -2277,8 +2669,9 @@ svg.addEventListener('keydown', (e) => {
     } else if (accion) {
       e.preventDefault();
       ejecutarAccion(accion, id);
-      // El DOM se rehizo: el foco vuelve a la mesa, o a la primera si se elimino.
-      const destino = capaPiezas.querySelector('[data-pieza="' + id + '"]') ||
+      // El DOM se rehizo: el foco vuelve a la pieza activa (la copia, al duplicar), o
+      // a la primera si se elimino.
+      const destino = capaPiezas.querySelector('[data-pieza="' + (mesaActiva || id) + '"]') ||
                       capaPiezas.querySelector('.pieza');
       if (destino) destino.focus();
     }
@@ -2312,6 +2705,7 @@ let modo = 'vista';        // 'vista' (previsualizar, como quien compra) o 'edit
 let arrastreMesa = null;
 let mesaActiva = null;     // id de la mesa sobre la que actuan los botones y atajos
 let herramienta = 'mesas'; // en el editor: 'mesas' (colocar) o 'bloquear' (butacas)
+let bandaActiva = null;    // id de la banda, vertical o franja seleccionada (excluye a mesaActiva)
 let tipoActual, salaActual;
 // Plano guardado por tipo de sala: { 'mixta-ambos': { bandas, mesas, siguiente,
 // siguienteBanda } }. Cada tipo tiene el suyo; editar uno no toca los otros.
@@ -2352,6 +2746,7 @@ function construirSombra({ ancho, alto, tablero, lugares }) {
 // Marca la mesa activa sin redibujar: solo clases, aria-pressed y botones.
 function marcarActiva(id) {
   mesaActiva = id;
+  if (id && bandaActiva) marcarBandaActiva(null);
   for (const p of capaPiezas.querySelectorAll('.pieza')) {
     const activa = p.dataset.pieza === id;
     p.classList.toggle('activa', activa);
@@ -2364,8 +2759,8 @@ const botonesDeMesa = () => document.querySelectorAll('#herramientas-editor [dat
 
 // Que acciones tiene cada tipo de pieza.
 const ACCIONES_DE = {
-  mesa: new Set(['girar', 'alargar', 'acortar', 'cabeceras', 'unlado', 'eliminar']),
-  bloque: new Set(['girar', 'alargar', 'acortar', 'masfilas', 'menosfilas', 'eliminar']),
+  mesa: new Set(['girar', 'alargar', 'acortar', 'cabeceras', 'unlado', 'duplicar', 'eliminar']),
+  bloque: new Set(['girar', 'alargar', 'acortar', 'masfilas', 'menosfilas', 'duplicar', 'eliminar']),
   escenario: new Set(['girar', 'alargar', 'acortar', 'masfilas', 'menosfilas']),
 };
 const tipoDePieza = (p) => (esEscenario(p) ? 'escenario' : esBloqueFilas(p) ? 'bloque' : 'mesa');
@@ -2491,6 +2886,7 @@ function regenerar(mensaje, antes = fotoDeButacas()) {
   const ocupadasQuitadas = antes.filter((b) => b.estado === 'ocupada' && !existe.has(b.id))
                                 .map((b) => b.id);
   if (!piezaPorId(mesaActiva)) mesaActiva = null;
+  if (bandaActiva && !ubicar(salaActual.bandas, bandaActiva)) bandaActiva = null;
   dibujarTodo();
   actualizarResumen();
   actualizarAforo(salaActual);
@@ -2619,6 +3015,24 @@ function agregarBloqueNuevo() {
   asegurarVisible({ x: b.x, y: b.y, w: b.geo.ancho, h: b.geo.alto });
 }
 
+// Duplica una mesa o bloque junto al original; la copia queda activa.
+function duplicarPiezaPorId(id) {
+  const m = piezaPorId(id);
+  const plano = planoEditable();
+  const nuevoId = esBloqueFilas(m) ? 'F' + plano.siguienteBloque : 'M' + plano.siguiente;
+  const resultado = duplicarPieza(plano, salaActual, id);
+  if (resultado.motivo) {
+    anunciar('No se pudo duplicar ' + m.nombre + ': ' + resultado.motivo + '.');
+    return;
+  }
+  planos[tipoActual] = resultado;
+  mesaActiva = nuevoId;
+  regenerar('');
+  const copia = piezaPorId(nuevoId);
+  anunciar(m.nombre + ' duplicad' + genero(m) + ': ' + copia.nombre + ' en columna ' + copia.x + ', fila ' + copia.y + '.');
+  asegurarVisible({ x: copia.x, y: copia.y, w: copia.geo.ancho, h: copia.geo.alto });
+}
+
 function eliminarMesa(id) {
   const m = piezaPorId(id);
   const plano = planoEditable();
@@ -2636,6 +3050,7 @@ function ejecutarAccion(accion, id = mesaActiva) {
     return;
   }
   if (accion === 'eliminar') eliminarMesa(id);
+  else if (accion === 'duplicar') duplicarPiezaPorId(id);
   else transformarMesa(id, accion);
 }
 
@@ -2665,6 +3080,23 @@ document.getElementById('nombre-pieza').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') aplicarNombreDeBloque();
 });
 
+// Ctrl+D (Cmd+D en Mac) duplica lo seleccionado: la banda o, si no, la pieza activa.
+// En los campos de texto de fuera del panel de bandas no se intercepta.
+document.addEventListener('keydown', (e) => {
+  if (modo !== 'editor' || !(e.ctrlKey || e.metaKey) || e.altKey || e.key.toLowerCase() !== 'd') return;
+  if (e.target.closest && e.target.closest('input, select, textarea') && !listaBandas.contains(e.target)) return;
+  if (bandaActiva) {
+    e.preventDefault();
+    duplicarBandaPorId(bandaActiva);
+  } else if (mesaActiva) {
+    e.preventDefault();
+    const enPlano = svg.contains(document.activeElement);
+    ejecutarAccion('duplicar');
+    const destino = enPlano && capaPiezas.querySelector('[data-pieza="' + mesaActiva + '"]');
+    if (destino) destino.focus();
+  }
+});
+
 const ATAJOS = {
   r: 'girar', R: 'girar',
   '+': 'alargar', '=': 'alargar',
@@ -2682,7 +3114,9 @@ const PISTAS = {
   editor: 'Arrastra el escenario, una mesa o un bloque de filas para moverlo · con teclado, Tab ' +
           'hasta la pieza: flechas la mueven, R la gira, + y − cambian su largo, ] y [ agregan o ' +
           'quitan filas (o alto, en el escenario), C pone o quita cabeceras, U alterna uno o dos ' +
-          'lados, Supr la elimina · Esc cancela un arrastre',
+          'lados, Ctrl+D la duplica, Supr la elimina · Esc cancela un arrastre · clic en el fondo ' +
+          'selecciona una banda (otro clic, la que la contiene) y Ctrl+D la duplica · doble clic en ' +
+          'un subtítulo para renombrar su banda',
 };
 
 function cambiarModo(nuevo) {
@@ -2702,6 +3136,7 @@ function cambiarModo(nuevo) {
   document.getElementById('herramienta-bloquear').setAttribute('aria-pressed', 'false');
   actualizarAccesoButacas();
   mesaActiva = null;
+  bandaActiva = null;
   dibujarTodo();
   actualizarControles();
   anunciar(editando
@@ -2725,6 +3160,7 @@ function cambiarHerramienta(nueva) {
   document.getElementById('pista').textContent = PISTAS[bloqueando ? 'bloquear' : modo];
   actualizarAccesoButacas();
   mesaActiva = null;
+  bandaActiva = null;
   dibujarTodo();
   actualizarControles();
   anunciar(bloqueando
@@ -2755,6 +3191,7 @@ document.getElementById('modo-editor').addEventListener('click', () => cambiarMo
 document.getElementById('restablecer').addEventListener('click', () => {
   delete planos[tipoActual];
   mesaActiva = null;
+  bandaActiva = null;
   regenerar('Sala restablecida: bandas y mesas como en su tipo.');
   calcularEncuadre();
 });
@@ -2803,7 +3240,6 @@ const frase = (ids, singular, plural) => (!ids.length ? ''
     ? 'Se soltó 1 butaca que ' + singular + ': ' + ids[0] + '.'
     : 'Se soltaron ' + ids.length + ' butacas que ' + plural + ': ' + ids.join(', ') + '.');
 
-const plural = (n, uno, varios) => n + ' ' + (n === 1 ? uno : varios);
 
 function actualizarAforo(sala) {
   const bandasDeFilas = hojasDe(sala.bandas).filter((b) => b.tipo === 'filas');
@@ -2824,6 +3260,7 @@ function redibujar(tipo) {
   if (arrastreMesa) terminarArrastreMesa(false);
   tipoActual = tipo;
   mesaActiva = null;
+  bandaActiva = null;
   const esMapa = TIPOS_DE_SALA[tipo].grupo === GRUPO_MAPAS;
   document.getElementById('nombre-mapa').value = esMapa ? TIPOS_DE_SALA[tipo].nombre : '';
   document.getElementById('eliminar-mapa').hidden = !esMapa;
