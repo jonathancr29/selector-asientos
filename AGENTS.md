@@ -60,7 +60,10 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    devuelven configuraciones de pieza (mesa `{ id, x, y, largo, cabeceras, unLado, giro }` o bloque
    `{ id, tipo: 'filas', x, y, ancho, filas, zona, giro, nombre? }`); nunca modifican la actual.
    **Bandas y columnas:** `planoDesdeSala`, `cambiarDistribucion`, `redimensionarBanda`, `moverBanda`, `eliminarBanda`, `agregarBanda`,
-   `cambiarZonaBanda`. Devuelven un plano nuevo o `{ motivo }`.
+   `cambiarZonaBanda`, `agregarVertical`, `cambiarAnchoVertical`, `agregarBandaEnVertical`. Devuelven un
+   plano nuevo o `{ motivo }`.
+   **Árbol de bandas:** `disponerBandas` (coloca el árbol y devuelve bandas colocadas, regiones y error),
+   `hojasDe`, `ubicar`, `idsDentro`, `copiarBandas`, `columnasDeBanda` y `reanclarPiezas`.
    **Bloqueos y mapas:** `idsBloqueadosPorBandas`, `alternarBloqueada`, `mapaDesdePlano`,
    `validarMapa`, `definicionDeMapa`, `registrarMapa`, `claveDeMapa`, `nombreDeArchivo`.
 6. **Selección sin DOM:** `elegidas` (un `Set` de ids) y `conciliarSeleccion`.
@@ -105,6 +108,13 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   girados. Nunca uses la etiqueta como clave.
 - **Una mesa respeta los pasillos; un bloque de filas y el escenario no:** en un bloque, los pasillos
   son el espacio entre bloques.
+- **Las bandas son un árbol:** la sala apila bandas; una `division` reparte su ancho en verticales, y
+  cada vertical apila bandas de filas o mesas. Recorre siempre con `hojasDe` o `ubicar`, nunca con
+  `sala.bandas` a secas, o te saltarás las bandas de dentro de las verticales.
+- **Las piezas se recolocan con `reanclarPiezas`:** toda operación de bandas la llama. No desplaces
+  piezas a mano por `y`: el anclaje por región es lo que las hace viajar también en horizontal.
+- **Disposición siempre válida:** `disponerBandas` devuelve `error` si las verticales no caben;
+  `aplicarBandas` y `validarMapa` lo comprueban antes de aceptar un cambio.
 - **El escenario es una pieza, no una banda:** la banda `escenario` solo es la franja inicial. Todo lo
   que depende de «hacia dónde está el escenario» (mira de las filas de banda, qué bloques miran de
   frente, orden de las letras) se calcula desde `escenario` en `generarPlano` y `numerarFilas`.

@@ -4,9 +4,39 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Escenario movible (fase 2)
+## Sin publicar — Bandas verticales (fase 3)
 
-Rama `claude/escenario-movible`.
+Rama `claude/bandas-verticales`.
+
+### Añadido
+
+- **Franjas divididas en bandas verticales:** una banda nueva que reparte su ancho en verticales, cada
+  una con su ancho (la última ocupa el resto) y sus propias bandas de filas o zonas de mesas
+  apiladas. El alto de la franja es el de la vertical más alta.
+- **Panel de bandas anidado:** franjas con «+ vertical»; verticales con ancho, mover a izquierda o
+  derecha, agregar filas o mesas dentro y eliminar; bandas internas con sus controles de siempre.
+  Botón «Agregar franja con bandas verticales».
+- **Piezas ancladas a su región:** al cambiar cualquier banda, las mesas, los bloques y el escenario
+  se mueven con la región donde están, en vertical y en horizontal (`reanclarPiezas`).
+- **Límites de bandas y verticales** dibujados en el plano del editor.
+- Los mapas guardan y validan las franjas (ids únicos en todo el árbol, anchos, solo filas o mesas
+  dentro de una vertical, verticales que caben).
+- Pruebas de disposición, columnas y numeración en verticales, anclaje al cambiar ancho, alto y
+  orden, agregar y eliminar verticales, y mapas (71 en total).
+
+### Corregido
+
+- **Arrastrar sobre el plano seleccionaba los textos del SVG** («ESCENARIO», «Mesa 1»…). Ahora el
+  plano no permite seleccionar texto. Se vio al probar el arrastre con el ratón real.
+
+### Cambiado
+
+- **El aforo** dice «N filas en bandas» cuando hay filas que no ocupan todo el ancho.
+
+## 2026-09-16 — PR #7: escenario movible (fase 2)
+
+[PR #7](https://github.com/jonathancr29/selector-asientos/pull/7), fusionado en `main` con el
+commit `5724d9a`.
 
 ### Añadido
 

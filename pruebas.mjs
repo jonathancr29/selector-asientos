@@ -24,7 +24,8 @@ const cargar = () => new Function(html.slice(inicio, fin) +
   ' claveDeMapa, nombreDeArchivo, FORMATO_MAPA, rejillaDeBloques, distribucionDePasillos, distribucionDeSala,' +
   ' leerDistribucion, cambiarDistribucion, geometriaBloqueFilas, bloquesFilas, cambiarAncho,' +
   ' cambiarFilasBloque, letraDeFila, escenario, girarEscenario, cambiarTamanoEscenario,' +
-  ' giroHaciaEscenario };')();
+  ' giroHaciaEscenario, disponerBandas, hojasDe, ubicar, agregarVertical, cambiarAnchoVertical,' +
+  ' agregarBandaEnVertical };')();
 
 const DISPOSICIONES = ['ninguno', 'izquierda', 'derecha', 'ambos'];
 const rango = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
@@ -1069,5 +1070,155 @@ test('el mapa guarda el escenario, y sin el se usa el de la franja', () => {
   assert.ok(con((m) => { m.escenario.ancho = 0; }).includes('el escenario no es válido'));
   assert.deepEqual(con((m) => { m.escenario.y = 18; }), ['Escenario choca con la fila A de General']);
   assert.deepEqual(con((m) => { delete m.escenario; }), []);
+});
+
+// --- Bandas verticales (fase 3) ----------------------------------------------
+
+// «ambos» + una franja dividida al final (filas 20 a 23):
+//   banda1 franja · banda2 vertical izquierda (7 columnas) con banda3 zona de mesas (4 de alto)
+//                 · banda4 vertical derecha (el resto) con banda5 filas de General (2)
+const conFranja = (api, preparar = (plano) => plano) => {
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const nuevo = preparar(api.agregarBanda(plano, 'division', 14));
+  return { plano: nuevo, sala: api.generarPlano('mixta-ambos', nuevo) };
+};
+const mesa = (id, x, y) => ({ id, x, y, largo: 2, cabeceras: false, unLado: false, giro: 0 });
+
+test('una franja dividida reparte su ancho en verticales y toma el alto de la mas alta', () => {
+  const api = cargar();
+  const { sala } = conFranja(api);
+  const franja = sala.bandas.at(-1);
+  assert.equal(franja.tipo, 'division');
+  assert.deepEqual([franja.y, franja.alto], [20, 4]);
+  assert.deepEqual(franja.verticales.map((v) => [v.id, v.x, v.anchoOcupado, v.altoPila, v.alto]),
+    [['banda2', 1, 7, 4, 4], ['banda4', 8, 7, 2, 4]]);
+  assert.equal(sala.alto, 24);
+  const resto = sala.regiones.find((r) => r.id === 'banda4:resto');
+  assert.deepEqual([resto.x, resto.y, resto.ancho, resto.alto], [8, 22, 7, 2]);
+  assert.deepEqual(api.hojasDe(sala.bandas).map((b) => b.id),
+    ['escenario', 'luneta', 'mesas', 'general', 'banda3', 'banda5']);
+  assert.equal(api.ubicar(sala.bandas, 'banda5').padre.id, 'banda4');
+  assert.equal(sala.errorDeBandas, null);
+});
+
+test('las filas de una vertical usan las columnas de la sala en su tramo y siguen la numeracion', () => {
+  const api = cargar();
+  conFranja(api);
+  const filas = api.butacas.filter((b) => b.banda === 'banda5');
+  // Columnas 8 a 14 de «ambos»: 8, 9 y 11 a 14 (la 10 es pasillo).
+  assert.deepEqual([...new Set(filas.map((b) => b.x))], [8, 9, 11, 12, 13, 14]);
+  assert.equal(filas.length, 12);
+  // General: la banda de siempre (filas 18-19) es A y B; la de la vertical (20-21), C y D.
+  assert.deepEqual(['banda5-A1', 'banda5-B6'].map((id) => etiqueta(api, id)), ['General C1', 'General D6']);
+  // Acaba en el borde derecho de la sala: su rotulo va a la derecha.
+  const rotulos = api.muebles.filter((m) => m.tipo === 'rotulo' && m.banda === 'banda5');
+  assert.deepEqual(rotulos.map((m) => [m.texto, m.x]), [['C', 15], ['D', 15]]);
+});
+
+test('las piezas se anclan a su region: cambiar el ancho de una vertical mueve lo de la derecha', () => {
+  const api = cargar();
+  const { plano, sala } = conFranja(api, (p) => ({ ...p, mesas: [...p.mesas, mesa('M9', 6, 20)],
+    bloquesFilas: [bloque('F1', 8, 22, { ancho: 3, filas: 2, zona: 'general' })] }));
+  assert.equal(api.primeraPiezaQueNoCabe(sala), null);
+
+  const angosta = api.cambiarAnchoVertical(plano, sala, 'banda2', -2);
+  const salaAngosta = api.generarPlano('mixta-ambos', angosta);
+  assert.deepEqual(salaAngosta.bandas.at(-1).verticales.map((v) => [v.x, v.anchoOcupado]), [[1, 5], [6, 9]]);
+  assert.deepEqual(angosta.bloquesFilas.map((b) => [b.x, b.y]), [[6, 22]]);    // viaja con la vertical derecha
+  assert.deepEqual(angosta.mesas.filter((m) => m.id === 'M9').map((m) => [m.x, m.y]), [[6, 20]]);   // se queda
+  assert.deepEqual(api.cambiarAnchoVertical(plano, sala, 'banda4', 1), { motivo: 'la última banda vertical ocupa el resto; cambia el ancho de las demás' });
+  assert.deepEqual(api.cambiarAnchoVertical(plano, sala, 'banda2', 7), { motivo: 'la última banda vertical se quedaría sin ancho' });
+});
+
+test('crecer una banda dentro de una vertical recoloca el espacio libre de debajo', () => {
+  const api = cargar();
+  const { plano, sala } = conFranja(api, (p) => ({ ...p,
+    bloquesFilas: [bloque('F1', 8, 22, { ancho: 3, filas: 2, zona: 'general' })] }));
+  // Las filas de la derecha pasan de 2 a 3: el espacio libre empieza en la 23 y el
+  // bloque, anclado a el, baja y se sale de la sala.
+  const mas = api.redimensionarBanda(plano, sala, 'banda5', 1);
+  assert.deepEqual(mas.bloquesFilas.map((b) => b.y), [23]);
+  const fallo = api.primeraPiezaQueNoCabe(api.generarPlano('mixta-ambos', mas));
+  assert.deepEqual([fallo.pieza.id, fallo.motivo], ['F1', 'se sale de la sala']);
+  // La zona de mesas de la izquierda pasa a 6 de alto: la franja crece y el bloque se queda.
+  const alta = api.redimensionarBanda(plano, sala, 'banda3', 2);
+  const salaAlta = api.generarPlano('mixta-ambos', alta);
+  assert.deepEqual([salaAlta.bandas.at(-1).alto, salaAlta.alto], [6, 26]);
+  assert.deepEqual(alta.bloquesFilas.map((b) => b.y), [22]);
+  assert.equal(api.primeraPiezaQueNoCabe(salaAlta), null);
+  assert.deepEqual(api.redimensionarBanda(plano, sala, 'banda1', 1), { motivo: 'su alto depende de las bandas que tiene dentro' });
+});
+
+test('mover verticales a los lados y la franja arriba o abajo lleva sus piezas', () => {
+  const api = cargar();
+  const { plano, sala } = conFranja(api, (p) => ({ ...p, mesas: [...p.mesas, mesa('M9', 6, 20)],
+    bloquesFilas: [bloque('F1', 8, 22, { ancho: 3, filas: 2, zona: 'general' })] }));
+  const derecha = api.moverBanda(plano, sala, 'banda2', 1);
+  const franja = derecha.bandas.at(-1);
+  assert.deepEqual(franja.verticales.map((v) => [v.id, v.ancho]), [['banda4', 7], ['banda2', undefined]]);
+  assert.deepEqual(derecha.bloquesFilas.map((b) => [b.x, b.y]), [[1, 22]]);
+  assert.deepEqual(derecha.mesas.filter((m) => m.id === 'M9').map((m) => [m.x, m.y]), [[13, 20]]);
+  assert.equal(api.primeraPiezaQueNoCabe(api.generarPlano('mixta-ambos', derecha)), null);
+  assert.deepEqual(api.moverBanda(plano, sala, 'banda4', 1), { motivo: 'ya está a la derecha del todo' });
+
+  const arriba = api.moverBanda(plano, sala, 'banda1', -1);   // sube por encima de General
+  assert.deepEqual(arriba.bloquesFilas.map((b) => b.y), [20]);
+  assert.deepEqual(arriba.mesas.filter((m) => m.id === 'M9').map((m) => m.y), [18]);
+});
+
+test('agregar y eliminar verticales y bandas dentro de ellas', () => {
+  const api = cargar();
+  const { plano, sala } = conFranja(api, (p) => ({ ...p, mesas: [...p.mesas, mesa('M9', 6, 20)],
+    bloquesFilas: [bloque('F1', 8, 22, { ancho: 3, filas: 2, zona: 'general' })] }));
+  const tres = api.agregarVertical(plano, sala, 'banda1');
+  const salaTres = api.generarPlano('mixta-ambos', tres);
+  assert.deepEqual(salaTres.bandas.at(-1).verticales.map((v) => [v.x, v.anchoOcupado]), [[1, 7], [8, 3], [11, 4]]);
+
+  const sinDerecha = api.eliminarBanda(plano, sala, 'banda4');
+  assert.deepEqual(sinDerecha.bloquesFilas, []);
+  assert.deepEqual(sinDerecha.bandas.at(-1).verticales.map((v) => [v.id, v.ancho]), [['banda2', undefined]]);
+  const unaSola = api.generarPlano('mixta-ambos', sinDerecha);
+  assert.deepEqual(api.eliminarBanda(sinDerecha, unaSola, 'banda2'),
+    { motivo: 'una franja dividida necesita al menos una banda vertical; elimina la franja' });
+
+  const sinFranja = api.eliminarBanda(plano, sala, 'banda1');
+  assert.deepEqual([sinFranja.bloquesFilas.length, sinFranja.mesas.some((m) => m.id === 'M9')], [0, false]);
+
+  const conMesas = api.agregarBandaEnVertical(plano, sala, 'banda4', 'mesas');
+  const salaMesas = api.generarPlano('mixta-ambos', conMesas);
+  assert.deepEqual(salaMesas.bandas.at(-1).verticales[1].bandas.map((b) => [b.tipo, b.y, b.alto]),
+    [['filas', 20, 2], ['mesas', 22, 4]]);
+  assert.equal(salaMesas.bandas.at(-1).alto, 6);
+});
+
+test('una franja dividida se guarda en el mapa y se valida al leer', () => {
+  const api = cargar();
+  const { plano, sala } = conFranja(api);
+  const extraido = api.planoDesdeSala('mixta-ambos', sala);
+  assert.deepEqual(extraido.bandas.at(-1), {
+    id: 'banda1', tipo: 'division',
+    verticales: [
+      { id: 'banda2', ancho: 7, bandas: [{ id: 'banda3', tipo: 'mesas', alto: 4 }] },
+      { id: 'banda4', bandas: [{ id: 'banda5', tipo: 'filas', zona: 'general', filas: 2 }] },
+    ],
+  });
+  const mapa = JSON.parse(JSON.stringify(api.mapaDesdePlano('Franja', extraido, null)));
+  const { mapa: leido, errores } = api.validarMapa(mapa);
+  assert.equal(errores, undefined);
+  const clave = api.registrarMapa(leido);
+  assert.equal(api.generarPlano(clave).alto, 24);
+
+  const con = (cambio) => { const m = JSON.parse(JSON.stringify(mapa)); cambio(m); return api.validarMapa(m).errores || []; };
+  const franja = (m) => m.bandas.at(-1);
+  assert.deepEqual(con((m) => { franja(m).verticales[0].ancho = 14; }),
+    ['las bandas verticales de Franja dividida no caben en 14 columnas']);
+  assert.ok(con((m) => { delete franja(m).verticales[0].ancho; })
+    .includes('banda 5, vertical 1: ancho fuera de rango'));
+  assert.ok(con((m) => { franja(m).verticales[1].bandas.push({ id: 'otra', tipo: 'division', verticales: [] }); })
+    .includes('banda 5, vertical 2, banda 2: dentro de una vertical solo van filas o mesas'));
+  assert.ok(con((m) => { franja(m).verticales = []; })
+    .includes('banda 5: debe tener de 1 a 6 bandas verticales'));
+  assert.ok(con((m) => { franja(m).verticales[1].id = 'banda2'; })
+    .includes('banda 5, vertical 2: id no válido o repetido'));
 });
 

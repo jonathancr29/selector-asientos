@@ -145,9 +145,9 @@ En el modo editor, el panel **Bandas de la sala** lista las bandas con sus contr
 
 - **− / +:** quita o agrega una fila (bandas de filas) o una fila de alto (zonas de mesas).
 - **Zona:** Luneta o General, con su precio. El nombre por defecto sigue a la zona.
-- **↑ / ↓:** sube o baja la banda. Sus mesas viajan con ella.
-- **Eliminar:** quita la banda y las mesas que empiezan dentro de ella; lo de debajo sube.
-- **Agregar banda de filas / zona de mesas:** al final de la sala.
+- **↑ / ↓:** sube o baja la banda. Sus piezas viajan con ella.
+- **Eliminar:** quita la banda y las piezas que empiezan dentro de ella; lo de debajo sube.
+- **Agregar banda de filas / zona de mesas / franja con bandas verticales:** al final de la sala.
 
 Al cambiar el alto de una banda, lo que queda debajo se desplaza con ella. Antes de aplicar
 cualquier cambio se comprueba que todas las mesas sigan cabiendo; si alguna no, no se aplica y se
@@ -155,6 +155,42 @@ explica (*«No se pudo: Mesa 4 choca con la fila A de General»*). Las butacas e
 que desaparecen se avisan igual que al acortar una mesa.
 
 Las bandas sin nombre propio toman el de su zona, numerado si se repite: *General*, *General 2*.
+
+### Bandas verticales
+
+Una **franja dividida** reparte su ancho en **bandas verticales**, de izquierda a derecha, y cada
+vertical apila bandas horizontales de filas o zonas de mesas:
+
+```
+        [        ESCENARIO        ]
+ ┌── Vertical 1 ──┬──── Vertical 2 (el resto) ────┐
+ │ zona de mesas  │ C ▣ ▣   ▣ ▣ ▣ ▣               │
+ │  [M4]          │ D ▣ ▣   ▣ ▣ ▣ ▣               │
+ │                │ (espacio libre)                │
+ └────────────────┴────────────────────────────────┘
+```
+
+- **Datos:** `{ id, tipo: 'division', verticales: [{ id, ancho, bandas: [...] }, …, { id, bandas }] }`.
+  Cada vertical tiene su ancho en columnas, salvo la última, que ocupa el resto. Dentro solo van
+  bandas de filas o de mesas (no otra franja).
+- **Alto:** el de la vertical más alta; las demás dejan espacio libre abajo.
+- **Columnas:** las filas de una vertical usan las columnas de la sala que caen en su tramo, así que
+  los pasillos siguen alineados con el resto. Se numeran por zona como cualquier fila.
+- **Rótulos de fila:** a la izquierda si la banda empieza en el borde izquierdo de la sala, a la
+  derecha si acaba en el derecho; en una vertical del medio no se dibujan.
+
+En el panel, cada franja muestra sus verticales anidadas, y cada vertical, sus bandas:
+
+- **Franja:** «+ vertical» (hasta 6; la última se parte por la mitad), ↑ / ↓ y Eliminar.
+- **Vertical:** − / + ancho (salvo la última), ← / → para moverla, «+ filas» y «+ mesas» para
+  agregar bandas dentro, y Eliminar (una franja necesita al menos una vertical).
+- **Bandas dentro de una vertical:** los mismos controles que las de la sala.
+
+**Las piezas se anclan a su región.** Cada mesa, bloque o el escenario se asocia a la región más
+concreta que contiene su esquina: una banda, el espacio libre bajo una vertical o la vertical. Al
+cambiar cualquier banda (alto, ancho, orden o eliminarla), la pieza conserva su distancia a esa
+región, así que viaja con ella en vertical y en horizontal. Si la región se elimina, la pieza se
+quita (el escenario nunca). Como siempre, si algo deja de caber, el cambio no se aplica.
 
 ## Modo editor
 
