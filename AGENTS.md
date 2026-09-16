@@ -8,8 +8,8 @@ lee primero [README.md](README.md). Para el historial de cambios, [CHANGELOG.md]
 Un selector de asientos: plano de butacas interactivo en SVG, en **un solo archivo HTML**, sin
 dependencias, sin paso de compilación y sin framework. Filas numeradas, mesas y zona general
 conviven en el mismo plano. Tiene dos modos: **Previsualizar** (elegir butacas, como quien compra)
-y **Editar plano** (mover, girar, alargar, agregar y eliminar mesas, y editar las bandas de la
-sala). Hay salas mixtas, solo filas y solo mesas.
+y **Editar plano** (mover, girar, alargar, agregar y eliminar mesas, editar las bandas de la
+sala y bloquear butacas). Los diseños se guardan con nombre en el navegador o como archivos JSON. Hay salas mixtas, solo filas y solo mesas.
 
 Es solo la capa visual: no hay servidor, reservas ni pagos. La ocupación del ejemplo está escrita
 en el propio archivo.
@@ -52,6 +52,8 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    configuraciones (`{ id, x, y, largo, cabeceras, unLado, giro }`); nunca modifican la actual.
    **Bandas:** `planoDesdeSala`, `redimensionarBanda`, `moverBanda`, `eliminarBanda`, `agregarBanda`,
    `cambiarZonaBanda`. Devuelven un plano nuevo o `{ motivo }`.
+   **Bloqueos y mapas:** `idsBloqueadosPorBandas`, `alternarBloqueada`, `mapaDesdePlano`,
+   `validarMapa`, `definicionDeMapa`, `registrarMapa`, `claveDeMapa`, `nombreDeArchivo`.
 6. **Selección sin DOM:** `elegidas` (un `Set` de ids) y `conciliarSeleccion`.
 7. **Marca `// === Fin de la parte sin DOM`.** `pruebas.mjs` evalúa en Node todo lo anterior a
    esta línea.
@@ -62,9 +64,12 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 10. **Selección y teclado:** `alternar`, `moverFoco`, `asegurarVisible`, manejadores `focusin` y
     `keydown`.
 11. **Modo editor:** `modo`, `mesaActiva`, `planos` (por tipo de sala), sombra de destino, arrastre, `regenerar`,
-    `transformarMesa`, `agregarMesaNueva`, `eliminarMesa`, atajos (`ATAJOS`), `cambiarModo`.
+    `transformarMesa`, `agregarMesaNueva`, `eliminarMesa`, atajos (`ATAJOS`), `cambiarModo`,
+    `herramienta` (mesas o bloquear), `cambiarHerramienta`, `alternarBloqueo`.
 12. **Resumen y cambio de tipo de sala:** `actualizarResumen`, `actualizarAforo`, `redibujar`, y el
-    selector de tipos, que se construye desde `TIPOS_DE_SALA`.
+    selector de tipos, que se construye desde `TIPOS_DE_SALA` (`construirSelector`).
+13. **Mapas guardados:** `leerAlmacen`, `escribirAlmacen` (`localStorage`), `guardarMapa`,
+    `exportarMapa`, `importarMapa`, `eliminarMapa`, y la carga de mapas guardados al abrir.
 
 ## Reglas que no se deben romper
 
@@ -101,6 +106,16 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   - El estado no depende solo del color (palomita, aspa, raya; sombra roja con contorno discontinuo).
   - Los colores de estado contrastan al menos 3:1 con el fondo del plano.
 
+- **Un mapa guarda diseño, no venta:** pasillos, bandas, mesas, bloqueadas y contadores. Nunca la
+  ocupación ni la selección. La ocupación de ejemplo vive en las plantillas (`ocupadas`,
+  `mesasOcupadas`).
+- **Todo mapa que entra se valida** con `validarMapa`, venga de un archivo o de `localStorage`: se
+  descartan los campos desconocidos y se comprueba que las mesas quepan. No se confía en el archivo.
+- **Las bloqueadas son una lista de ids** (`plano.bloqueadas`). `bloqueadasAlFinal` de las plantillas
+  solo se usa si no hay lista.
+- **Si cambias el formato del mapa**, sube `VERSION_MAPA` y convierte los mapas viejos en lugar de
+  rechazarlos.
+
 ## Trampas conocidas
 
 - **`setPointerCapture` retargetea los eventos al `<svg>`:** la butaca o la mesa agarrada se anota
@@ -122,6 +137,12 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   calcula. Quitarlo de todas rompe las zonas de mesas (pasó; hay prueba).
 - **Nombres de banda:** solo se guardan los puestos a mano en el tipo (Platea). Los demás se calculan
   al generar, para numerar bien (General, General 2).
+- **`validarMapa` genera un plano para comprobar las mesas**: cambia `butacas`, `muebles` y
+  `mesas`. Después hay que volver a generar y dibujar la sala actual (lo hace `importarMapa`).
+- **`localStorage` puede lanzar excepciones** (páginas `data:`, modo privado, cuota llena): todo acceso
+  va en `try/catch` y la página tiene que funcionar sin él.
+- **`confirm` bloquea las pruebas automáticas:** en el navegador, sustitúyelo antes de guardar o
+  importar sobre un nombre existente.
 - **`escalar` asigna el ancho exacto** en vez de multiplicar, para que el tope del zoom no falle por
   redondeo.
 
@@ -147,11 +168,14 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
      «Restablecer sala», y que la selección se conserve.
    - **Bandas:** − / +, zona, subir y bajar, eliminar, agregar; que no se aplique un cambio que deja
      una mesa sin caber, y que el foco vuelva al mismo control.
+   - **Mapas:** bloquear y desbloquear butacas; guardar con nombre y recargar; exportar e importar;
+     importar un archivo dañado; eliminar. `localStorage` no funciona en páginas `data:`: para
+     probar el guardado, sirve la carpeta por HTTP.
 3. Revisa que no haya errores en la consola del navegador.
 
 ## Pendiente
 
 - Probar el pellizco en un móvil o tablet real.
-- Guardar los planos de mesas en un servidor: hoy viven en memoria y se pierden al recargar.
+- Guardar los mapas en un servidor: hoy se guardan en el navegador o como archivos JSON.
 - Desplazar el plano solo al arrastrar una mesa hasta el borde con zoom.
 - Decidir si una mesa con lugares ocupados se puede mover, acortar o eliminar (hoy sí, con aviso).

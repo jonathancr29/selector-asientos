@@ -110,6 +110,14 @@
   /* --- Modo editor ---
      Las butacas no responden: el clic atraviesa hasta la pieza o el fondo. */
   #plano.editando .butaca { pointer-events: none; }
+  /* Con la herramienta de bloqueo, las butacas vuelven a responder. */
+  #plano.editando.bloqueando .butaca { pointer-events: auto; }
+  .herramientas input[type="text"] {
+    height: 30px; min-width: 210px; padding: 0 9px; font: inherit; font-size: 13px; color: #e2e8f0;
+    background: #17171c; border: 1px solid #3a3a46; border-radius: 6px;
+  }
+  .herramientas input[type="text"]:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+  #herramientas-mapa { margin-top: 6px; padding: 6px 8px; background: #23232b; border: 1px solid #2c2c36; border-radius: 8px; }
   .pieza { fill: transparent; stroke: #93c5fd; stroke-width: .8; stroke-dasharray: 2 1.5; cursor: grab; }
   .pieza:hover { fill: rgba(147, 197, 253, .1); }
   .pieza:focus { outline: none; }
@@ -177,6 +185,8 @@
   </div>
   <!-- Solo en modo editor. Los botones de mesa actuan sobre la mesa activa. -->
   <div class="herramientas" id="herramientas-editor" role="group" aria-label="Editar mesas" hidden>
+    <button type="button" id="herramienta-bloquear" aria-pressed="false">Bloquear butacas</button>
+    <span class="separador" aria-hidden="true"></span>
     <span class="campo">Agregar mesa</span>
     <!-- Sin title: algunos lectores lo anuncian en lugar del texto del boton. Los
          atajos van en aria-keyshortcuts y estan explicados en la pista. -->
@@ -193,6 +203,17 @@
     <button type="button" data-accion="eliminar" aria-keyshortcuts="Delete">Eliminar</button>
     <span class="separador" aria-hidden="true"></span>
     <button type="button" id="restablecer">Restablecer sala</button>
+  </div>
+  <!-- Solo en modo editor: guardar el diseño con nombre, en el navegador o como JSON. -->
+  <div class="herramientas" id="herramientas-mapa" role="group" aria-label="Guardar mapa" hidden>
+    <label class="campo" for="nombre-mapa">Nombre del mapa</label>
+    <input type="text" id="nombre-mapa" maxlength="80" autocomplete="off" placeholder="Ej.: Salón Jardín, boda">
+    <button type="button" id="guardar-mapa">Guardar</button>
+    <button type="button" id="eliminar-mapa" hidden>Eliminar mapa</button>
+    <span class="separador" aria-hidden="true"></span>
+    <button type="button" id="exportar-mapa">Exportar JSON</button>
+    <button type="button" id="importar-mapa">Importar JSON</button>
+    <input type="file" id="archivo-mapa" accept=".json,application/json" hidden>
   </div>
   <p class="pista" id="pista">Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer</p>
   <p class="aforo" id="aforo"></p>
@@ -356,6 +377,7 @@ const ESCENARIO = { id: 'escenario', tipo: 'escenario' };
 // Las cuatro salas mixtas son las disposiciones de pasillos de siempre.
 const mixta = (pasillos, nombre) => ({
   nombre, grupo: 'Mixta', pasillos,
+  mesasOcupadas: { M2: ['S1', 'S2'] },   // ocupacion de ejemplo; no es parte del diseño
   bandas: [
     ESCENARIO,
     { id: 'luneta', tipo: 'filas', zona: 'luneta', filas: 3, ocupadas: { B: [5, 6], C: [11] } },
@@ -384,6 +406,7 @@ const TIPOS_DE_SALA = {
   },
   'solo-mesas': {
     nombre: 'Solo mesas · sin pasillos', grupo: 'Otras', pasillos: 'ninguno',
+    mesasOcupadas: { M2: ['S1', 'S2'] },
     bandas: [
       ESCENARIO,
       { id: 'salon', tipo: 'mesas', nombre: 'Salón', alto: 20, filasDeMesas: 4 },
@@ -397,14 +420,12 @@ const altoDeBanda = (banda) =>
 // La butaca n de la fila va a columnas[n-1]: nunca a la columna n a secas.
 // Es lo que mantiene todas las bandas en la misma rejilla.
 function agregarFilas(banda, columnas) {
-  const { id, nombre, zona, y, filas, ocupadas = {}, bloqueadasAlFinal = {} } = banda;
+  const { id, nombre, zona, y, filas, ocupadas = {} } = banda;
   for (let i = 0; i < filas; i++) {
     const fila = LETRAS[i];
-    const bloqueadas = bloqueadasAlFinal[fila] || 0;
     columnas.forEach((columna, indice) => {
       const numero = indice + 1;
-      const estado = numero > columnas.length - bloqueadas ? 'bloqueada'
-        : (ocupadas[fila] || []).includes(numero) ? 'ocupada' : 'libre';
+      const estado = (ocupadas[fila] || []).includes(numero) ? 'ocupada' : 'libre';
       butacas.push({
         id: id + '-' + fila + numero, fila, numero, banda: id, bandaNombre: nombre,
         x: columna, y: y + i, zona, grupo: null, estado,
@@ -412,6 +433,21 @@ function agregarFilas(banda, columnas) {
     });
     muebles.push({ tipo: 'rotulo', texto: fila, x: columnas[0] - 1, y: y + i });
   }
+}
+
+// Ids bloqueados por las bandas de una plantilla: 'bloqueadasAlFinal: { B: 2 }'
+// bloquea las dos ultimas butacas de la fila B. Solo se usa si el plano no trae
+// su propia lista de bloqueadas.
+function idsBloqueadosPorBandas(sala) {
+  const ids = [];
+  for (const banda of sala.bandas) {
+    for (const [fila, cuantas] of Object.entries(banda.bloqueadasAlFinal || {})) {
+      for (let n = sala.columnas.length - cuantas + 1; n <= sala.columnas.length; n++) {
+        ids.push(banda.id + '-' + fila + n);
+      }
+    }
+  }
+  return ids;
 }
 
 // ---------------------------------------------------------------------------
@@ -490,8 +526,6 @@ function agregarMesa(config, ocupadas = []) {
   });
 }
 
-const MESAS_OCUPADAS = { M2: ['S1', 'S2'] };
-
 // Posicion automatica: en cada banda de mesas, 'filasDeMesas' filas de tres mesas
 // de estilo «lados», cada cuatro filas de rejilla empezando en la tercera. Los ids
 // siguen el orden de lectura: M1, M2, M3 en la primera fila, M4... en la segunda.
@@ -510,11 +544,12 @@ function mesasAutomaticas(sala) {
   return lista;
 }
 
-// 'plano' es lo que guarda el editor para un tipo de sala: { bandas, mesas,
-// siguiente, siguienteBanda }. Sin plano, se usan las bandas del tipo y las
-// mesas automaticas.
+// 'tipo' es la clave de TIPOS_DE_SALA o directamente una definicion. 'plano' es
+// lo que guarda el editor para ese tipo: { bandas, mesas, bloqueadas, siguiente,
+// siguienteBanda }. Sin plano, se usan las bandas del tipo y sus mesas (las
+// guardadas si es un mapa, las automaticas si es una plantilla).
 function generarPlano(tipo, plano = null) {
-  const definicion = TIPOS_DE_SALA[tipo];
+  const definicion = typeof tipo === 'string' ? TIPOS_DE_SALA[tipo] : tipo;
   if (!definicion) throw new Error('Tipo de sala desconocido: ' + tipo);
   butacas.length = 0;
   muebles.length = 0;
@@ -542,9 +577,15 @@ function generarPlano(tipo, plano = null) {
   }
   sala.alto = y;
 
-  for (const config of plano ? plano.mesas : mesasAutomaticas(sala)) {
-    agregarMesa(config, MESAS_OCUPADAS[config.id]);
+  const ocupadasDeMesas = definicion.mesasOcupadas || {};
+  for (const config of plano ? plano.mesas : definicion.mesas || mesasAutomaticas(sala)) {
+    agregarMesa(config, ocupadasDeMesas[config.id]);
   }
+
+  // Bloqueadas: la lista del plano o del mapa manda; si no hay, las de las bandas.
+  const bloqueadas = new Set((plano && plano.bloqueadas) || definicion.bloqueadas ||
+                             idsBloqueadosPorBandas(sala));
+  for (const b of butacas) if (bloqueadas.has(b.id)) b.estado = 'bloqueada';
 
   // Filas de la rejilla donde puede haber mesas: toda la sala bajo el escenario.
   const primera = sala.bandas.find((b) => b.tipo !== 'escenario');
@@ -747,18 +788,162 @@ function agregarBanda(plano, tipo) {
 // El plano editable de una sala ya generada: bandas y mesas como datos. De cada
 // banda se quitan lo calculado al generar (y, nombre por defecto) pero no los
 // datos propios: el alto de una zona de mesas SI es un dato, el de las demas no.
+// Las bloqueadas pasan a ser una lista de ids: asi se pueden editar una a una.
 function planoDesdeSala(tipo, sala) {
-  const conNombre = new Set(TIPOS_DE_SALA[tipo].bandas.filter((b) => b.nombre).map((b) => b.id));
+  const definicion = typeof tipo === 'string' ? TIPOS_DE_SALA[tipo] : tipo;
+  const conNombre = new Set(definicion.bandas.filter((b) => b.nombre).map((b) => b.id));
   return {
-    bandas: sala.bandas.map(({ y, alto, nombre, ...banda }) => ({
+    bandas: sala.bandas.map(({ y, alto, nombre, bloqueadasAlFinal, ...banda }) => ({
       ...banda,
       ...(banda.tipo === 'mesas' ? { alto } : {}),
       ...(conNombre.has(banda.id) ? { nombre } : {}),
     })),
     mesas: mesas.map(({ id, x, y, largo, cabeceras, unLado, giro }) => ({ id, x, y, largo, cabeceras, unLado, giro })),
-    siguiente: Math.max(0, ...mesas.map((m) => Number(m.id.slice(1)))) + 1,
-    siguienteBanda: 1,
+    bloqueadas: butacas.filter((b) => b.estado === 'bloqueada').map((b) => b.id),
+    siguiente: Math.max(definicion.siguiente || 0, ...mesas.map((m) => Number(m.id.slice(1)) + 1), 1),
+    siguienteBanda: Math.max(definicion.siguienteBanda || 1, 1),
   };
+}
+
+// Bloquea o desbloquea una butaca por id. Es parte del diseño del recinto (una
+// butaca sin visibilidad), no de la venta: por eso se guarda con el mapa.
+function alternarBloqueada(plano, id) {
+  const nuevo = copiarPlano(plano);
+  const lista = new Set(nuevo.bloqueadas || []);
+  if (!lista.delete(id)) lista.add(id);
+  nuevo.bloqueadas = [...lista];
+  return nuevo;
+}
+
+// ---------------------------------------------------------------------------
+// Mapas guardados.
+//
+// Un mapa es el diseño de un recinto en JSON: nombre, pasillos, bandas, mesas y
+// butacas bloqueadas. No guarda la ocupacion ni la seleccion, que son datos de
+// venta. Se guarda en el navegador y se exporta o importa como archivo .json.
+//
+// Al importar, el archivo es un dato que no se ha visto nunca: se comprueba campo
+// por campo, se descarta lo desconocido y se verifica que todas las mesas quepan.
+// ---------------------------------------------------------------------------
+const FORMATO_MAPA = 'selector-asientos/mapa';
+const VERSION_MAPA = 1;
+const PASILLOS_VALIDOS = ['ninguno', 'izquierda', 'derecha', 'ambos'];
+const GRUPO_MAPAS = 'Mis mapas';
+const claveDeMapa = (nombre) => 'mapa:' + nombre;
+const esEntero = (v, min, max) => Number.isInteger(v) && v >= min && v <= max;
+
+// El mapa de lo que hay ahora en un tipo de sala. 'idsExistentes' limpia las
+// bloqueadas que ya no existen (de una banda o mesa eliminada).
+function mapaDesdePlano(nombre, tipo, plano, guardado, idsExistentes = null) {
+  return {
+    formato: FORMATO_MAPA, version: VERSION_MAPA, nombre, guardado,
+    pasillos: TIPOS_DE_SALA[tipo].pasillos,
+    // Sin ocupacion de ejemplo, ni bloqueos por plantilla (ya van en la lista),
+    // ni filas de mesas automaticas (las mesas van explicitas).
+    bandas: plano.bandas.map(({ ocupadas, bloqueadasAlFinal, filasDeMesas, ...banda }) => banda),
+    mesas: plano.mesas.map(({ id, x, y, largo, cabeceras, unLado, giro }) => ({ id, x, y, largo, cabeceras, unLado, giro })),
+    bloqueadas: (plano.bloqueadas || []).filter((id) => !idsExistentes || idsExistentes.has(id)),
+    siguiente: plano.siguiente,
+    siguienteBanda: plano.siguienteBanda,
+  };
+}
+
+const definicionDeMapa = (mapa) => ({
+  nombre: mapa.nombre, grupo: GRUPO_MAPAS, pasillos: mapa.pasillos, bandas: mapa.bandas,
+  mesas: mapa.mesas, bloqueadas: mapa.bloqueadas,
+  siguiente: mapa.siguiente, siguienteBanda: mapa.siguienteBanda,
+});
+
+function registrarMapa(mapa) {
+  const clave = claveDeMapa(mapa.nombre);
+  TIPOS_DE_SALA[clave] = definicionDeMapa(mapa);
+  return clave;
+}
+
+function nombreDeArchivo(nombre) {
+  const base = nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return (base || 'mapa') + '.json';
+}
+
+// Devuelve { mapa } limpio y valido, o { errores: [...] } en palabras. Genera el
+// plano para comprobar que las mesas quepan: cambia butacas, muebles y mesas, asi
+// que quien la llame debe volver a generar su sala despues.
+function validarMapa(dato) {
+  if (!dato || typeof dato !== 'object' || Array.isArray(dato)) return { errores: ['el archivo no contiene un mapa'] };
+  if (dato.formato !== FORMATO_MAPA) return { errores: ['no es un mapa de este selector de asientos'] };
+  if (dato.version !== VERSION_MAPA) return { errores: ['versión de mapa no compatible (' + dato.version + ')'] };
+  const errores = [];
+
+  const nombre = typeof dato.nombre === 'string' ? dato.nombre.trim() : '';
+  if (!nombre || nombre.length > 80) errores.push('el nombre debe tener entre 1 y 80 caracteres');
+  if (!PASILLOS_VALIDOS.includes(dato.pasillos)) errores.push('pasillos desconocidos');
+
+  const bandasDato = Array.isArray(dato.bandas) ? dato.bandas : [];
+  if (!bandasDato.length || !bandasDato[0] || bandasDato[0].tipo !== 'escenario') {
+    errores.push('la primera banda debe ser el escenario');
+  }
+  const idsBanda = new Set();
+  const bandas = bandasDato.map((b, i) => {
+    const donde = 'banda ' + (i + 1);
+    if (!b || typeof b.id !== 'string' || !/^[a-z][a-z0-9]{0,30}$/i.test(b.id) || idsBanda.has(b.id)) {
+      errores.push(donde + ': id no válido o repetido');
+      return null;
+    }
+    idsBanda.add(b.id);
+    const limpia = { id: b.id, tipo: b.tipo };
+    if (typeof b.nombre === 'string' && b.nombre.trim()) limpia.nombre = b.nombre.trim().slice(0, 40);
+    if (b.tipo === 'escenario') {
+      if (i > 0) errores.push(donde + ': el escenario solo puede ir primero');
+    } else if (b.tipo === 'filas') {
+      if (!esEntero(b.filas, 1, FILAS_MAXIMAS)) errores.push(donde + ': número de filas fuera de rango');
+      if (!['luneta', 'general'].includes(b.zona)) errores.push(donde + ': zona desconocida');
+      Object.assign(limpia, { zona: b.zona, filas: b.filas });
+    } else if (b.tipo === 'mesas') {
+      if (!esEntero(b.alto, 1, ALTO_MAXIMO)) errores.push(donde + ': alto fuera de rango');
+      limpia.alto = b.alto;
+    } else {
+      errores.push(donde + ': tipo de banda desconocido');
+    }
+    return limpia;
+  });
+
+  if (!Array.isArray(dato.mesas)) errores.push('falta la lista de mesas');
+  const idsMesa = new Set();
+  const mesasLimpias = (Array.isArray(dato.mesas) ? dato.mesas : []).map((m, i) => {
+    if (!m || typeof m.id !== 'string' || !/^M[1-9]\d{0,5}$/.test(m.id) || idsMesa.has(m.id)) {
+      errores.push('mesa ' + (i + 1) + ': id no válido o repetido');
+      return null;
+    }
+    idsMesa.add(m.id);
+    if (!esEntero(m.x, 0, 999) || !esEntero(m.y, 0, 999)) errores.push(m.id + ': posición no válida');
+    if (!esEntero(m.largo, 1, LARGO_MAXIMO)) errores.push(m.id + ': largo fuera de rango');
+    if (typeof m.cabeceras !== 'boolean' || typeof m.unLado !== 'boolean') {
+      errores.push(m.id + ': cabeceras y unLado deben ser true o false');
+    }
+    if (![0, 90, 180, 270].includes(m.giro)) errores.push(m.id + ': giro no válido');
+    return { id: m.id, x: m.x, y: m.y, largo: m.largo, cabeceras: m.cabeceras, unLado: m.unLado, giro: m.giro };
+  });
+
+  const bloqueadas = dato.bloqueadas === undefined ? [] : dato.bloqueadas;
+  if (!Array.isArray(bloqueadas) || !bloqueadas.every((id) => typeof id === 'string' && id.length <= 60)) {
+    errores.push('la lista de butacas bloqueadas no es válida');
+  }
+  if (errores.length) return { errores };
+
+  // Los contadores nunca por debajo de lo que ya existe: un id no se reutiliza.
+  const maximo = (ids, patron) => Math.max(0, ...[...ids].map((id) => Number((id.match(patron) || [])[1]) || 0));
+  const mapa = {
+    formato: FORMATO_MAPA, version: VERSION_MAPA, nombre,
+    guardado: typeof dato.guardado === 'string' ? dato.guardado.slice(0, 40) : null,
+    pasillos: dato.pasillos, bandas, mesas: mesasLimpias, bloqueadas: [...new Set(bloqueadas)],
+    siguiente: Math.max(esEntero(dato.siguiente, 1, 1e6) ? dato.siguiente : 1, maximo(idsMesa, /^M(\d+)$/) + 1),
+    siguienteBanda: Math.max(esEntero(dato.siguienteBanda, 1, 1e6) ? dato.siguienteBanda : 1,
+                             maximo(idsBanda, /^banda(\d+)$/) + 1),
+  };
+  const fallo = primeraMesaQueNoCabe(generarPlano(definicionDeMapa(mapa)));
+  if (fallo) return { errores: [fallo.mesa.nombre + ' ' + fallo.motivo] };
+  return { mapa };
 }
 
 function cambiarZonaBanda(plano, id, zona) {
@@ -858,18 +1043,24 @@ function glifoButaca(x, y, mira = 0) {
 
 function dibujarButacas() {
   porId.clear();
+  const bloqueando = modo === 'editor' && herramienta === 'bloquear';
   butacas.forEach((b, indice) => {
     const seleccionable = b.estado === 'libre';
     const elegida = elegidas.has(b.id);
+    // Al bloquear, cada butaca es un checkbox de «bloqueada»; las ocupadas no se tocan.
+    const marcada = bloqueando ? b.estado === 'bloqueada' : elegida;
+    const inactiva = bloqueando ? b.estado === 'ocupada' : !seleccionable;
     const g = nodo('g', {
       class: 'butaca' + (seleccionable ? '' : ' ' + b.estado) + (elegida ? ' elegida' : ''),
       role: 'checkbox',
-      'aria-checked': String(elegida),
-      'aria-label': etiquetaDe(b) + (seleccionable ? '' : ', ' + b.estado),
-      // tabindex movil: un solo punto de tabulacion. En el editor, ninguno: se tabula por mesas.
-      tabindex: modo === 'vista' && indice === 0 ? '0' : '-1',
+      'aria-checked': String(marcada),
+      'aria-label': etiquetaDe(b) + (bloqueando
+        ? (b.estado === 'ocupada' ? ', ocupada' : ', bloquear')
+        : (seleccionable ? '' : ', ' + b.estado)),
+      // tabindex movil: un solo punto de tabulacion. Colocando mesas, ninguno: se tabula por mesas.
+      tabindex: (modo === 'vista' || bloqueando) && indice === 0 ? '0' : '-1',
     });
-    if (!seleccionable) g.setAttribute('aria-disabled', 'true');
+    if (inactiva) g.setAttribute('aria-disabled', 'true');
     g.dataset.id = b.id;
     if (b.grupo) g.dataset.mesa = b.grupo.id;
     // El area sensible es la celda entera: contigua con sus vecinas y sin solaparlas.
@@ -901,7 +1092,7 @@ const etiquetaMesa = (m) => m.nombre + ', ' + m.geo.lugares.length + ' lugares' 
   (m.unLado ? ', un solo lado' : '') + ', columna ' + m.x + ', fila ' + m.y;
 
 function dibujarPiezas() {
-  if (modo !== 'editor') return;
+  if (modo !== 'editor' || herramienta === 'bloquear') return;
   // Si la mesa activa ya no existe (se elimino), el punto de tabulacion va a la primera.
   const hayActiva = mesas.some((m) => m.id === mesaActiva);
   mesas.forEach((m, indice) => {
@@ -1200,8 +1391,9 @@ function soltarPuntero(e, cancelado) {
   svg.classList.remove('arrastrando');
   // Un arrastre no debe contar como clic sobre la butaca que quedo debajo.
   if (!cancelado && arrastre && arrastre.movido <= 4) {
-    // En el editor, un clic en el fondo deselecciona la mesa activa.
-    if (modo === 'editor') marcarActiva(null);
+    // En el editor, un clic en el fondo deselecciona la mesa activa; con la
+    // herramienta de bloqueo, el clic en una butaca la bloquea o desbloquea.
+    if (modo === 'editor' && herramienta !== 'bloquear') marcarActiva(null);
     else alternar(arrastre.butaca);
   }
   arrastre = null;
@@ -1222,7 +1414,10 @@ document.getElementById('ajustar').addEventListener('click', () => {
 const porNodo = (elemento) => porId.get(elemento.dataset.id);
 
 function alternar(elemento) {
-  if (modo !== 'vista') return;   // en el editor no se elige, se coloca
+  if (modo === 'editor') {        // en el editor no se elige: se coloca o se bloquea
+    if (herramienta === 'bloquear' && elemento) alternarBloqueo(elemento);
+    return;
+  }
   const b = elemento && porNodo(elemento);
   if (!b || b.estado !== 'libre') return;
   const elegida = !elegidas.delete(b.id);
@@ -1332,6 +1527,7 @@ const FLECHAS = {
 let modo = 'vista';        // 'vista' (previsualizar, como quien compra) o 'editor'
 let arrastreMesa = null;
 let mesaActiva = null;     // id de la mesa sobre la que actuan los botones y atajos
+let herramienta = 'mesas'; // en el editor: 'mesas' (colocar) o 'bloquear' (butacas)
 let tipoActual, salaActual;
 // Plano guardado por tipo de sala: { 'mixta-ambos': { bandas, mesas, siguiente,
 // siguienteBanda } }. Cada tipo tiene el suyo; editar uno no toca los otros.
@@ -1470,7 +1666,7 @@ const fotoDeButacas = () => butacas.map((b) => ({ id: b.id, estado: b.estado }))
 function regenerar(mensaje, antes = fotoDeButacas()) {
   salaActual = generarPlano(tipoActual, planos[tipoActual]);
   const existe = new Set(butacas.map((b) => b.id));
-  const { ausentes } = conciliarSeleccion(elegidas, butacas);
+  const { ausentes, noLibres } = conciliarSeleccion(elegidas, butacas);
   const ocupadasQuitadas = antes.filter((b) => b.estado === 'ocupada' && !existe.has(b.id))
                                 .map((b) => b.id);
   if (!mesaPorId(mesaActiva)) mesaActiva = null;
@@ -1481,6 +1677,7 @@ function regenerar(mensaje, antes = fotoDeButacas()) {
   anunciar(mensaje);
   document.getElementById('aviso').textContent = [
     frase(ausentes, 'ya no existe en el plano', 'ya no existen en el plano'),
+    frase(noLibres, 'ya no está libre', 'ya no están libres'),
     ocupadasQuitadas.length
       ? 'Atención: se quitaron lugares ocupados: ' + ocupadasQuitadas.join(', ') + '.' : '',
   ].filter(Boolean).join(' ');
@@ -1583,6 +1780,8 @@ const ATAJOS = {
 };
 
 const PISTAS = {
+  bloquear: 'Haz clic en una butaca, o Enter sobre ella, para bloquearla o desbloquearla · ' +
+            'flechas para recorrer · las bloqueadas se guardan con el mapa',
   vista: 'Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer',
   editor: 'Arrastra una mesa para moverla · con teclado, Tab hasta una mesa: flechas la ' +
           'mueven, R la gira, + y − cambian su largo, C pone o quita cabeceras, U alterna ' +
@@ -1600,10 +1799,12 @@ function cambiarModo(nuevo) {
   document.getElementById('modo-editor').setAttribute('aria-pressed', String(editando));
   document.getElementById('herramientas-editor').hidden = !editando;
   document.getElementById('panel-bandas').hidden = !editando;
+  document.getElementById('herramientas-mapa').hidden = !editando;
   document.getElementById('pista').textContent = PISTAS[modo];
-  // En el editor las butacas son decorado: el lector de pantalla recorre mesas.
-  if (editando) capaButacas.setAttribute('aria-hidden', 'true');
-  else capaButacas.removeAttribute('aria-hidden');
+  herramienta = 'mesas';
+  svg.classList.remove('bloqueando');
+  document.getElementById('herramienta-bloquear').setAttribute('aria-pressed', 'false');
+  actualizarAccesoButacas();
   mesaActiva = null;
   dibujarTodo();
   actualizarControles();
@@ -1611,6 +1812,47 @@ function cambiarModo(nuevo) {
     ? 'Modo editor: arrastra las mesas para colocarlas.'
     : 'Previsualización: el plano como lo verá quien compra.');
 }
+
+// Colocando mesas, las butacas son decorado y el lector de pantalla recorre mesas.
+// Bloqueando, o en la previsualizacion, las butacas son lo que se recorre.
+function actualizarAccesoButacas() {
+  if (modo === 'editor' && herramienta !== 'bloquear') capaButacas.setAttribute('aria-hidden', 'true');
+  else capaButacas.removeAttribute('aria-hidden');
+}
+
+function cambiarHerramienta(nueva) {
+  if (arrastreMesa) terminarArrastreMesa(false);
+  herramienta = nueva;
+  const bloqueando = herramienta === 'bloquear';
+  svg.classList.toggle('bloqueando', bloqueando);
+  document.getElementById('herramienta-bloquear').setAttribute('aria-pressed', String(bloqueando));
+  document.getElementById('pista').textContent = PISTAS[bloqueando ? 'bloquear' : modo];
+  actualizarAccesoButacas();
+  mesaActiva = null;
+  dibujarTodo();
+  actualizarControles();
+  anunciar(bloqueando
+    ? 'Bloquear butacas: haz clic en una butaca para bloquearla o desbloquearla.'
+    : 'Colocar mesas.');
+}
+
+function alternarBloqueo(elemento) {
+  const b = porNodo(elemento);
+  if (!b) return;
+  if (b.estado === 'ocupada') {
+    anunciar(etiquetaDe(b) + ' está ocupada: no se puede bloquear.');
+    return;
+  }
+  planos[tipoActual] = alternarBloqueada(planoEditable(), b.id);
+  const bloqueada = planos[tipoActual].bloqueadas.includes(b.id);
+  regenerar(etiquetaDe(b) + (bloqueada ? ' bloqueada.' : ' desbloqueada.'));
+  // El DOM se rehizo: el foco vuelve a la misma butaca.
+  const nueva = porId.get(b.id);
+  if (nueva) nueva.nodo.focus({ preventScroll: true });
+}
+
+document.getElementById('herramienta-bloquear').addEventListener('click', () =>
+  cambiarHerramienta(herramienta === 'bloquear' ? 'mesas' : 'bloquear'));
 
 document.getElementById('modo-vista').addEventListener('click', () => cambiarModo('vista'));
 document.getElementById('modo-editor').addEventListener('click', () => cambiarModo('editor'));
@@ -1680,6 +1922,9 @@ function redibujar(tipo) {
   if (arrastreMesa) terminarArrastreMesa(false);
   tipoActual = tipo;
   mesaActiva = null;
+  const esMapa = TIPOS_DE_SALA[tipo].grupo === GRUPO_MAPAS;
+  document.getElementById('nombre-mapa').value = esMapa ? TIPOS_DE_SALA[tipo].nombre : '';
+  document.getElementById('eliminar-mapa').hidden = !esMapa;
   salaActual = generarPlano(tipo, planos[tipo]);
   // Antes de dibujar: asi el DOM nace ya con la seleccion que sobrevive.
   const { ausentes, noLibres } = conciliarSeleccion(elegidas, butacas);
@@ -1696,20 +1941,173 @@ function redibujar(tipo) {
   ].filter(Boolean).join(' ');
 }
 
-// Las opciones del selector salen de TIPOS_DE_SALA, agrupadas.
+// ---------------------------------------------------------------------------
+// Mapas guardados: en el navegador (localStorage) y como archivos JSON.
+// ---------------------------------------------------------------------------
 const selector = document.getElementById('tipo-sala');
-const gruposDeSala = new Map();
-for (const [id, { nombre, grupo }] of Object.entries(TIPOS_DE_SALA)) {
-  if (!gruposDeSala.has(grupo)) {
-    const optgroup = document.createElement('optgroup');
-    optgroup.label = grupo;
-    gruposDeSala.set(grupo, optgroup);
-    selector.appendChild(optgroup);
+const campoNombre = document.getElementById('nombre-mapa');
+const CLAVE_ALMACEN = 'selector-asientos:mapas';
+
+// { nombre: mapa }, o null si el navegador no deja leer (modo privado, bloqueo).
+function leerAlmacen() {
+  try {
+    const texto = localStorage.getItem(CLAVE_ALMACEN);
+    const datos = texto ? JSON.parse(texto) : {};
+    return datos && typeof datos === 'object' && !Array.isArray(datos) ? datos : {};
+  } catch {
+    return null;
   }
-  gruposDeSala.get(grupo).appendChild(new Option(nombre, id));
 }
+
+function escribirAlmacen(mapas) {
+  try {
+    localStorage.setItem(CLAVE_ALMACEN, JSON.stringify(mapas));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Las opciones salen de TIPOS_DE_SALA, agrupadas; «Mis mapas» al final y por nombre.
+function construirSelector(valor) {
+  selector.textContent = '';
+  const entradas = Object.entries(TIPOS_DE_SALA);
+  const mapasOrdenados = entradas.filter(([, d]) => d.grupo === GRUPO_MAPAS)
+    .sort(([, a], [, b]) => a.nombre.localeCompare(b.nombre, 'es'));
+  const grupos = new Map();
+  for (const [id, { nombre, grupo }] of [...entradas.filter(([, d]) => d.grupo !== GRUPO_MAPAS), ...mapasOrdenados]) {
+    if (!grupos.has(grupo)) {
+      const optgroup = document.createElement('optgroup');
+      optgroup.label = grupo;
+      grupos.set(grupo, optgroup);
+      selector.appendChild(optgroup);
+    }
+    grupos.get(grupo).appendChild(new Option(nombre, id));
+  }
+  selector.value = valor;
+}
+
+const idsActuales = () => new Set(butacas.map((b) => b.id));
+
+function guardarMapa() {
+  const nombre = campoNombre.value.trim();
+  if (!nombre) {
+    anunciar('Escribe un nombre para el mapa.');
+    campoNombre.focus();
+    return;
+  }
+  const almacen = leerAlmacen();
+  if (!almacen) {
+    anunciar('Este navegador no permite guardar mapas aquí. Usa «Exportar JSON».');
+    return;
+  }
+  const clave = claveDeMapa(nombre);
+  if (TIPOS_DE_SALA[clave] && clave !== tipoActual &&
+      !confirm('Ya hay un mapa llamado «' + nombre + '». ¿Sobrescribirlo?')) return;
+  const mapa = mapaDesdePlano(nombre, tipoActual, planoEditable(), new Date().toISOString(), idsActuales());
+  almacen[nombre] = mapa;
+  if (!escribirAlmacen(almacen)) {
+    anunciar('No se pudo guardar: el almacenamiento del navegador está lleno o bloqueado. Usa «Exportar JSON».');
+    return;
+  }
+  registrarMapa(mapa);
+  delete planos[clave];   // lo guardado pasa a ser el punto de partida del mapa
+  construirSelector(clave);
+  redibujar(clave);
+  anunciar('Mapa «' + nombre + '» guardado en este navegador.');
+}
+
+function exportarMapa() {
+  const nombre = campoNombre.value.trim() || TIPOS_DE_SALA[tipoActual].nombre;
+  const mapa = mapaDesdePlano(nombre, tipoActual, planoEditable(), new Date().toISOString(), idsActuales());
+  const archivo = new Blob([JSON.stringify(mapa, null, 2) + '\n'], { type: 'application/json' });
+  const enlace = document.createElement('a');
+  enlace.href = URL.createObjectURL(archivo);
+  enlace.download = nombreDeArchivo(nombre);
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  setTimeout(() => URL.revokeObjectURL(enlace.href), 0);
+  anunciar('Mapa «' + nombre + '» exportado como ' + enlace.download + '.');
+}
+
+async function importarMapa(archivo) {
+  let dato;
+  try {
+    dato = JSON.parse(await archivo.text());
+  } catch {
+    anunciar('No se pudo importar ' + archivo.name + ': no es un JSON válido.');
+    return;
+  }
+  const { mapa, errores } = validarMapa(dato);
+  // validarMapa genero su propia sala para comprobarla: se vuelve a dibujar la actual.
+  salaActual = generarPlano(tipoActual, planos[tipoActual]);
+  dibujarTodo();
+  if (errores) {
+    anunciar('No se pudo importar ' + archivo.name + ': ' + errores.slice(0, 3).join('; ') +
+             (errores.length > 3 ? '…' : '') + '.');
+    return;
+  }
+  const clave = claveDeMapa(mapa.nombre);
+  if (TIPOS_DE_SALA[clave] && !confirm('Ya hay un mapa llamado «' + mapa.nombre + '». ¿Sobrescribirlo?')) return;
+  const almacen = leerAlmacen();
+  const guardado = Boolean(almacen) && ((almacen[mapa.nombre] = mapa), escribirAlmacen(almacen));
+  registrarMapa(mapa);
+  delete planos[clave];
+  construirSelector(clave);
+  redibujar(clave);
+  anunciar('Mapa «' + mapa.nombre + '» importado' + (guardado
+    ? ' y guardado en este navegador.'
+    : '. No se pudo guardar en el navegador: estará disponible hasta recargar la página.'));
+}
+
+function eliminarMapa() {
+  const { nombre } = TIPOS_DE_SALA[tipoActual];
+  if (!confirm('¿Eliminar el mapa «' + nombre + '» de este navegador? No se puede deshacer.')) return;
+  const almacen = leerAlmacen();
+  if (almacen) {
+    delete almacen[nombre];
+    escribirAlmacen(almacen);
+  }
+  delete TIPOS_DE_SALA[tipoActual];
+  delete planos[tipoActual];
+  construirSelector('mixta-ambos');
+  redibujar('mixta-ambos');
+  anunciar('Mapa «' + nombre + '» eliminado.');
+}
+
+document.getElementById('guardar-mapa').addEventListener('click', guardarMapa);
+campoNombre.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') guardarMapa();
+});
+document.getElementById('eliminar-mapa').addEventListener('click', eliminarMapa);
+document.getElementById('exportar-mapa').addEventListener('click', exportarMapa);
+document.getElementById('importar-mapa').addEventListener('click', () =>
+  document.getElementById('archivo-mapa').click());
+document.getElementById('archivo-mapa').addEventListener('change', (e) => {
+  const [archivo] = e.target.files;
+  e.target.value = '';   // para poder importar otra vez el mismo archivo
+  if (archivo) importarMapa(archivo);
+});
+
+// Al cargar: los mapas guardados que sigan siendo validos entran en el selector.
+const almacenInicial = leerAlmacen();
+// Los que no validan (dañados, o de una version futura) se quedan en el almacen
+// sin tocar, pero no se cargan, y se avisa de cuales son.
+const mapasDescartados = [];
+for (const [nombre, dato] of Object.entries(almacenInicial || {})) {
+  const { mapa } = validarMapa(dato);
+  if (mapa) registrarMapa(mapa);
+  else mapasDescartados.push(nombre);
+}
+construirSelector('mixta-ambos');
 selector.addEventListener('change', () => redibujar(selector.value));
 redibujar(selector.value);
+if (mapasDescartados.length) {
+  anunciar((mapasDescartados.length === 1 ? 'No se pudo cargar el mapa guardado «'
+    : 'No se pudieron cargar los mapas guardados «') + mapasDescartados.join('», «') +
+    (mapasDescartados.length === 1 ? '»: está dañado.' : '»: están dañados.'));
+}
 </script>
 </body>
 </html>
