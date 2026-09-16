@@ -4,9 +4,34 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Bloques de filas libres (fase 1)
+## Sin publicar — Escenario movible (fase 2)
 
-Rama `claude/bloques-de-filas`.
+Rama `claude/escenario-movible`.
+
+### Añadido
+
+- **El escenario es una pieza:** se arrastra, se mueve con flechas, se gira 90° (intercambia ancho y
+  alto) y cambia de ancho y alto desde la barra del editor. No se elimina; no puede pisar filas,
+  mesas ni bloques, y puede cruzar pasillos.
+- **Todo se mide desde el escenario:** las filas de las bandas miran hacia donde esté, la fila A de
+  cada zona es la más cercana y los rótulos cambian con ella. Los bloques cuentan en la numeración
+  por zona solo si lo miran de frente.
+- **Bloques nuevos orientados hacia el escenario.**
+- **Mapas:** guardan el escenario (campo opcional de la versión 2) y lo validan al importar.
+- Pruebas del escenario: posición por defecto, choques, tamaño, giro, filas y letras con el
+  escenario abajo, bloques de frente y de espaldas, orientación de bloques nuevos, columnas y mapas
+  (64 en total).
+
+### Cambiado
+
+- **Las piezas pueden ocupar la franja inicial** si el escenario no está ahí (`sala.filas.min` pasa a
+  0).
+- **Al cambiar las columnas,** un escenario a todo el ancho sigue a todo el ancho.
+
+## 2026-09-16 — PR #6: bloques de filas libres (fase 1)
+
+[PR #6](https://github.com/jonathancr29/selector-asientos/pull/6), fusionado en `main` con el
+commit `8dcb583`.
 
 ### Añadido
 

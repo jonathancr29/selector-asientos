@@ -23,7 +23,8 @@ const cargar = () => new Function(html.slice(inicio, fin) +
   ' cambiarZonaBanda, planoDesdeSala, alternarBloqueada, mapaDesdePlano, validarMapa, registrarMapa,' +
   ' claveDeMapa, nombreDeArchivo, FORMATO_MAPA, rejillaDeBloques, distribucionDePasillos, distribucionDeSala,' +
   ' leerDistribucion, cambiarDistribucion, geometriaBloqueFilas, bloquesFilas, cambiarAncho,' +
-  ' cambiarFilasBloque, letraDeFila };')();
+  ' cambiarFilasBloque, letraDeFila, escenario, girarEscenario, cambiarTamanoEscenario,' +
+  ' giroHaciaEscenario };')();
 
 const DISPOSICIONES = ['ninguno', 'izquierda', 'derecha', 'ambos'];
 const rango = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
@@ -402,7 +403,7 @@ test('las bandas se apilan y cada banda de filas empieza su secuencia en A', () 
   const { generarPlano, butacas } = cargar();
   const sala = generarPlano('mixta-ambos');
   assert.deepEqual(resumenBandas(sala), ['Escenario@0+2', 'Luneta@2+3', 'Zona de mesas@5+13', 'General@18+2']);
-  assert.deepEqual([sala.alto, sala.filas.min, sala.filas.max], [20, 2, 19]);
+  assert.deepEqual([sala.alto, sala.filas.min, sala.filas.max], [20, 0, 19]);
   const a1 = butacas.filter((b) => b.fila === 'A' && b.numero === 1).map((b) => [b.id, b.bandaNombre, b.y]);
   assert.deepEqual(a1, [['luneta-A1', 'Luneta', 2], ['general-A1', 'General', 18]]);
   // Ocupadas y bloqueadas salen de la definicion de cada banda.
@@ -422,7 +423,7 @@ test('«solo filas» y «solo mesas» generan salas sin mesas y sin filas', () =
   assert.deepEqual(resumenBandas(salon), ['Escenario@0+2', 'Salón@2+20']);
   assert.equal(butacas.filter((b) => !b.grupo).length, 0);
   assert.equal(mesas.length, 12);
-  assert.deepEqual([salon.filas.min, salon.filas.max], [2, 21]);
+  assert.deepEqual([salon.filas.min, salon.filas.max], [0, 21]);
 });
 
 test('las bandas sin nombre toman el de su zona, numerado si se repite', () => {
@@ -459,7 +460,7 @@ test('redimensionar una banda desplaza lo de debajo y detecta mesas que dejan de
   const fallo = api.primeraPiezaQueNoCabe(salaMenos);
   assert.deepEqual([fallo.pieza.id, fallo.motivo], ['M4', 'choca con la fila A de General']);
 
-  assert.deepEqual(api.redimensionarBanda(plano, sala, 'escenario', 1), { motivo: 'el escenario tiene un alto fijo' });
+  assert.deepEqual(api.redimensionarBanda(plano, sala, 'escenario', 1), { motivo: 'la franja del escenario tiene un alto fijo; cambia el tamaño del escenario en el plano' });
   assert.deepEqual(api.redimensionarBanda(plano, sala, 'general', -2), { motivo: 'ya tiene el mínimo' });
 });
 
@@ -946,5 +947,127 @@ test('los bloques se guardan en el mapa, con nombre propio, y se validan al leer
 test('letraDeFila sigue con AA, AB... despues de la Z', () => {
   const { letraDeFila } = cargar();
   assert.deepEqual([0, 25, 26, 27, 51, 52].map(letraDeFila), ['A', 'Z', 'AA', 'AB', 'AZ', 'BA']);
+});
+
+// --- Escenario movible (fase 2) ----------------------------------------------
+
+// Una sala mixta con una zona de mesas extra al final (filas 20 a 23), para tener
+// sitio donde bajar el escenario.
+const conZonaAbajo = (api) => {
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const nuevo = api.agregarBanda(plano, 'mesas');
+  return { plano: nuevo, sala: api.generarPlano('mixta-ambos', nuevo) };
+};
+
+test('por defecto el escenario ocupa su franja a todo el ancho', () => {
+  const api = cargar();
+  const sala = api.generarPlano('mixta-ambos');
+  const { x, y, ancho, alto } = api.escenario;
+  assert.deepEqual([x, y, ancho, alto], [1, 0, 14, 2]);
+  const mueble = api.muebles.find((m) => m.tipo === 'escenario');
+  assert.deepEqual([mueble.x, mueble.y, mueble.w, mueble.h], [1, 0, 14, 1.2]);
+  assert.equal(sala.escenarioPorDefecto, true);
+  // Nada se le pone encima.
+  const mesa = { id: 'M9', x: 3, y: 1, largo: 2, cabeceras: false, unLado: false, giro: 0 };
+  assert.equal(api.motivoNoCabe(sala, api.celdasOcupadas('M9'), mesa), 'choca con el escenario');
+  const plano = api.planoDesdeSala('mixta-ambos', sala);
+  assert.deepEqual(plano.escenario, { x: 1, y: 0, ancho: 14, alto: 2 });
+});
+
+test('el escenario se puede mover y redimensionar, pero no pisar filas ni piezas', () => {
+  const api = cargar();
+  const { plano, sala } = conZonaAbajo(api);
+  const ocupadas = api.celdasOcupadas('escenario');
+  const escenario = (x, y, ancho = 14, alto = 2) => ({ id: 'escenario', tipo: 'escenario', x, y, ancho, alto });
+  assert.equal(api.motivoNoCabe(sala, ocupadas, escenario(1, 21)), null);
+  assert.equal(api.motivoNoCabe(sala, ocupadas, escenario(1, 18)), 'choca con la fila A de General');
+  assert.equal(api.motivoNoCabe(sala, ocupadas, escenario(1, 22, 14, 3)), 'se sale de la sala');
+  assert.equal(api.motivoNoCabe(sala, ocupadas, escenario(2, 6, 3, 1)), null);           // cruza el pasillo de la 5, vale
+  assert.equal(api.motivoNoCabe(sala, ocupadas, escenario(2, 7, 3, 1)), 'choca con Mesa 1');
+  assert.deepEqual(api.cambiarTamanoEscenario(escenario(1, 0), -4, 1), escenario(1, 0, 10, 3));
+  assert.equal(api.cambiarTamanoEscenario(escenario(1, 0, 1, 2), -1, 0), null);
+  assert.equal(api.cambiarTamanoEscenario(escenario(1, 0, 14, 10), 0, 1), null);
+  assert.ok(plano.bandas.length === 5);
+});
+
+test('girar el escenario intercambia ancho y alto, y dos giros lo dejan donde estaba', () => {
+  const { girarEscenario } = cargar();
+  const e = { id: 'escenario', tipo: 'escenario', x: 3, y: 4, ancho: 6, alto: 2 };
+  const girado = girarEscenario(e);
+  assert.deepEqual([girado.ancho, girado.alto], [2, 6]);
+  assert.deepEqual(girarEscenario(girado), e);
+});
+
+test('con el escenario abajo, las filas lo miran y la A es la mas cercana', () => {
+  const api = cargar();
+  const { plano } = conZonaAbajo(api);
+  const abajo = { ...plano, escenario: { x: 1, y: 22, ancho: 14, alto: 2 } };
+  const sala = api.generarPlano('mixta-ambos', abajo);
+  assert.equal(api.primeraPiezaQueNoCabe(sala), null);
+  const luneta = api.butacas.find((b) => b.id === 'luneta-A1');
+  const general = api.butacas.find((b) => b.id === 'general-B1');
+  assert.deepEqual([luneta.mira, general.mira], [0, 0], 'miran hacia abajo');
+  // General (filas 18 y 19) queda ahora mas cerca: su fila de abajo es la A.
+  assert.deepEqual(['general-B1', 'general-A1'].map((id) => etiqueta(api, id)), ['General A1', 'General B1']);
+  // Luneta: la fila 4 (local C) es la A.
+  assert.deepEqual(['luneta-C1', 'luneta-A1'].map((id) => etiqueta(api, id)), ['Luneta A1', 'Luneta C1']);
+  // Los rotulos siguen la letra nueva.
+  const rotulo = api.muebles.find((m) => m.tipo === 'rotulo' && m.banda === 'luneta' && m.filaLocal === 2);
+  assert.equal(rotulo.texto, 'A');
+  // Y la franja de arriba queda libre para piezas.
+  const mesa = { id: 'M9', x: 3, y: 0, largo: 2, cabeceras: false, unLado: false, giro: 0 };
+  assert.equal(api.motivoNoCabe(sala, api.celdasOcupadas('M9'), mesa), 'choca con la fila C de Luneta');   // la fila 2, ahora la mas lejana
+  assert.equal(api.motivoNoCabe(sala, api.celdasOcupadas('M9'), { ...mesa, y: -1 }), 'se sale de la sala');
+});
+
+test('un bloque de espaldas al escenario lleva secuencia propia; de frente, entra en la zona', () => {
+  const api = cargar();
+  const { plano } = conZonaAbajo(api);
+  const abajo = { ...plano, escenario: { x: 1, y: 22, ancho: 14, alto: 2 } };
+  abajo.bloquesFilas = [bloque('F1', 1, 14), bloque('F2', 8, 14, { ancho: 2, giro: 180 })];
+  api.generarPlano('mixta-ambos', abajo);
+  // F1 sin girar mira hacia arriba, de espaldas al escenario de abajo.
+  assert.equal(etiqueta(api, 'F1-1-1'), 'Bloque 1 A1');
+  // F2 girado 180 mira hacia abajo, al escenario: numeracion por zona (Luneta).
+  assert.equal(api.butacas.find((b) => b.id === 'F2-1-1').seccion, 'Luneta');
+});
+
+test('los bloques nuevos se orientan hacia el escenario', () => {
+  const api = cargar();
+  api.generarPlano('mixta-ambos', { ...planoDe(api, 'mixta-ambos').plano, escenario: { x: 6, y: 9, ancho: 2, alto: 2 } });
+  // Centro del escenario en (7, 10).
+  assert.equal(api.giroHaciaEscenario(7, 16), 0);    // debajo: mira arriba
+  assert.equal(api.giroHaciaEscenario(7, 3), 180);   // encima: mira abajo
+  assert.equal(api.giroHaciaEscenario(1, 10), 90);   // a la izquierda: mira a la derecha
+  assert.equal(api.giroHaciaEscenario(13, 10), 270); // a la derecha: mira a la izquierda
+});
+
+test('un escenario a todo el ancho sigue a todo el ancho al cambiar las columnas', () => {
+  const api = cargar();
+  const { plano, sala } = planoDe(api, 'mixta-ambos');
+  const ancho = api.cambiarDistribucion(plano, sala, { bloques: [5, 6, 5], pasillos: [2, 2] });
+  assert.deepEqual(ancho.escenario, { x: 1, y: 0, ancho: 20, alto: 2 });
+  // Uno que no esta a todo el ancho no cambia.
+  const corto = api.cambiarDistribucion({ ...plano, escenario: { x: 3, y: 0, ancho: 6, alto: 2 } }, sala,
+    { bloques: [5, 6, 5], pasillos: [2, 2] });
+  assert.deepEqual(corto.escenario, { x: 3, y: 0, ancho: 6, alto: 2 });
+});
+
+test('el mapa guarda el escenario, y sin el se usa el de la franja', () => {
+  const api = cargar();
+  const { plano } = conZonaAbajo(api);
+  const abajo = { ...plano, escenario: { x: 1, y: 22, ancho: 14, alto: 2 } };
+  api.generarPlano('mixta-ambos', abajo);
+  const mapa = JSON.parse(JSON.stringify(api.mapaDesdePlano('Escenario abajo', abajo, null)));
+  assert.deepEqual(mapa.escenario, { x: 1, y: 22, ancho: 14, alto: 2 });
+  const { mapa: leido } = api.validarMapa(mapa);
+  const clave = api.registrarMapa(leido);
+  api.generarPlano(clave);
+  assert.deepEqual([api.escenario.y, api.escenario.ancho], [22, 14]);
+
+  const con = (cambio) => { const m = JSON.parse(JSON.stringify(mapa)); cambio(m); return api.validarMapa(m).errores || []; };
+  assert.ok(con((m) => { m.escenario.ancho = 0; }).includes('el escenario no es válido'));
+  assert.deepEqual(con((m) => { m.escenario.y = 18; }), ['Escenario choca con la fila A de General']);
+  assert.deepEqual(con((m) => { delete m.escenario; }), []);
 });
 

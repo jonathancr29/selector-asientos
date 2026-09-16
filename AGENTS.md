@@ -50,6 +50,8 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    `ESTILOS` (lados, cruz, barra), `agregarMesa`, `mesasAutomaticas`. `generarPlano(tipo, plano)`
    apila las bandas y rellena `butacas`, `muebles` y `mesas`; la sala devuelta trae `bandas` (con
    `y`, `alto` y `nombre`), `alto` y `filas` (rango de filas de rejilla donde caben mesas).
+   **Escenario:** `escenario` (pieza `{ x, y, ancho, alto }`), `centroDelEscenario`, `miraHaciaEscenario`,
+   `miraDeFrente`, `giroHaciaEscenario`, `girarEscenario`, `cambiarTamanoEscenario`, `configDeEscenario`.
    **Bloques de filas:** `geometriaBloqueFilas`, `agregarBloqueFilas`, `huellaDe` (huella de cualquier
    pieza), `numerarFilas` (etiquetas por zona) y `letraDeFila`.
 5. **Editor sin DOM:** `celdasOcupadas`, `motivoNoCabe`, `buscarHueco`, `colocarCerca`, `girarPieza`,
@@ -101,8 +103,12 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   las bloqueadas usan solo el id. `fila`, `numero` y `seccion` se recalculan en `numerarFilas`: por
   zona y de izquierda a derecha para lo que mira al escenario; con secuencia propia para bloques
   girados. Nunca uses la etiqueta como clave.
-- **Una mesa respeta los pasillos; un bloque de filas no:** en un bloque, los pasillos son el espacio
-  entre bloques.
+- **Una mesa respeta los pasillos; un bloque de filas y el escenario no:** en un bloque, los pasillos
+  son el espacio entre bloques.
+- **El escenario es una pieza, no una banda:** la banda `escenario` solo es la franja inicial. Todo lo
+  que depende de «hacia dónde está el escenario» (mira de las filas de banda, qué bloques miran de
+  frente, orden de las letras) se calcula desde `escenario` en `generarPlano` y `numerarFilas`.
+  Nunca supongas que está arriba.
 - **Los ids son estables.** Bloques: bloque + fila + butaca locales (`F1-2-3`). Filas de banda: banda + fila + número dentro de la banda
   (`luneta-A1`), aunque la etiqueta visible siga la numeración por zona. Mesas: mesa + lado (`M2-N1`, `M2-S2`,
   `M2-C1`), nunca un número de orden. Mover, girar o cambiar de sala mixta no renombra lugares;
