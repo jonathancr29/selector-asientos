@@ -56,8 +56,9 @@ servidor:
 sueltas en una mesa: el resumen dice *«Mesa 1 · 4 lugares (1, 2, 3, 4)»* en vez de listar
 identificadores sueltos.
 
-El id de una butaca de fila lleva su banda delante (`luneta-A1`), porque cada banda empieza su
-secuencia de filas en A y dos bandas pueden tener una fila A.
+El id de una butaca de fila lleva su banda delante (`luneta-A1`) y usa la fila y el número **dentro
+de su banda**, así que no cambia al editar. La etiqueta visible (fila y número) se calcula aparte,
+con la numeración por zona que se explica en *Bloques de filas*.
 
 **El SVG se genera al mostrar; nunca se almacena un SVG.** Con datos puedes consultar ocupación,
 precio y disponibilidad. Con un blob de SVG no puedes hacer un `WHERE`.
@@ -126,7 +127,7 @@ columnas. Cada banda empieza donde acaba la anterior:
 | Banda | Alto | Contenido |
 |---|---|---|
 | `escenario` | 2 filas de rejilla | El escenario. Siempre la primera. |
-| `filas` | `filas` | Filas de butacas de una zona (Luneta o General). Cada banda empieza en la fila A. |
+| `filas` | `filas` | Filas de butacas de una zona (Luneta o General). Las letras siguen la numeración por zona (ver *Bloques de filas*). |
 | `mesas` | `alto` | Espacio libre, con `filasDeMesas` filas de mesas automáticas. |
 
 El selector **Tipo de sala** elige una plantilla. Cada tipo define sus pasillos y sus bandas:
@@ -211,6 +212,10 @@ atajo de teclado sobre la mesa enfocada:
 | Lugares en uno o dos lados | Un solo lado | U |
 | Eliminar | Eliminar | Supr |
 | Agregar una mesa nueva | Lados / Cruz / Un lado | — |
+| Agregar un bloque de filas | Bloque de filas | — |
+| Butacas por fila de un bloque | Alargar / Acortar | + / − |
+| Filas de un bloque | + fila / − fila | ] / [ |
+| Zona y nombre de un bloque | Zona / Nombre | — |
 | Volver a la sala de su tipo | Restablecer sala | — |
 | Bloquear o desbloquear butacas | Bloquear butacas, y clic en la butaca | Enter o Espacio |
 
@@ -251,6 +256,42 @@ que una mesa o banda nueva nunca reutilice el id de una eliminada. «Restablecer
 tipo a sus bandas y mesas originales.
 Mientras no se guardan, los planos viven en memoria y se pierden al recargar. Para conservarlos,
 ver *Mapas guardados*.
+
+### Bloques de filas
+
+Además de las bandas, que ocupan todo el ancho, se pueden colocar **bloques de filas libres**: un
+rectángulo de butacas que se agrega, arrastra, gira y redimensiona como una mesa.
+
+```
+                 [       ESCENARIO        ]
+ A   ▣ ▣ ▣ ▣ ▣        ▣ ▣       ← bloque de 5 × 2 y, dejando dos columnas, otro de 2 × 2
+ B   ▣ ▣ ▣ ▣ ▣        ▣ ▣
+```
+
+- **Datos:** `{ id: 'F1', tipo: 'filas', x, y, ancho, filas, zona, giro, nombre? }`. `ancho` son las
+  butacas por fila (1 a 40) y `filas`, las filas (1 a 26).
+- **Pasillos:** los pone quien diseña, dejando espacio entre bloques. Un bloque puede ocupar columnas
+  que en las bandas son pasillo; una mesa, no.
+- **Choques:** un bloque no puede pisar filas, mesas ni otros bloques. Si no cabe, se explica igual
+  que con las mesas.
+- **Crecer y encoger:** la primera butaca (fila de delante, butaca 1) no se mueve; las butacas se
+  añaden al final de cada fila y las filas, por detrás.
+- **Girar:** en cuartos de vuelta. A 90° el bloque mira a la derecha (un lateral izquierdo); a 270°,
+  a la izquierda (un lateral derecho).
+
+**Numeración, como en un teatro.** Cada butaca tiene un **id estable**, que no cambia al mover ni
+girar su bloque (`F1-2-3` es la fila 2, butaca 3 del bloque F1). Es el que usan la selección, las
+reservas y las bloqueadas. La **etiqueta visible** se calcula:
+
+- **Bandas y bloques que miran al escenario** se numeran **por zona**. En cada zona, la fila más
+  cercana al escenario es la A, y todas las butacas de esa zona a esa altura se numeran de izquierda
+  a derecha a través de bandas y bloques: A1–A5 en un bloque y A6–A7 en el de al lado. Dos bandas
+  de la misma zona no reinician en A: la segunda continúa.
+- **Bloques girados** llevan su nombre (o «Bloque N») y su propia secuencia: «Lateral izquierdo,
+  fila B, butaca 2».
+
+Como la etiqueta depende de la posición, mover un bloque puede cambiar las etiquetas de su zona (A6
+pasa a B3), pero nunca los ids.
 
 ### Butacas bloqueadas
 
