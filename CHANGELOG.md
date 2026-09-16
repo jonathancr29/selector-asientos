@@ -4,9 +4,36 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Mapas guardados y butacas bloqueadas
+## Sin publicar — Columnas libres y filas mirando al escenario
 
-Rama `claude/mapas-guardados`.
+Rama `claude/filas-miran-escenario`.
+
+### Añadido
+
+- **Columnas libres:** en el editor, «Diseño de la sala → Columnas» permite escribir las butacas por
+  bloque (`4, 6, 4`) y el ancho de cada pasillo (`1, 2`). Las columnas son las mismas para toda la
+  sala. Límites: 1 a 10 bloques, 1 a 40 butacas por bloque, pasillos de 1 a 10 columnas y 60
+  columnas en total.
+- **Recolocación de mesas al cambiar las columnas:** con el mismo número de bloques, cada mesa se
+  queda en su bloque; si cambia, conserva su posición relativa en la sala. Si alguna no cabe, el
+  cambio no se aplica.
+- Pruebas de rejilla por bloques, lectura de los campos, recolocación de mesas, mapas con columnas
+  y lectura de mapas de la versión 1 (44 en total).
+
+### Cambiado
+
+- **Las butacas de fila miran al escenario:** giran 180°, con el respaldo abajo. Antes tenían el
+  respaldo hacia el escenario.
+- **La rejilla** se construye desde `{ bloques, pasillos }` (`rejillaDeBloques`); las disposiciones
+  con nombre de las plantillas se convierten a esa forma.
+- **Mapas, formato versión 2:** guardan `distribucion` en lugar de `pasillos`. Los mapas de la
+  versión 1 se convierten al cargarlos.
+- **El panel del editor** pasa a llamarse «Diseño de la sala», con las secciones Columnas y Bandas.
+
+## 2026-09-16 — PR #4: mapas guardados y butacas bloqueadas
+
+[PR #4](https://github.com/jonathancr29/selector-asientos/pull/4), fusionado en `main` con el
+commit `33b3c89`.
 
 ### Añadido
 
