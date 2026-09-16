@@ -45,7 +45,8 @@
   .pista { font-size: 11px; color: #64748b; }
   .aforo { margin: 0 0 8px; font-size: 12px; color: #94a3b8; }
   .aviso { margin: 8px 0 0; font-size: 12px; color: #fbbf24; }
-  .aviso:empty { display: none; }
+  /* Sin display:none: una region viva oculta asi no siempre se anuncia al llenarse. */
+  .aviso:empty { margin: 0; }
 
   /* --- El plano ---
      Un solo <svg> con viewBox. De ahi salen tres cosas que la version por filas
@@ -115,7 +116,7 @@
       </select>
     </label>
   </div>
-  <p class="pista">Rueda para acercar · arrastra para mover · flechas para recorrer</p>
+  <p class="pista">Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer</p>
   <p class="aforo" id="aforo"></p>
 
   <div class="lienzo">
@@ -132,9 +133,9 @@
     </svg>
   </div>
 
-  <p class="aviso" id="aviso"></p>
+  <p class="aviso" id="aviso" role="status"></p>
 
-  <p class="resumen">
+  <p class="resumen" aria-live="polite">
     Seleccionadas: <strong id="cuenta">0</strong> · Total <strong id="total">$0.00</strong>
     <span id="vacio">— ninguna butaca seleccionada.</span>
   </p>
@@ -377,19 +378,27 @@ function calcularEncuadre() {
 }
 
 function aplicarVista() {
+  // La vista no puede salir del encuadre inicial: el plano nunca se pierde de
+  // vista. Como el zoom minimo ES el encuadre inicial, el rango nunca es vacio.
+  const limitar = (v, min, max) => Math.min(Math.max(v, min), max);
+  vista.x = limitar(vista.x, vistaInicial.x, vistaInicial.x + vistaInicial.w - vista.w);
+  vista.y = limitar(vista.y, vistaInicial.y, vistaInicial.y + vistaInicial.h - vista.h);
   svg.setAttribute('viewBox', [vista.x, vista.y, vista.w, vista.h].join(' '));
 }
 
+// Devuelve si la vista cambio, para que la rueda sepa si debe ceder el scroll
+// a la pagina.
 function escalar(factor, centro) {
   const nuevoAncho = Math.min(vistaInicial.w, Math.max(vistaInicial.w / 6, vista.w * factor));
   const razon = nuevoAncho / vista.w;
-  if (razon === 1) return;
+  if (Math.abs(razon - 1) < 1e-9) return false;
   const c = centro || { x: vista.x + vista.w / 2, y: vista.y + vista.h / 2 };
   vista.x = c.x - (c.x - vista.x) * razon;
   vista.y = c.y - (c.y - vista.y) * razon;
-  vista.w *= razon;
+  vista.w = nuevoAncho;   // exacto, no w *= razon: asi el tope se alcanza sin error de redondeo
   vista.h *= razon;
   aplicarVista();
+  return true;
 }
 
 function enUnidades(evento) {
@@ -401,42 +410,76 @@ function enUnidades(evento) {
 }
 
 svg.addEventListener('wheel', (e) => {
-  e.preventDefault();
-  escalar(e.deltaY > 0 ? 1.15 : 1 / 1.15, enUnidades(e));
+  // Proporcional al delta, no un paso fijo por evento: una muesca de rueda
+  // (~100 px) da x1.15, y un trackpad, que manda muchos deltas pequenos, avanza
+  // suave. El pellizco de trackpad llega como wheel con ctrlKey y deltas cortos.
+  const porModo = e.deltaMode === 1 ? 0.05 : e.deltaMode === 2 ? 1 : 0.002;
+  const factor = Math.pow(2, e.deltaY * porModo * (e.ctrlKey ? 10 : 1));
+  // En el tope del zoom la rueda vuelve a desplazar la pagina. Con ctrlKey se
+  // bloquea siempre, o el navegador haria zoom de la pagina entera.
+  if (escalar(factor, enUnidades(e)) || e.ctrlKey) e.preventDefault();
 }, { passive: false });
 
+// Punteros activos (raton, dedos, lapiz) por pointerId. Con uno se arrastra;
+// con dos se arrastra y se pellizca a la vez.
+const punteros = new Map();
 let arrastre = null;
+
+function centroDePunteros() {
+  const [a, b] = punteros.values();
+  if (!b) return { x: a.x, y: a.y, d: 0 };
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) };
+}
+
 svg.addEventListener('pointerdown', (e) => {
-  arrastre = {
-    x: e.clientX, y: e.clientY, vx: vista.x, vy: vista.y, movido: 0,
-    // La butaca se anota AQUI, no en pointerup: setPointerCapture retargetea al
-    // <svg> todos los eventos de puntero siguientes, asi que al soltar el boton
-    // e.target ya es el <svg> y closest('.butaca') devuelve null.
-    butaca: e.target.closest('.butaca'),
-  };
+  if (e.button !== 0) return;   // solo boton principal: el derecho y el central no eligen butaca
+  punteros.set(e.pointerId, { x: e.clientX, y: e.clientY });
   svg.setPointerCapture(e.pointerId);
+  if (punteros.size === 1) {
+    arrastre = {
+      x: e.clientX, y: e.clientY, movido: 0,
+      // La butaca se anota AQUI, no en pointerup: setPointerCapture retargetea al
+      // <svg> todos los eventos de puntero siguientes, asi que al soltar el boton
+      // e.target ya es el <svg> y closest('.butaca') devuelve null.
+      butaca: e.target.closest('.butaca'),
+    };
+  } else if (arrastre) {
+    arrastre.movido = Infinity;   // un segundo dedo convierte el toque en gesto
+  }
 });
 svg.addEventListener('pointermove', (e) => {
-  if (!arrastre) return;
-  const caja = svg.getBoundingClientRect();
-  const dx = e.clientX - arrastre.x, dy = e.clientY - arrastre.y;
-  arrastre.movido = Math.max(arrastre.movido, Math.abs(dx) + Math.abs(dy));
+  if (!arrastre || !punteros.has(e.pointerId)) return;
+  // Incremental: se compara el centro antes y despues de ESTE movimiento. Asi
+  // poner o levantar un dedo no hace saltar el plano.
+  const antes = centroDePunteros();
+  punteros.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const despues = centroDePunteros();
+
+  if (punteros.size === 1) {
+    arrastre.movido = Math.max(arrastre.movido,
+      Math.abs(e.clientX - arrastre.x) + Math.abs(e.clientY - arrastre.y));
+  }
   if (arrastre.movido > 4) svg.classList.add('arrastrando');
-  vista.x = arrastre.vx - (dx / caja.width) * vista.w;
-  vista.y = arrastre.vy - (dy / caja.height) * vista.h;
+
+  const caja = svg.getBoundingClientRect();
+  vista.x -= ((despues.x - antes.x) / caja.width) * vista.w;
+  vista.y -= ((despues.y - antes.y) / caja.height) * vista.h;
   aplicarVista();
+  if (antes.d && despues.d) {
+    escalar(antes.d / despues.d, enUnidades({ clientX: despues.x, clientY: despues.y }));
+  }
 });
-svg.addEventListener('pointerup', (e) => {
-  svg.classList.remove('arrastrando');
+function soltarPuntero(e, cancelado) {
+  if (!punteros.delete(e.pointerId)) return;
   if (svg.hasPointerCapture(e.pointerId)) svg.releasePointerCapture(e.pointerId);
-  // Un arrastre no debe contar como clic sobre la butaca que quedo debajo.
-  if (arrastre && arrastre.movido <= 4) alternar(arrastre.butaca);
-  arrastre = null;
-});
-svg.addEventListener('pointercancel', () => {
+  if (punteros.size) return;   // queda un dedo: el gesto sigue
   svg.classList.remove('arrastrando');
+  // Un arrastre no debe contar como clic sobre la butaca que quedo debajo.
+  if (!cancelado && arrastre && arrastre.movido <= 4) alternar(arrastre.butaca);
   arrastre = null;
-});
+}
+svg.addEventListener('pointerup', (e) => soltarPuntero(e, false));
+svg.addEventListener('pointercancel', (e) => soltarPuntero(e, true));
 
 document.getElementById('acercar').addEventListener('click', () => escalar(1 / 1.3));
 document.getElementById('alejar').addEventListener('click', () => escalar(1.3));

@@ -22,8 +22,9 @@ bien en una maqueta y se rompe en cuanto la sala crece. Aquí el plano es **un �
 
 - **Escala con el ancho disponible.** Una sala de 94 lugares entra completa en una pantalla de
   375 px sin desbordarse ni cortar butacas.
-- **Zoom y desplazamiento** moviendo el `viewBox`: rueda, arrastre y botones. Un arrastre que
-  empieza sobre una butaca mueve el plano y no la selecciona.
+- **Zoom y desplazamiento** moviendo el `viewBox`: rueda, pellizco, arrastre y botones. Un
+  arrastre que empieza sobre una butaca mueve el plano y no la selecciona, y el plano no se puede
+  sacar de su encuadre. En el tope del zoom, la rueda vuelve a desplazar la página.
 - **El trazo se declara una vez** con `<symbol>` y se instancia con `<use>`. Una sala de 94 butacas
   tiene un `<path>`, no 94.
 - **Las áreas de clic son contiguas y no se solapan**: cada butaca es sensible en su celda entera,
@@ -34,6 +35,7 @@ bien en una maqueta y se rompe en cuanto la sala crece. Aquí el plano es **un �
 Cada butaca es un `checkbox` con su etiqueta —*«Fila A, butaca 3»*, *«Mesa 2, lugar 1, ocupada»*—.
 Se recorre el plano con las flechas, que se mueven por coordenadas, y se elige con Enter o Espacio.
 El `tabindex` es móvil: hay un solo alto de tabulación para todo el plano, no uno por butaca.
+El total y los avisos están en regiones vivas, así que un lector de pantalla los anuncia al cambiar.
 
 ## Los datos
 
