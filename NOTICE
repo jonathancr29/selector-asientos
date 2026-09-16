@@ -1,0 +1,20 @@
+Selector de asientos
+Copyright (c) 2026 Jonathan CR
+
+Este producto incluye trabajo de terceros:
+
+------------------------------------------------------------------------------
+Material Icons — icono "event_seat"
+Copyright (c) Google LLC
+Licencia: Apache License, Version 2.0
+https://github.com/google/material-design-icons
+https://www.apache.org/licenses/LICENSE-2.0
+------------------------------------------------------------------------------
+
+El trazo SVG de la butaca, declarado en index.html dentro de
+<symbol id="butaca">, procede del icono "event_seat" de Material Icons y se
+usa sin modificaciones.
+
+Todo el codigo restante —renderizador, rejilla de sala, reparto de mesas,
+zoom por viewBox, seleccion, navegacion por teclado y estilos— es obra
+original del titular del copyright indicado arriba, bajo licencia MIT.

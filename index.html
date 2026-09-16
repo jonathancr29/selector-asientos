@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<!--
+  Selector de asientos · plano de butacas interactivo en SVG.
+  Un solo archivo, sin dependencias ni paso de compilacion.
+
+  Copyright (c) 2026 Jonathan CR
+  Publicado bajo licencia MIT. Ver LICENSE.
+
+  El icono de la butaca es «event_seat» de Material Icons (Google),
+  bajo Apache License 2.0. Ver NOTICE.
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Selector de asientos</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; padding: 24px 16px;
+    font-family: system-ui, "Segoe UI", sans-serif;
+    background: #1e1e24; color: #fff;
+  }
+  .envoltorio { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
+  .subtitulo { margin: 0 0 20px; font-size: 13px; color: #94a3b8; }
+
+  /* --- Leyenda --- */
+  .leyenda { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 12px; padding: 0; list-style: none; }
+  .leyenda li { display: flex; align-items: center; gap: 7px; font-size: 12px; color: #94a3b8; }
+  .muestra { width: 16px; height: 16px; border-radius: 8px 8px 2px 2px; background: #444451; }
+
+  /* --- Barra de herramientas --- */
+  .herramientas { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .herramientas button, .herramientas select {
+    height: 30px; padding: 0 9px;
+    font: inherit; font-size: 13px; color: #cbd5e1;
+    background: #2a2a33; border: 1px solid #3a3a46; border-radius: 6px; cursor: pointer;
+  }
+  .herramientas button { min-width: 34px; }
+  .herramientas button:hover, .herramientas select:hover { background: #33333e; }
+  .herramientas button:focus-visible, .herramientas select:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+  .campo { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #94a3b8; }
+  .separador { width: 1px; height: 22px; background: #3a3a46; margin: 0 4px; }
+  .pista { font-size: 11px; color: #64748b; }
+  .aforo { margin: 0 0 8px; font-size: 12px; color: #94a3b8; }
+  .aviso { margin: 8px 0 0; font-size: 12px; color: #fbbf24; }
+  .aviso:empty { display: none; }
+
+  /* --- El plano ---
+     Un solo <svg> con viewBox. De ahi salen tres cosas que la version por filas
+     de <div> no podia dar: escala con el ancho disponible, admite zoom y
+     desplazamiento, y las butacas viven en un sistema de coordenadas. */
+  .lienzo {
+    background: #17171c; border: 1px solid #2c2c36; border-radius: 10px;
+    overflow: hidden; touch-action: none;
+  }
+  #plano { display: block; width: 100%; height: auto; cursor: grab; }
+  #plano.arrastrando { cursor: grabbing; }
+
+  .butaca { fill: #444451; transition: fill .15s; }
+  .butaca .toque { fill: transparent; }      /* area de clic: una celda exacta, sin solape */
+  .butaca:not(.ocupada):not(.bloqueada) { cursor: pointer; }
+  /* Igual que en la version reducida: el hover solo recolorea si NO esta
+     seleccionada, para que la confirmacion visual no desaparezca bajo el cursor. */
+  .butaca:not(.ocupada):not(.bloqueada):not(.elegida):hover { fill: #666; }
+  .butaca.elegida { fill: #3b82f6; }
+  .butaca.ocupada { fill: #ef4444; cursor: not-allowed; }
+  .butaca.bloqueada { fill: #2f2f38; cursor: not-allowed; }
+  .butaca:focus { outline: none; }
+  .butaca:focus-visible .toque { fill: none; stroke: #93c5fd; stroke-width: 1.2; }
+
+  .mueble { fill: #26262f; stroke: #3a3a46; stroke-width: .6; }
+  .rotulo { fill: #64748b; font-size: 4.2px; text-anchor: middle; dominant-baseline: middle; }
+  .escenario { fill: #f8fafc; }
+  .escenario-texto { fill: #1e1e24; font-size: 5px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; }
+
+  /* --- Resumen --- */
+  .resumen { margin: 16px 0 0; font-size: 14px; color: #cbd5e1; line-height: 1.7; }
+  .resumen strong { color: #3b82f6; }
+  #detalle { margin: 8px 0 0; padding-left: 18px; }
+  #detalle li { font-size: 13px; color: #94a3b8; }
+  .nota {
+    margin-top: 22px; padding: 12px 14px; font-size: 12px; line-height: 1.6; color: #94a3b8;
+    background: rgba(0,0,0,.25); border-left: 3px solid #3b82f6; border-radius: 4px;
+  }
+  .nota code { color: #cbd5e1; }
+  .nota + .nota { border-left-color: #fbbf24; }
+</style>
+</head>
+<body>
+<div class="envoltorio">
+
+  <h1>Selector de asientos</h1>
+  <p class="subtitulo">Plano de butacas en SVG, sin dependencias. Filas numeradas, mesas y zona general en el mismo plano.</p>
+
+  <ul class="leyenda">
+    <li><span class="muestra"></span>Disponible</li>
+    <li><span class="muestra" style="background:#3b82f6"></span>Seleccionado</li>
+    <li><span class="muestra" style="background:#ef4444"></span>Ocupado</li>
+    <li><span class="muestra" style="background:#2f2f38"></span>Bloqueado</li>
+  </ul>
+
+  <div class="herramientas">
+    <button type="button" id="acercar" aria-label="Acercar">+</button>
+    <button type="button" id="alejar" aria-label="Alejar">−</button>
+    <button type="button" id="ajustar">Ajustar</button>
+    <span class="separador" aria-hidden="true"></span>
+    <label class="campo" for="disposicion">Pasillos
+      <select id="disposicion">
+        <option value="ambos">Dos, al centro</option>
+        <option value="izquierda">Uno, a la izquierda</option>
+        <option value="derecha">Uno, a la derecha</option>
+        <option value="ninguno">Sin pasillos</option>
+      </select>
+    </label>
+  </div>
+  <p class="pista">Rueda para acercar · arrastra para mover · flechas para recorrer</p>
+  <p class="aforo" id="aforo"></p>
+
+  <div class="lienzo">
+    <svg id="plano" role="group" aria-label="Plano de butacas" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- El trazo se declara UNA vez y se instancia con <use>. En la version
+             anterior el mismo path estaba repetido tantas veces como butacas. -->
+        <symbol id="butaca" viewBox="0 0 24 24">
+          <path d="M4 18v3h3v-3h10v3h3v-6H4zm15-8h3v5h-3V10zM2 10h3v5H2V10zm3-6h14c1.1 0 2 .9 2 2v2H3V6c0-1.1.9-2 2-2z"></path>
+        </symbol>
+      </defs>
+      <g id="muebles"></g>
+      <g id="butacas"></g>
+    </svg>
+  </div>
+
+  <p class="aviso" id="aviso"></p>
+
+  <p class="resumen">
+    Seleccionadas: <strong id="cuenta">0</strong> · Total <strong id="total">$0.00</strong>
+    <span id="vacio">— ninguna butaca seleccionada.</span>
+  </p>
+  <ul id="detalle"></ul>
+
+  <p class="nota">
+    El plano se genera desde <code>butacas</code>, una lista plana con una fila por butaca:
+    identificador, fila, número, coordenadas, zona, grupo y estado. Es lo que devolvería tu
+    servidor. El SVG se produce al mostrar; nunca se almacena un SVG.
+  </p>
+
+  <p class="nota">
+    El selector de pasillos está aquí para comparar disposiciones. En una aplicación real, la
+    disposición de una sala es fija: se elegiría una vez al crear el plano del recinto y quedaría
+    guardada en él, no sería un control para quien compra.
+  </p>
+
+</div>
+
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const PASO = 12;        // distancia entre centros de celda, en unidades del viewBox
+const GLIFO = 10;       // tamano dibujado de la butaca dentro de su celda
+const ANCHO_SALA = 14;  // columnas de la sala. Constante: el pasillo se come una butaca,
+                        // no ensancha el recinto.
+
+// ---------------------------------------------------------------------------
+// La rejilla de la sala.
+//
+// Unica fuente de verdad de las columnas. Todas las bandas del plano la
+// consumen, asi que quedan alineadas por construccion: deja de ser posible que
+// dos bandas usen esquemas de columnas distintos, que era el origen del
+// descuadre anterior.
+//
+// El ancho es constante entre disposiciones. Lo que cambia es el aforo, igual
+// que en un recinto real: el pasillo se lleva lugares que si no serian butacas.
+// ---------------------------------------------------------------------------
+function rejillaDeSala({ ancho, pasillos = 'ninguno' }) {
+  const reparto = {
+    ninguno:   [1],        // sin cortes
+    izquierda: [1, 2],     // un pasillo, escorado a la izquierda
+    derecha:   [2, 1],     // un pasillo, escorado a la derecha
+    ambos:     [1, 1, 1],  // dos pasillos
+  }[pasillos];
+  if (!reparto) throw new Error('Disposicion desconocida: ' + pasillos);
+
+  const huecos = reparto.length - 1;
+  const cuantas = ancho - huecos;
+  const peso = reparto.reduce((s, p) => s + p, 0);
+
+  const tamanos = reparto.map((p) => Math.floor((cuantas * p) / peso));
+  // El sobrante va al bloque mas ancho, para que izquierda y derecha salgan simetricas.
+  const mayor = reparto.indexOf(Math.max(...reparto));
+  tamanos[mayor] += cuantas - tamanos.reduce((s, t) => s + t, 0);
+
+  const bloques = [];
+  let columna = 1;
+  for (const tamano of tamanos) {
+    bloques.push(Array.from({ length: tamano }, () => columna++));
+    columna++;   // la columna del pasillo queda vacia
+  }
+  return { ancho, bloques, columnas: bloques.flat() };
+}
+
+// Reparte mesas por los bloques, a prorrata de su tamano, y las espacia dentro
+// de cada uno. Una mesa nunca cruza un pasillo porque solo se coloca DENTRO de
+// un bloque, que es donde las columnas son contiguas.
+function repartirMesas(sala, cuantas, ancho = 2) {
+  const aptos = sala.bloques.filter((b) => b.length >= ancho);
+  const capacidad = aptos.map((b) => Math.floor(b.length / ancho));
+  const total = capacidad.reduce((s, c) => s + c, 0);
+  if (!total) return [];
+  cuantas = Math.min(cuantas, total);
+
+  const cuota = capacidad.map((c) => Math.floor((cuantas * c) / total));
+  let resto = cuantas - cuota.reduce((s, c) => s + c, 0);
+  for (let i = 0; resto > 0; i = (i + 1) % cuota.length) {
+    if (cuota[i] < capacidad[i]) { cuota[i]++; resto--; }
+  }
+
+  const arranques = [];
+  aptos.forEach((bloque, i) => {
+    const n = cuota[i];
+    if (!n) return;
+    const hueco = (bloque.length - n * ancho) / (n + 1);
+    for (let k = 0; k < n; k++) {
+      arranques.push(bloque[Math.round(hueco * (k + 1)) + k * ancho]);
+    }
+  });
+  return arranques;
+}
+
+// ---------------------------------------------------------------------------
+// Datos. Esto es lo que devolveria el servidor: una fila por butaca.
+// ---------------------------------------------------------------------------
+const zonas = {
+  luneta:  { nombre: 'Luneta',  precio: 35000 },
+  mesas:   { nombre: 'Mesas',   precio: 50000 },
+  general: { nombre: 'General', precio: 20000 },
+};
+
+const butacas = [];   // {id, fila, numero, x, y, zona, grupo, estado}
+const muebles = [];   // decorado: escenario y mesas. No se vende, solo se dibuja.
+
+// La butaca n de la fila va a columnas[n-1]: nunca a la columna n a secas.
+// Es lo que mantiene todas las bandas en la misma rejilla.
+function agregarFilas({ etiquetas, columnas, y, zona, ocupadas = {} }) {
+  etiquetas.forEach((etiqueta, i) => {
+    columnas.forEach((columna, indice) => {
+      const numero = indice + 1;
+      butacas.push({
+        id: etiqueta + numero, fila: etiqueta, numero, x: columna, y: y + i,
+        zona, grupo: null,
+        estado: (ocupadas[etiqueta] || []).includes(numero) ? 'ocupada' : 'libre',
+      });
+    });
+    muebles.push({ tipo: 'rotulo', texto: etiqueta, x: columnas[0] - 1, y: y + i });
+  });
+}
+
+// Una mesa: dos lugares arriba, dos abajo, y la mesa dibujada en medio.
+// El grupo es una identidad real, no un hueco visual.
+function agregarMesa({ id, nombre, x, y, ocupadas = [] }) {
+  muebles.push({ tipo: 'mesa', x, y: y + 1, w: 2, h: 1, texto: nombre });
+  [[0, 0], [1, 0], [0, 2], [1, 2]].forEach(([dx, dy], i) => {
+    const numero = i + 1;
+    butacas.push({
+      id: id + '-' + numero, fila: id, numero, x: x + dx, y: y + dy,
+      zona: 'mesas', grupo: { id, nombre },
+      estado: ocupadas.includes(numero) ? 'ocupada' : 'libre',
+    });
+  });
+}
+
+function generarPlano(disposicion) {
+  butacas.length = 0;
+  muebles.length = 0;
+  const sala = rejillaDeSala({ ancho: ANCHO_SALA, pasillos: disposicion });
+
+  // El escenario abarca la rejilla completa, no un tramo suelto.
+  muebles.push({ tipo: 'escenario', x: 1, y: 0, w: sala.ancho, h: 1.2 });
+
+  agregarFilas({ etiquetas: ['A', 'B', 'C'], columnas: sala.columnas, y: 2, zona: 'luneta',
+                 ocupadas: { B: [5, 6], C: [11] } });
+
+  repartirMesas(sala, 3).forEach((x, i) => {
+    agregarMesa({ id: 'M' + (i + 1), nombre: 'Mesa ' + (i + 1), x, y: 7,
+                  ocupadas: i === 1 ? [3, 4] : [] });
+    agregarMesa({ id: 'M' + (i + 4), nombre: 'Mesa ' + (i + 4), x, y: 11 });
+  });
+
+  agregarFilas({ etiquetas: ['G', 'H'], columnas: sala.columnas, y: 15, zona: 'general',
+                 ocupadas: { G: [1, 2, 3] } });
+
+  const ultimas = sala.columnas.length - 2;
+  butacas.filter((b) => b.fila === 'H' && b.numero > ultimas)
+         .forEach((b) => { b.estado = 'bloqueada'; });
+
+  return sala;
+}
+
+// ---------------------------------------------------------------------------
+// Render
+// ---------------------------------------------------------------------------
+const svg = document.getElementById('plano');
+const capaMuebles = document.getElementById('muebles');
+const capaButacas = document.getElementById('butacas');
+const dinero = (c) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(c / 100);
+const etiquetaDe = (b) => (b.grupo ? b.grupo.nombre + ', lugar ' + b.numero
+                                   : 'Fila ' + b.fila + ', butaca ' + b.numero);
+
+function nodo(nombre, atributos) {
+  const el = document.createElementNS(NS, nombre);
+  for (const [k, v] of Object.entries(atributos)) el.setAttribute(k, v);
+  return el;
+}
+
+function texto(clase, x, y, contenido) {
+  const t = nodo('text', { class: clase, x, y });
+  t.textContent = contenido;
+  return t;
+}
+
+function dibujarMuebles() {
+  for (const m of muebles) {
+    if (m.tipo === 'escenario') {
+      capaMuebles.appendChild(nodo('rect', { class: 'escenario', x: m.x * PASO, y: m.y * PASO,
+        width: m.w * PASO, height: m.h * PASO, rx: 3 }));
+      capaMuebles.appendChild(texto('escenario-texto',
+        (m.x + m.w / 2) * PASO, (m.y + m.h / 2) * PASO, 'ESCENARIO'));
+    } else if (m.tipo === 'mesa') {
+      capaMuebles.appendChild(nodo('rect', { class: 'mueble', x: m.x * PASO + 1, y: m.y * PASO + 1,
+        width: m.w * PASO - 2, height: m.h * PASO - 2, rx: 4 }));
+      capaMuebles.appendChild(texto('rotulo',
+        (m.x + m.w / 2) * PASO, (m.y + m.h / 2) * PASO, m.texto));
+    } else if (m.tipo === 'rotulo') {
+      capaMuebles.appendChild(texto('rotulo', (m.x + 0.5) * PASO, (m.y + 0.5) * PASO, m.texto));
+    }
+  }
+}
+
+function dibujarButacas() {
+  butacas.forEach((b, indice) => {
+    const seleccionable = b.estado === 'libre';
+    const g = nodo('g', {
+      class: 'butaca' + (seleccionable ? '' : ' ' + b.estado),
+      role: 'checkbox',
+      'aria-checked': 'false',
+      'aria-label': etiquetaDe(b) + (seleccionable ? '' : ', ' + b.estado),
+      tabindex: indice === 0 ? '0' : '-1',   // tabindex movil: un solo punto de tabulacion
+    });
+    if (!seleccionable) g.setAttribute('aria-disabled', 'true');
+    g.dataset.id = b.id;
+    // El area sensible es la celda entera: contigua con sus vecinas y sin solaparlas.
+    g.appendChild(nodo('rect', { class: 'toque', x: b.x * PASO, y: b.y * PASO,
+      width: PASO, height: PASO, rx: 2 }));
+    g.appendChild(nodo('use', { href: '#butaca',
+      x: b.x * PASO + (PASO - GLIFO) / 2, y: b.y * PASO + (PASO - GLIFO) / 2,
+      width: GLIFO, height: GLIFO }));
+    capaButacas.appendChild(g);
+    b.nodo = g;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Zoom y desplazamiento: se mueve el viewBox, no el DOM.
+// ---------------------------------------------------------------------------
+let vista, vistaInicial;
+
+function calcularEncuadre() {
+  const xs = butacas.map((b) => b.x), ys = butacas.map((b) => b.y);
+  const margen = PASO;
+  const x = Math.min(...xs, 0) * PASO - margen * 2;
+  const y = Math.min(...ys, 0) * PASO - margen;
+  const w = (Math.max(...xs) + 1) * PASO - x + margen;
+  const h = (Math.max(...ys) + 1) * PASO - y + margen;
+  vistaInicial = { x, y, w, h };
+  vista = { ...vistaInicial };
+  aplicarVista();
+}
+
+function aplicarVista() {
+  svg.setAttribute('viewBox', [vista.x, vista.y, vista.w, vista.h].join(' '));
+}
+
+function escalar(factor, centro) {
+  const nuevoAncho = Math.min(vistaInicial.w, Math.max(vistaInicial.w / 6, vista.w * factor));
+  const razon = nuevoAncho / vista.w;
+  if (razon === 1) return;
+  const c = centro || { x: vista.x + vista.w / 2, y: vista.y + vista.h / 2 };
+  vista.x = c.x - (c.x - vista.x) * razon;
+  vista.y = c.y - (c.y - vista.y) * razon;
+  vista.w *= razon;
+  vista.h *= razon;
+  aplicarVista();
+}
+
+function enUnidades(evento) {
+  const caja = svg.getBoundingClientRect();
+  return {
+    x: vista.x + ((evento.clientX - caja.left) / caja.width) * vista.w,
+    y: vista.y + ((evento.clientY - caja.top) / caja.height) * vista.h,
+  };
+}
+
+svg.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  escalar(e.deltaY > 0 ? 1.15 : 1 / 1.15, enUnidades(e));
+}, { passive: false });
+
+let arrastre = null;
+svg.addEventListener('pointerdown', (e) => {
+  arrastre = {
+    x: e.clientX, y: e.clientY, vx: vista.x, vy: vista.y, movido: 0,
+    // La butaca se anota AQUI, no en pointerup: setPointerCapture retargetea al
+    // <svg> todos los eventos de puntero siguientes, asi que al soltar el boton
+    // e.target ya es el <svg> y closest('.butaca') devuelve null.
+    butaca: e.target.closest('.butaca'),
+  };
+  svg.setPointerCapture(e.pointerId);
+});
+svg.addEventListener('pointermove', (e) => {
+  if (!arrastre) return;
+  const caja = svg.getBoundingClientRect();
+  const dx = e.clientX - arrastre.x, dy = e.clientY - arrastre.y;
+  arrastre.movido = Math.max(arrastre.movido, Math.abs(dx) + Math.abs(dy));
+  if (arrastre.movido > 4) svg.classList.add('arrastrando');
+  vista.x = arrastre.vx - (dx / caja.width) * vista.w;
+  vista.y = arrastre.vy - (dy / caja.height) * vista.h;
+  aplicarVista();
+});
+svg.addEventListener('pointerup', (e) => {
+  svg.classList.remove('arrastrando');
+  if (svg.hasPointerCapture(e.pointerId)) svg.releasePointerCapture(e.pointerId);
+  // Un arrastre no debe contar como clic sobre la butaca que quedo debajo.
+  if (arrastre && arrastre.movido <= 4) alternar(arrastre.butaca);
+  arrastre = null;
+});
+svg.addEventListener('pointercancel', () => {
+  svg.classList.remove('arrastrando');
+  arrastre = null;
+});
+
+document.getElementById('acercar').addEventListener('click', () => escalar(1 / 1.3));
+document.getElementById('alejar').addEventListener('click', () => escalar(1.3));
+document.getElementById('ajustar').addEventListener('click', () => {
+  vista = { ...vistaInicial };
+  aplicarVista();
+});
+
+// ---------------------------------------------------------------------------
+// Seleccion y teclado
+// ---------------------------------------------------------------------------
+const porNodo = (elemento) => butacas.find((b) => b.nodo === elemento);
+
+function alternar(elemento) {
+  const b = elemento && porNodo(elemento);
+  if (!b || b.estado !== 'libre') return;
+  const elegida = b.nodo.classList.toggle('elegida');
+  b.nodo.setAttribute('aria-checked', elegida ? 'true' : 'false');
+  actualizarResumen();
+}
+
+function moverFoco(desde, dx, dy) {
+  const origen = porNodo(desde);
+  if (!origen) return;
+  const candidatas = butacas.filter((b) => (dx
+    ? Math.sign(b.x - origen.x) === dx && b.y === origen.y
+    : Math.sign(b.y - origen.y) === dy));
+  if (!candidatas.length) return;
+  const destino = candidatas.reduce((mejor, b) => {
+    const d = Math.abs(b.x - origen.x) + Math.abs(b.y - origen.y) * 1.5;
+    return d < mejor.d ? { b, d } : mejor;
+  }, { b: null, d: Infinity }).b;
+  if (!destino) return;
+  desde.setAttribute('tabindex', '-1');
+  destino.nodo.setAttribute('tabindex', '0');
+  destino.nodo.focus();
+}
+
+svg.addEventListener('keydown', (e) => {
+  const elemento = e.target.closest('.butaca');
+  if (!elemento) return;
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    alternar(elemento);
+    return;
+  }
+  const flechas = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+  if (flechas[e.key]) {
+    e.preventDefault();
+    moverFoco(elemento, flechas[e.key][0], flechas[e.key][1]);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Resumen: agrupa por mesa cuando la butaca pertenece a una.
+// ---------------------------------------------------------------------------
+function actualizarResumen() {
+  const elegidas = butacas.filter((b) => b.nodo.classList.contains('elegida'));
+  const total = elegidas.reduce((s, b) => s + zonas[b.zona].precio, 0);
+  document.getElementById('cuenta').textContent = String(elegidas.length);
+  document.getElementById('total').textContent = dinero(total);
+  document.getElementById('vacio').hidden = elegidas.length > 0;
+
+  const cubos = new Map();
+  for (const b of elegidas) {
+    const clave = b.grupo ? b.grupo.nombre : zonas[b.zona].nombre;
+    if (!cubos.has(clave)) cubos.set(clave, []);
+    cubos.get(clave).push(b);
+  }
+  const lista = document.getElementById('detalle');
+  lista.textContent = '';
+  for (const [clave, items] of cubos) {
+    const li = document.createElement('li');
+    const cuantos = items.length === 1 ? '1 lugar' : items.length + ' lugares';
+    const cuales = items.map((b) => (b.grupo ? b.numero : b.id)).join(', ');
+    const importe = items.reduce((s, b) => s + zonas[b.zona].precio, 0);
+    li.textContent = clave + ' · ' + cuantos + ' (' + cuales + ') · ' + dinero(importe);
+    lista.appendChild(li);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cambio de disposicion
+// ---------------------------------------------------------------------------
+function redibujar(disposicion) {
+  // La identidad es fila + numero y es estable entre disposiciones: solo cambia
+  // la columna. Lo unico que no sobrevive es una butaca que la nueva disposicion
+  // ya no tiene, porque el pasillo se llevo su lugar.
+  const recordadas = new Set(
+    butacas.filter((b) => b.nodo && b.nodo.classList.contains('elegida')).map((b) => b.id)
+  );
+
+  const sala = generarPlano(disposicion);
+  capaMuebles.textContent = '';
+  capaButacas.textContent = '';
+  dibujarMuebles();
+  dibujarButacas();
+
+  for (const b of butacas) {
+    if (!recordadas.delete(b.id) || b.estado !== 'libre') continue;
+    b.nodo.classList.add('elegida');
+    b.nodo.setAttribute('aria-checked', 'true');
+  }
+
+  calcularEncuadre();
+  actualizarResumen();
+
+  const porFila = sala.columnas.length;
+  document.getElementById('aforo').textContent =
+    'Sala de ' + sala.ancho + ' columnas · ' + porFila + ' butacas por fila · ' +
+    butacas.length + ' lugares en total';
+  const sueltas = [...recordadas];
+  document.getElementById('aviso').textContent = sueltas.length
+    ? (sueltas.length === 1
+        ? 'Se soltó 1 butaca que esta disposición no tiene: ' + sueltas[0] + '.'
+        : 'Se soltaron ' + sueltas.length + ' butacas que esta disposición no tiene: ' +
+          sueltas.join(', ') + '.')
+    : '';
+}
+
+const selector = document.getElementById('disposicion');
+selector.addEventListener('change', () => redibujar(selector.value));
+redibujar(selector.value);
+</script>
+</body>
+</html>
