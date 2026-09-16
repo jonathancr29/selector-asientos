@@ -37,6 +37,10 @@ Se recorre el plano con las flechas, que se mueven por coordenadas, y se elige c
 El `tabindex` es móvil: hay un solo alto de tabulación para todo el plano, no uno por butaca.
 El total y los avisos están en regiones vivas, así que un lector de pantalla los anuncia al cambiar.
 
+El estado no depende solo del color: la butaca seleccionada lleva una palomita, la ocupada un aspa
+y la bloqueada una raya. Todos los estados contrastan al menos 3:1 con el fondo del plano, y la
+leyenda reutiliza los mismos `<symbol>` que el dibujo.
+
 ## Los datos
 
 El plano se genera a partir de una lista plana con una fila por butaca, que es lo que devolvería tu
@@ -52,6 +56,9 @@ identificadores sueltos.
 
 **El SVG se genera al mostrar; nunca se almacena un SVG.** Con datos puedes consultar ocupación,
 precio y disponibilidad. Con un blob de SVG no puedes hacer un `WHERE`.
+
+La selección también es un dato: un conjunto de identificadores. El DOM la refleja, pero nunca se
+lee de vuelta del DOM.
 
 ## La rejilla de la sala
 
@@ -78,6 +85,17 @@ identidad es `fila` + `numero` y es estable; solo cambia la columna. Lo que no s
 butaca que la nueva disposición ya no tiene, porque el pasillo se llevó su lugar, o una que sigue
 existiendo pero ahí no está libre. Esas se sueltan con un aviso que las nombra, en vez de
 desaparecer en silencio.
+
+## Pruebas
+
+```bash
+node --test pruebas.mjs
+```
+
+Cubren la rejilla, el reparto de mesas, el aforo de la tabla anterior y la conciliación de la
+selección al cambiar de disposición. No hay copia del código: `pruebas.mjs` lee `index.html` y
+evalúa la parte del script anterior a la marca *«Fin de la parte sin DOM»*, así que el proyecto
+sigue siendo un solo archivo. Requiere Node 18 o posterior.
 
 ## Qué no incluye
 

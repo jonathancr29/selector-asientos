@@ -28,7 +28,7 @@
   /* --- Leyenda --- */
   .leyenda { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 12px; padding: 0; list-style: none; }
   .leyenda li { display: flex; align-items: center; gap: 7px; font-size: 12px; color: #94a3b8; }
-  .muestra { width: 16px; height: 16px; border-radius: 8px 8px 2px 2px; background: #444451; }
+  .muestra { width: 18px; height: 18px; flex: none; }
 
   /* --- Barra de herramientas --- */
   .herramientas { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
@@ -42,16 +42,16 @@
   .herramientas button:focus-visible, .herramientas select:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
   .campo { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #94a3b8; }
   .separador { width: 1px; height: 22px; background: #3a3a46; margin: 0 4px; }
-  .pista { font-size: 11px; color: #64748b; }
+  .pista { font-size: 11px; color: #94a3b8; }
   .aforo { margin: 0 0 8px; font-size: 12px; color: #94a3b8; }
   .aviso { margin: 8px 0 0; font-size: 12px; color: #fbbf24; }
   /* Sin display:none: una region viva oculta asi no siempre se anuncia al llenarse. */
   .aviso:empty { margin: 0; }
 
   /* --- El plano ---
-     Un solo <svg> con viewBox. De ahi salen tres cosas que la version por filas
-     de <div> no podia dar: escala con el ancho disponible, admite zoom y
-     desplazamiento, y las butacas viven en un sistema de coordenadas. */
+     Un solo <svg> con viewBox. De ahi salen tres cosas que una rejilla de <div>
+     no da: escala con el ancho disponible, admite zoom y desplazamiento, y las
+     butacas viven en un sistema de coordenadas. */
   .lienzo {
     background: #17171c; border: 1px solid #2c2c36; border-radius: 10px;
     overflow: hidden; touch-action: none;
@@ -59,20 +59,27 @@
   #plano { display: block; width: 100%; height: auto; cursor: grab; }
   #plano.arrastrando { cursor: grabbing; }
 
-  .butaca { fill: #444451; transition: fill .15s; }
+  /* El color de estado va en 'color' y se pinta con currentColor, asi la butaca
+     y su marca comparten tono. Todos pasan 3:1 contra el fondo del plano. */
+  .butaca, .muestra { color: #8a8a9a; fill: currentColor; transition: color .15s; }
   .butaca .toque { fill: transparent; }      /* area de clic: una celda exacta, sin solape */
   .butaca:not(.ocupada):not(.bloqueada) { cursor: pointer; }
-  /* Igual que en la version reducida: el hover solo recolorea si NO esta
-     seleccionada, para que la confirmacion visual no desaparezca bajo el cursor. */
-  .butaca:not(.ocupada):not(.bloqueada):not(.elegida):hover { fill: #666; }
-  .butaca.elegida { fill: #3b82f6; }
-  .butaca.ocupada { fill: #ef4444; cursor: not-allowed; }
-  .butaca.bloqueada { fill: #2f2f38; cursor: not-allowed; }
+  /* El hover solo aclara si NO esta seleccionada, para que la confirmacion
+     visual no desaparezca bajo el cursor. */
+  .butaca:not(.ocupada):not(.bloqueada):not(.elegida):hover { color: #b4b4c2; }
+  .elegida { color: #3b82f6; }
+  .ocupada { color: #ef4444; }
+  .bloqueada { color: #646472; }
+  .butaca.ocupada, .butaca.bloqueada { cursor: not-allowed; }
+  /* Marcas en el hueco del respaldo: el estado no depende solo del color.
+     Seleccionada lleva una palomita, ocupada un aspa, bloqueada una raya. */
+  .marca { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .butaca:not(.elegida) .marca-elegida { display: none; }
   .butaca:focus { outline: none; }
   .butaca:focus-visible .toque { fill: none; stroke: #93c5fd; stroke-width: 1.2; }
 
   .mueble { fill: #26262f; stroke: #3a3a46; stroke-width: .6; }
-  .rotulo { fill: #64748b; font-size: 4.2px; text-anchor: middle; dominant-baseline: middle; }
+  .rotulo { fill: #94a3b8; font-size: 4.2px; text-anchor: middle; dominant-baseline: middle; }
   .escenario { fill: #f8fafc; }
   .escenario-texto { fill: #1e1e24; font-size: 5px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; }
 
@@ -96,10 +103,12 @@
   <p class="subtitulo">Plano de butacas en SVG, sin dependencias. Filas numeradas, mesas y zona general en el mismo plano.</p>
 
   <ul class="leyenda">
-    <li><span class="muestra"></span>Disponible</li>
-    <li><span class="muestra" style="background:#3b82f6"></span>Seleccionado</li>
-    <li><span class="muestra" style="background:#ef4444"></span>Ocupado</li>
-    <li><span class="muestra" style="background:#2f2f38"></span>Bloqueado</li>
+    <!-- Las muestras reutilizan los <symbol> del plano: la leyenda no puede
+         desalinearse del dibujo real. -->
+    <li><svg class="muestra" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/></svg>Disponible</li>
+    <li><svg class="muestra elegida" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/><use class="marca" href="#marca-elegida"/></svg>Seleccionado</li>
+    <li><svg class="muestra ocupada" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/><use class="marca" href="#marca-ocupada"/></svg>Ocupado</li>
+    <li><svg class="muestra bloqueada" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/><use class="marca" href="#marca-bloqueada"/></svg>Bloqueado</li>
   </ul>
 
   <div class="herramientas">
@@ -122,11 +131,16 @@
   <div class="lienzo">
     <svg id="plano" role="group" aria-label="Plano de butacas" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <!-- El trazo se declara UNA vez y se instancia con <use>. En la version
-             anterior el mismo path estaba repetido tantas veces como butacas. -->
+        <!-- El trazo se declara UNA vez y se instancia con <use>: el path no se
+             repite por butaca. -->
         <symbol id="butaca" viewBox="0 0 24 24">
           <path d="M4 18v3h3v-3h10v3h3v-6H4zm15-8h3v5h-3V10zM2 10h3v5H2V10zm3-6h14c1.1 0 2 .9 2 2v2H3V6c0-1.1.9-2 2-2z"></path>
         </symbol>
+        <!-- Marcas de estado. Van en el hueco entre respaldo y asiento (y 8 a 15),
+             que el icono deja vacio, y comparten viewBox con la butaca. -->
+        <symbol id="marca-elegida" viewBox="0 0 24 24"><path d="M8.5 11.5l2.5 2.5 4.5-4.5"></path></symbol>
+        <symbol id="marca-ocupada" viewBox="0 0 24 24"><path d="M9.5 9.5l5 4.5M14.5 9.5l-5 4.5"></path></symbol>
+        <symbol id="marca-bloqueada" viewBox="0 0 24 24"><path d="M8.5 11.75h7"></path></symbol>
       </defs>
       <g id="muebles"></g>
       <g id="butacas"></g>
@@ -166,9 +180,8 @@ const ANCHO_SALA = 14;  // columnas de la sala. Constante: el pasillo se come un
 // La rejilla de la sala.
 //
 // Unica fuente de verdad de las columnas. Todas las bandas del plano la
-// consumen, asi que quedan alineadas por construccion: deja de ser posible que
-// dos bandas usen esquemas de columnas distintos, que era el origen del
-// descuadre anterior.
+// consumen, asi que quedan alineadas por construccion: no es posible que dos
+// bandas usen esquemas de columnas distintos y el plano quede descuadrado.
 //
 // El ancho es constante entre disposiciones. Lo que cambia es el aforo, igual
 // que en un recinto real: el pasillo se lleva lugares que si no serian butacas.
@@ -298,12 +311,38 @@ function generarPlano(disposicion) {
 }
 
 // ---------------------------------------------------------------------------
+// Seleccion. Es estado de datos, no del DOM: un conjunto de identificadores.
+// Asi sobrevive a redibujar sin leer clases de nodos que van a desaparecer.
+// ---------------------------------------------------------------------------
+const elegidas = new Set();
+
+// La identidad es fila + numero y es estable entre disposiciones: solo cambia
+// la columna. Lo unico que no sobrevive es una butaca que la nueva disposicion
+// ya no tiene, porque el pasillo se llevo su lugar, o una que sigue existiendo
+// pero ahi no esta libre. Ambas se devuelven para avisar, nunca en silencio.
+function conciliarSeleccion(ids, lista) {
+  const indice = new Map(lista.map((b) => [b.id, b]));
+  const ausentes = [], noLibres = [];
+  for (const id of ids) {
+    const b = indice.get(id);
+    if (!b) ausentes.push(id);
+    else if (b.estado !== 'libre') noLibres.push(id);
+  }
+  for (const id of [...ausentes, ...noLibres]) ids.delete(id);
+  return { ausentes, noLibres };
+}
+
+// === Fin de la parte sin DOM. pruebas.mjs evalua todo lo anterior en Node. ===
+
+// ---------------------------------------------------------------------------
 // Render
 // ---------------------------------------------------------------------------
 const svg = document.getElementById('plano');
 const capaMuebles = document.getElementById('muebles');
 const capaButacas = document.getElementById('butacas');
-const dinero = (c) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(c / 100);
+const formatoDinero = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+const dinero = (centavos) => formatoDinero.format(centavos / 100);
+const porId = new Map();   // id -> butaca, para no recorrer la lista en cada interaccion
 const etiquetaDe = (b) => (b.grupo ? b.grupo.nombre + ', lugar ' + b.numero
                                    : 'Fila ' + b.fila + ', butaca ' + b.numero);
 
@@ -338,12 +377,14 @@ function dibujarMuebles() {
 }
 
 function dibujarButacas() {
+  porId.clear();
   butacas.forEach((b, indice) => {
     const seleccionable = b.estado === 'libre';
+    const elegida = elegidas.has(b.id);
     const g = nodo('g', {
-      class: 'butaca' + (seleccionable ? '' : ' ' + b.estado),
+      class: 'butaca' + (seleccionable ? '' : ' ' + b.estado) + (elegida ? ' elegida' : ''),
       role: 'checkbox',
-      'aria-checked': 'false',
+      'aria-checked': String(elegida),
       'aria-label': etiquetaDe(b) + (seleccionable ? '' : ', ' + b.estado),
       tabindex: indice === 0 ? '0' : '-1',   // tabindex movil: un solo punto de tabulacion
     });
@@ -355,8 +396,14 @@ function dibujarButacas() {
     g.appendChild(nodo('use', { href: '#butaca',
       x: b.x * PASO + (PASO - GLIFO) / 2, y: b.y * PASO + (PASO - GLIFO) / 2,
       width: GLIFO, height: GLIFO }));
+    // Libre lleva la palomita siempre, oculta por CSS hasta que se elige.
+    g.appendChild(nodo('use', { class: 'marca marca-' + (seleccionable ? 'elegida' : b.estado),
+      href: '#marca-' + (seleccionable ? 'elegida' : b.estado),
+      x: b.x * PASO + (PASO - GLIFO) / 2, y: b.y * PASO + (PASO - GLIFO) / 2,
+      width: GLIFO, height: GLIFO }));
     capaButacas.appendChild(g);
     b.nodo = g;
+    porId.set(b.id, b);
   });
 }
 
@@ -365,13 +412,16 @@ function dibujarButacas() {
 // ---------------------------------------------------------------------------
 let vista, vistaInicial;
 
+// El encuadre abarca todo lo dibujado, butacas y muebles (escenario, mesas,
+// rotulos de fila), mas una celda de margen. Cada elemento ocupa una celda
+// salvo que declare w y h.
 function calcularEncuadre() {
-  const xs = butacas.map((b) => b.x), ys = butacas.map((b) => b.y);
+  const cajas = [...butacas, ...muebles];
   const margen = PASO;
-  const x = Math.min(...xs, 0) * PASO - margen * 2;
-  const y = Math.min(...ys, 0) * PASO - margen;
-  const w = (Math.max(...xs) + 1) * PASO - x + margen;
-  const h = (Math.max(...ys) + 1) * PASO - y + margen;
+  const x = Math.min(...cajas.map((c) => c.x)) * PASO - margen;
+  const y = Math.min(...cajas.map((c) => c.y)) * PASO - margen;
+  const w = Math.max(...cajas.map((c) => c.x + (c.w || 1))) * PASO + margen - x;
+  const h = Math.max(...cajas.map((c) => c.y + (c.h || 1))) * PASO + margen - y;
   vistaInicial = { x, y, w, h };
   vista = { ...vistaInicial };
   aplicarVista();
@@ -491,13 +541,16 @@ document.getElementById('ajustar').addEventListener('click', () => {
 // ---------------------------------------------------------------------------
 // Seleccion y teclado
 // ---------------------------------------------------------------------------
-const porNodo = (elemento) => butacas.find((b) => b.nodo === elemento);
+const porNodo = (elemento) => porId.get(elemento.dataset.id);
 
 function alternar(elemento) {
   const b = elemento && porNodo(elemento);
   if (!b || b.estado !== 'libre') return;
-  const elegida = b.nodo.classList.toggle('elegida');
-  b.nodo.setAttribute('aria-checked', elegida ? 'true' : 'false');
+  const elegida = !elegidas.delete(b.id);
+  if (elegida) elegidas.add(b.id);
+  // El DOM refleja el dato; nunca se lee de vuelta.
+  b.nodo.classList.toggle('elegida', elegida);
+  b.nodo.setAttribute('aria-checked', String(elegida));
   actualizarResumen();
 }
 
@@ -562,27 +615,28 @@ svg.addEventListener('keydown', (e) => {
 // Resumen: agrupa por mesa cuando la butaca pertenece a una.
 // ---------------------------------------------------------------------------
 function actualizarResumen() {
-  const elegidas = butacas.filter((b) => b.nodo.classList.contains('elegida'));
-  const total = elegidas.reduce((s, b) => s + zonas[b.zona].precio, 0);
-  document.getElementById('cuenta').textContent = String(elegidas.length);
+  // En orden de plano, no de clic: el detalle sale estable.
+  const lista = butacas.filter((b) => elegidas.has(b.id));
+  const total = lista.reduce((s, b) => s + zonas[b.zona].precio, 0);
+  document.getElementById('cuenta').textContent = String(lista.length);
   document.getElementById('total').textContent = dinero(total);
-  document.getElementById('vacio').hidden = elegidas.length > 0;
+  document.getElementById('vacio').hidden = lista.length > 0;
 
   const cubos = new Map();
-  for (const b of elegidas) {
+  for (const b of lista) {
     const clave = b.grupo ? b.grupo.nombre : zonas[b.zona].nombre;
     if (!cubos.has(clave)) cubos.set(clave, []);
     cubos.get(clave).push(b);
   }
-  const lista = document.getElementById('detalle');
-  lista.textContent = '';
+  const detalle = document.getElementById('detalle');
+  detalle.textContent = '';
   for (const [clave, items] of cubos) {
     const li = document.createElement('li');
     const cuantos = items.length === 1 ? '1 lugar' : items.length + ' lugares';
     const cuales = items.map((b) => (b.grupo ? b.numero : b.id)).join(', ');
     const importe = items.reduce((s, b) => s + zonas[b.zona].precio, 0);
     li.textContent = clave + ' · ' + cuantos + ' (' + cuales + ') · ' + dinero(importe);
-    lista.appendChild(li);
+    detalle.appendChild(li);
   }
 }
 
@@ -590,26 +644,13 @@ function actualizarResumen() {
 // Cambio de disposicion
 // ---------------------------------------------------------------------------
 function redibujar(disposicion) {
-  // La identidad es fila + numero y es estable entre disposiciones: solo cambia
-  // la columna. Lo unico que no sobrevive es una butaca que la nueva disposicion
-  // ya no tiene, porque el pasillo se llevo su lugar, o una que sigue existiendo
-  // pero en esta disposicion no esta libre. Ambas se sueltan con aviso.
-  const recordadas = new Set(
-    butacas.filter((b) => b.nodo && b.nodo.classList.contains('elegida')).map((b) => b.id)
-  );
-
   const sala = generarPlano(disposicion);
+  // Antes de dibujar: asi el DOM nace ya con la seleccion que sobrevive.
+  const { ausentes, noLibres } = conciliarSeleccion(elegidas, butacas);
   capaMuebles.textContent = '';
   capaButacas.textContent = '';
   dibujarMuebles();
   dibujarButacas();
-
-  for (const b of butacas) {
-    if (!recordadas.has(b.id) || b.estado !== 'libre') continue;
-    recordadas.delete(b.id);
-    b.nodo.classList.add('elegida');
-    b.nodo.setAttribute('aria-checked', 'true');
-  }
 
   calcularEncuadre();
   actualizarResumen();
@@ -618,17 +659,13 @@ function redibujar(disposicion) {
   document.getElementById('aforo').textContent =
     'Sala de ' + sala.ancho + ' columnas · ' + porFila + ' butacas por fila · ' +
     butacas.length + ' lugares en total';
-  const existe = new Set(butacas.map((b) => b.id));
-  const sueltas = [...recordadas];
   const frase = (ids, singular, plural) => (!ids.length ? ''
     : ids.length === 1
       ? 'Se soltó 1 butaca que ' + singular + ': ' + ids[0] + '.'
       : 'Se soltaron ' + ids.length + ' butacas que ' + plural + ': ' + ids.join(', ') + '.');
   document.getElementById('aviso').textContent = [
-    frase(sueltas.filter((id) => !existe.has(id)),
-          'esta disposición no tiene', 'esta disposición no tiene'),
-    frase(sueltas.filter((id) => existe.has(id)),
-          'en esta disposición no está libre', 'en esta disposición no están libres'),
+    frase(ausentes, 'esta disposición no tiene', 'esta disposición no tiene'),
+    frase(noLibres, 'en esta disposición no está libre', 'en esta disposición no están libres'),
   ].filter(Boolean).join(' ');
 }
 
