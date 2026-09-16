@@ -470,10 +470,35 @@ function moverFoco(desde, dx, dy) {
     return d < mejor.d ? { b, d } : mejor;
   }, { b: null, d: Infinity }).b;
   if (!destino) return;
-  desde.setAttribute('tabindex', '-1');
-  destino.nodo.setAttribute('tabindex', '0');
-  destino.nodo.focus();
+  destino.nodo.focus();   // el tabindex y el encuadre los ajusta 'focusin'
 }
+
+// Desplaza el viewBox lo justo para que la celda de la butaca quede dentro,
+// con media celda de margen. Sin esto, con zoom, el foco podia irse fuera de vista.
+function asegurarVisible(b) {
+  const margen = PASO / 2;
+  const x = b.x * PASO, y = b.y * PASO;
+  if (x - margen < vista.x) vista.x = x - margen;
+  else if (x + PASO + margen > vista.x + vista.w) vista.x = x + PASO + margen - vista.w;
+  if (y - margen < vista.y) vista.y = y - margen;
+  else if (y + PASO + margen > vista.y + vista.h) vista.y = y + PASO + margen - vista.h;
+  aplicarVista();
+}
+
+// El foco puede llegar por flechas o por clic: en ambos casos la butaca
+// enfocada pasa a ser el unico punto de tabulacion del plano.
+svg.addEventListener('focusin', (e) => {
+  const elemento = e.target.closest('.butaca');
+  if (!elemento) return;
+  for (const n of capaButacas.querySelectorAll('.butaca[tabindex="0"]')) {
+    if (n !== elemento) n.setAttribute('tabindex', '-1');
+  }
+  elemento.setAttribute('tabindex', '0');
+  // Durante un clic no se reencuadra: moveria el plano bajo el puntero y el
+  // arrastre, que parte de la vista anterior, lo haria saltar.
+  const b = porNodo(elemento);
+  if (b && !arrastre) asegurarVisible(b);
+});
 
 svg.addEventListener('keydown', (e) => {
   const elemento = e.target.closest('.butaca');
@@ -524,7 +549,8 @@ function actualizarResumen() {
 function redibujar(disposicion) {
   // La identidad es fila + numero y es estable entre disposiciones: solo cambia
   // la columna. Lo unico que no sobrevive es una butaca que la nueva disposicion
-  // ya no tiene, porque el pasillo se llevo su lugar.
+  // ya no tiene, porque el pasillo se llevo su lugar, o una que sigue existiendo
+  // pero en esta disposicion no esta libre. Ambas se sueltan con aviso.
   const recordadas = new Set(
     butacas.filter((b) => b.nodo && b.nodo.classList.contains('elegida')).map((b) => b.id)
   );
@@ -536,7 +562,8 @@ function redibujar(disposicion) {
   dibujarButacas();
 
   for (const b of butacas) {
-    if (!recordadas.delete(b.id) || b.estado !== 'libre') continue;
+    if (!recordadas.has(b.id) || b.estado !== 'libre') continue;
+    recordadas.delete(b.id);
     b.nodo.classList.add('elegida');
     b.nodo.setAttribute('aria-checked', 'true');
   }
@@ -548,13 +575,18 @@ function redibujar(disposicion) {
   document.getElementById('aforo').textContent =
     'Sala de ' + sala.ancho + ' columnas · ' + porFila + ' butacas por fila · ' +
     butacas.length + ' lugares en total';
+  const existe = new Set(butacas.map((b) => b.id));
   const sueltas = [...recordadas];
-  document.getElementById('aviso').textContent = sueltas.length
-    ? (sueltas.length === 1
-        ? 'Se soltó 1 butaca que esta disposición no tiene: ' + sueltas[0] + '.'
-        : 'Se soltaron ' + sueltas.length + ' butacas que esta disposición no tiene: ' +
-          sueltas.join(', ') + '.')
-    : '';
+  const frase = (ids, singular, plural) => (!ids.length ? ''
+    : ids.length === 1
+      ? 'Se soltó 1 butaca que ' + singular + ': ' + ids[0] + '.'
+      : 'Se soltaron ' + ids.length + ' butacas que ' + plural + ': ' + ids.join(', ') + '.');
+  document.getElementById('aviso').textContent = [
+    frase(sueltas.filter((id) => !existe.has(id)),
+          'esta disposición no tiene', 'esta disposición no tiene'),
+    frase(sueltas.filter((id) => existe.has(id)),
+          'en esta disposición no está libre', 'en esta disposición no están libres'),
+  ].filter(Boolean).join(' ');
 }
 
 const selector = document.getElementById('disposicion');

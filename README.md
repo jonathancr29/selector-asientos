@@ -73,8 +73,9 @@ del plano, y eso es lo que las hace comparables.
 
 Al cambiar de disposición la selección se conserva **por identificador, no por posición**: la
 identidad es `fila` + `numero` y es estable; solo cambia la columna. Lo que no sobrevive es una
-butaca que la nueva disposición ya no tiene, porque el pasillo se llevó su lugar. Esas se sueltan
-con un aviso que las nombra, en vez de desaparecer en silencio.
+butaca que la nueva disposición ya no tiene, porque el pasillo se llevó su lugar, o una que sigue
+existiendo pero ahí no está libre. Esas se sueltan con un aviso que las nombra, en vez de
+desaparecer en silencio.
 
 ## Qué no incluye
 
