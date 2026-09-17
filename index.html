@@ -17,13 +17,62 @@
 <style>
   * { box-sizing: border-box; }
   body {
-    margin: 0; min-height: 100vh; padding: 24px 16px;
+    margin: 0; min-height: 100vh; padding: 0;
     font-family: system-ui, "Segoe UI", sans-serif;
     background: #1e1e24; color: #fff;
   }
-  .envoltorio { max-width: 900px; margin: 0 auto; }
   h1 { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
-  .subtitulo { margin: 0 0 20px; font-size: 13px; color: #94a3b8; }
+  /* No «.subtitulo»: esa clase es la de los nombres de banda del SVG (letra de 4 px). */
+  .bajada { margin: 0 0 12px; font-size: 13px; color: #94a3b8; }
+
+  /* --- Disposicion: lateral de herramientas, plano y lateral de configuracion ---
+     Los laterales son sticky y tienen su propio scroll; en pantallas angostas se apilan. */
+  .app { display: grid; grid-template-columns: 248px minmax(0, 1fr); gap: 16px; align-items: start;
+    max-width: 1680px; margin: 0 auto; padding: 16px; }
+  .app.editando { grid-template-columns: 248px minmax(0, 1fr) 380px; }
+  .lateral { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; scrollbar-width: thin;
+    padding: 10px 12px; background: #23232b; border: 1px solid #2c2c36; border-radius: 10px; }
+  .lateral[hidden] { display: none; }
+  .grupo { padding: 8px 0; border-top: 1px solid #2c2c36; }
+  .grupo:first-of-type { border-top: 0; padding-top: 0; }
+  .grupo > summary { padding: 2px 0 8px; font-size: 12px; font-weight: 700; color: #cbd5e1; cursor: pointer; }
+  .grupo > summary:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; border-radius: 4px; }
+  .lateral .herramientas { margin-bottom: 8px; }
+  .rejilla-iconos.herramientas { display: grid; grid-template-columns: repeat(5, 32px); gap: 6px; }
+  .modos.herramientas { display: grid; grid-template-columns: 1fr; gap: 6px; }
+  .modos button { justify-content: flex-start; }
+  .campo-ancho.herramientas { flex-wrap: nowrap; }
+  .campo-ancho select, .campo-ancho input[type="text"] { flex: 1; min-width: 0; width: auto; }
+  .lateral .mesa-activa { margin: 0 0 8px; min-width: 0; }
+  .lateral .leyenda { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; margin: 0; }
+  #herramientas-mapa input[type="text"] { flex: 1 1 100%; min-width: 0; }
+  .lateral .bandas { margin: 0; padding: 0; background: none; border: 0; }
+  .encabezado { margin: 0 0 10px; }
+  .encabezado .pista { margin: 0 0 6px; }
+  /* Linea de estado: fija al pie del plano mientras se hace scroll por el. */
+  .barra-estado { position: sticky; bottom: 0; z-index: 5; min-height: 34px; margin-top: 8px; padding: 8px 10px;
+    background: #23232b; border: 1px solid #2c2c36; border-radius: 8px; }
+  .barra-estado p, .barra-estado p:empty { margin: 0; }
+  .pie { margin-top: 8px; }
+  /* Tooltip de los botones de icono: un solo elemento fijo, para que el scroll de los
+     laterales no lo recorte. Lo coloca el script. */
+  .tooltip { position: fixed; z-index: 50; padding: 4px 8px; font-size: 12px; line-height: 1.3; white-space: nowrap;
+    color: #f8fafc; background: #0f0f13; border: 1px solid #4b5563; border-radius: 4px; pointer-events: none; }
+  .tooltip[hidden] { display: none; }
+  @media (max-width: 1280px) {
+    .app { grid-template-columns: 220px minmax(0, 1fr); }
+    .app.editando { grid-template-columns: 220px minmax(0, 1fr) 330px; }
+    .rejilla-iconos.herramientas { grid-template-columns: repeat(auto-fill, 32px); }
+  }
+  /* Pantallas angostas: sin laterales. Herramientas arriba del plano, configuracion debajo. */
+  @media (max-width: 900px) {
+    .app, .app.editando { display: block; padding: 12px; }
+    .lateral { position: static; max-height: none; overflow: visible; margin-bottom: 12px; }
+    .lateral-herramientas { margin-bottom: 12px; }
+    .lateral-configuracion { margin: 12px 0 0; }
+    .lateral .leyenda { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+    .modos.herramientas { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  }
 
   /* --- Leyenda --- */
   .leyenda { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 12px; padding: 0; list-style: none; }
@@ -46,13 +95,6 @@
     display: inline-flex; align-items: center; justify-content: center; }
   .modos button { display: inline-flex; align-items: center; gap: 6px; }
   .solo-lector { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  [data-tooltip] { position: relative; }
-  [data-tooltip]:hover::after, [data-tooltip]:focus-visible::after, .campo[data-tooltip]:focus-within::after {
-    content: attr(data-tooltip); position: absolute; z-index: 20; top: calc(100% + 6px); left: 50%;
-    transform: translateX(-50%); padding: 4px 8px; font-size: 12px; font-weight: 400; line-height: 1.3;
-    white-space: nowrap; color: #f8fafc; background: #0f0f13; border: 1px solid #4b5563; border-radius: 4px;
-    pointer-events: none;
-  }
   /* Eliminar avisa de que es destructivo al pasar el raton, no solo por el color: el tooltip lo dice. */
   .herramientas button[data-accion="eliminar"]:not(:disabled):hover { color: #fca5a5; border-color: #ef4444; }
   .herramientas button:hover, .herramientas select:hover { background: #33333e; }
@@ -72,7 +114,6 @@
   .herramientas button:disabled:hover { background: #2a2a33; }
   /* display:flex de .herramientas pisaria el atributo hidden. */
   .herramientas[hidden] { display: none; }
-  #herramientas-editor { padding: 6px 8px; background: #23232b; border: 1px solid #2c2c36; border-radius: 8px; }
 
   /* --- Panel de bandas (editor) --- */
   .bandas { margin: 16px 0 0; padding: 10px 12px; background: #23232b; border: 1px solid #2c2c36; border-radius: 8px; }
@@ -132,7 +173,6 @@
   .banda-nombre input::placeholder { color: #94a3b8; }
   .banda-nombre input:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
   .banda.activa > .banda-nombre input { border-color: var(--capa); border-width: 2px; font-weight: 700; }
-  .banda-seleccionada { display: none; font-size: 12px; color: var(--capa); }
   /* Zonas y precios: una fila por zona, con su nombre y su precio editables. */
   .zonas input {
     height: 28px; padding: 0 8px; font: inherit; font-size: 13px; color: #e2e8f0;
@@ -141,7 +181,6 @@
   .zonas input:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
   .zonas .nombre-zona { width: 150px; }
   .zonas .precio-zona { width: 110px; text-align: right; }
-  .banda.activa > .banda-seleccionada { display: inline; }
   .mesa-activa { font-size: 12px; color: #cbd5e1; min-width: 150px; }
   #nombre-pieza { min-width: 150px; width: 150px; }
   .herramientas select:disabled, .herramientas input:disabled { opacity: .45; }
@@ -188,7 +227,6 @@
     background: #17171c; border: 1px solid #3a3a46; border-radius: 6px;
   }
   .herramientas input[type="text"]:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
-  #herramientas-mapa { margin-top: 6px; padding: 6px 8px; background: #23232b; border: 1px solid #2c2c36; border-radius: 8px; }
   .pieza { fill: transparent; stroke: #93c5fd; stroke-width: .8; stroke-dasharray: 2 1.5; cursor: grab; }
   .pieza:hover { fill: rgba(147, 197, 253, .1); }
   .pieza:focus { outline: none; }
@@ -218,7 +256,7 @@
   .escenario-texto { fill: #1e1e24; font-size: 5px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; }
 
   /* --- Resumen --- */
-  .resumen { margin: 16px 0 0; font-size: 14px; color: #cbd5e1; line-height: 1.7; }
+  .resumen { margin: 8px 0 0; font-size: 14px; color: #cbd5e1; line-height: 1.7; }
   .resumen strong { color: #3b82f6; }
   #detalle { margin: 8px 0 0; padding-left: 18px; }
   #detalle li { font-size: 13px; color: #94a3b8; }
@@ -267,181 +305,224 @@
     <symbol id="i-un-solo-lado" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="6" rx="1.5" fill-opacity=".25" stroke="currentColor" stroke-width="1.6"></rect><rect x="6" y="16.5" width="4" height="3.5" rx="1"></rect><rect x="14" y="16.5" width="4" height="3.5" rx="1"></rect><rect x="6" y="3.5" width="4" height="3.5" rx="1" fill-opacity=".35"></rect><rect x="14" y="3.5" width="4" height="3.5" rx="1" fill-opacity=".35"></rect></symbol>
   </defs>
 </svg>
-<div class="envoltorio">
+<div class="app" id="app">
 
-  <h1>Selector de asientos</h1>
-  <p class="subtitulo">Plano de butacas en SVG, sin dependencias. Filas numeradas, mesas y zona general en el mismo plano.</p>
-
-  <ul class="leyenda">
-    <!-- Las muestras reutilizan los <symbol> del plano: la leyenda no puede
-         desalinearse del dibujo real. -->
-    <li><svg class="muestra" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/></svg>Disponible</li>
-    <li><svg class="muestra elegida" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/><use class="marca" href="#marca-elegida"/></svg>Seleccionado</li>
-    <li><svg class="muestra ocupada" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/><use class="marca" href="#marca-ocupada"/></svg>Ocupado</li>
-    <li><svg class="muestra bloqueada" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/><use class="marca" href="#marca-bloqueada"/></svg>Bloqueado</li>
-  </ul>
-
-  <div class="herramientas">
-    <span class="modos" role="group" aria-label="Modo">
-      <button type="button" id="modo-vista" aria-pressed="true"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-ver"></use></svg>Previsualizar</button>
-      <button type="button" id="modo-editor" aria-pressed="false"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-editar"></use></svg>Editar plano</button>
-    </span>
-    <span class="separador" aria-hidden="true"></span>
-    <!-- Botones de icono: sin title (algunos lectores lo anuncian en lugar de aria-label);
-         el nombre visible va en data-tooltip. -->
-    <button type="button" class="icono" id="acercar" aria-label="Acercar" data-tooltip="Acercar"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-acercar"></use></svg></button>
-    <button type="button" class="icono" id="alejar" aria-label="Alejar" data-tooltip="Alejar"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-alejar"></use></svg></button>
-    <button type="button" class="icono" id="ajustar" aria-label="Ajustar" data-tooltip="Ajustar a la sala"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-ajustar"></use></svg></button>
-    <span class="separador" aria-hidden="true"></span>
-    <!-- Las opciones salen de TIPOS_DE_SALA: el script las crea al cargar. -->
-    <label class="campo" for="tipo-sala" data-tooltip="Tipo de sala"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-sala"></use></svg><span class="solo-lector">Tipo de sala</span>
-      <select id="tipo-sala"></select>
-    </label>
-  </div>
-  <!-- Solo en modo editor. Los botones de mesa actuan sobre la mesa activa. -->
-  <div class="herramientas" id="herramientas-editor" role="group" aria-label="Editar mesas, bloques, butacas y formas" hidden>
-    <button type="button" class="icono" id="herramienta-bloquear" aria-pressed="false" aria-label="Bloquear butacas" data-tooltip="Bloquear butacas"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-bloquear"></use></svg></button>
-    <span class="separador" aria-hidden="true"></span>
-    <span class="campo" data-tooltip="Agregar"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar"></use></svg><span class="solo-lector">Agregar</span></span>
-    <!-- Los atajos van en aria-keyshortcuts y en el tooltip, y estan explicados en la pista. -->
-    <button type="button" class="icono" id="agregar-lados" aria-label="Lados: mesa de largo 2, dos lugares por lado" data-tooltip="Mesa de lados"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mesa-lados"></use></svg></button>
-    <button type="button" class="icono" id="agregar-cruz" aria-label="Cruz: mesa de largo 1, un lugar por lado y cabeceras" data-tooltip="Mesa en cruz"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mesa-cruz"></use></svg></button>
-    <button type="button" class="icono" id="agregar-barra" aria-label="Un lado: mesa de largo 4 con lugares en un solo lado" data-tooltip="Mesa de un lado"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mesa-un-lado"></use></svg></button>
-    <button type="button" class="icono" id="agregar-bloque" aria-label="Bloque de filas: 5 butacas por fila y 2 filas" data-tooltip="Bloque de filas"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-bloque"></use></svg></button>
-    <button type="button" class="icono" id="agregar-butaca" aria-label="Butaca suelta: una butaca de la zona General" data-tooltip="Butaca suelta"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-butaca"></use></svg></button>
-    <button type="button" class="icono" id="agregar-pista" aria-label="Pista de baile: 4 × 4 celdas" data-tooltip="Pista de baile"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-pista"></use></svg></button>
-    <button type="button" class="icono" id="agregar-forma-barra" aria-label="Barra: 4 × 1 celdas" data-tooltip="Barra"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-barra"></use></svg></button>
-    <span class="separador" aria-hidden="true"></span>
-    <span class="mesa-activa" id="mesa-activa" aria-live="polite">Ninguna pieza seleccionada</span>
-    <button type="button" class="icono" data-accion="girar" aria-keyshortcuts="R" aria-label="Girar 90°" data-tooltip="Girar 90° · R"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-girar"></use></svg></button>
-    <button type="button" class="icono" data-accion="alargar" aria-keyshortcuts="+" aria-label="Alargar" data-tooltip="Alargar · +"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-alargar"></use></svg></button>
-    <button type="button" class="icono" data-accion="acortar" aria-keyshortcuts="-" aria-label="Acortar" data-tooltip="Acortar · −"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-acortar"></use></svg></button>
-    <button type="button" class="icono" data-accion="masfilas" aria-keyshortcuts="]" aria-label="Agregar fila" data-tooltip="Agregar fila · ]"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mas-fila"></use></svg></button>
-    <button type="button" class="icono" data-accion="menosfilas" aria-keyshortcuts="[" aria-label="Quitar fila" data-tooltip="Quitar fila · ["><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-menos-fila"></use></svg></button>
-    <button type="button" class="icono" data-accion="cabeceras" aria-pressed="false" aria-keyshortcuts="C" aria-label="Cabeceras" data-tooltip="Cabeceras · C"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-cabeceras"></use></svg></button>
-    <button type="button" class="icono" data-accion="unlado" aria-pressed="false" aria-keyshortcuts="U" aria-label="Un solo lado" data-tooltip="Un solo lado · U"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-un-solo-lado"></use></svg></button>
-    <button type="button" class="icono" data-accion="duplicar" aria-keyshortcuts="Control+D Meta+D" aria-label="Duplicar" data-tooltip="Duplicar · Ctrl+D"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-duplicar"></use></svg></button>
-    <button type="button" class="icono" data-accion="eliminar" aria-keyshortcuts="Delete" aria-label="Eliminar" data-tooltip="Eliminar · Supr"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-eliminar"></use></svg></button>
-    <label class="campo" for="zona-pieza" data-tooltip="Zona"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-zona"></use></svg><span class="solo-lector">Zona</span></label>
-    <!-- Las opciones salen de las zonas de la sala: se crean al dibujar. -->
-    <select id="zona-pieza" disabled></select>
-    <label class="campo" for="nombre-pieza" data-tooltip="Nombre"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-nombre"></use></svg><span class="solo-lector">Nombre</span></label>
-    <input type="text" id="nombre-pieza" maxlength="40" autocomplete="off" disabled
-           placeholder="Ej.: Lateral izquierdo">
-    <span class="separador" aria-hidden="true"></span>
-    <button type="button" class="icono" id="alternar-escenario" aria-label="Quitar escenario" data-tooltip="Quitar escenario"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-escenario-quitar"></use></svg></button>
-    <button type="button" class="icono" id="restablecer" aria-label="Restablecer sala" data-tooltip="Restablecer sala"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-restablecer"></use></svg></button>
-  </div>
-  <!-- Solo en modo editor: guardar el diseño con nombre, en el navegador o como JSON. -->
-  <div class="herramientas" id="herramientas-mapa" role="group" aria-label="Guardar mapa" hidden>
-    <label class="campo" for="nombre-mapa">Nombre del mapa</label>
-    <input type="text" id="nombre-mapa" maxlength="80" autocomplete="off" placeholder="Ej.: Salón Jardín, boda">
-    <button type="button" id="guardar-mapa">Guardar</button>
-    <button type="button" id="eliminar-mapa" hidden>Eliminar mapa</button>
-    <span class="separador" aria-hidden="true"></span>
-    <button type="button" id="exportar-mapa">Exportar JSON</button>
-    <button type="button" id="importar-mapa">Importar JSON</button>
-    <input type="file" id="archivo-mapa" accept=".json,application/json" hidden>
-  </div>
-  <p class="pista" id="pista">Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer</p>
-  <p class="aforo" id="aforo"></p>
-
-  <div class="lienzo">
-    <svg id="plano" role="group" aria-label="Plano de butacas" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <!-- El trazo se declara UNA vez y se instancia con <use>: el path no se
-             repite por butaca. -->
-        <symbol id="butaca" viewBox="0 0 24 24">
-          <path d="M4 18v3h3v-3h10v3h3v-6H4zm15-8h3v5h-3V10zM2 10h3v5H2V10zm3-6h14c1.1 0 2 .9 2 2v2H3V6c0-1.1.9-2 2-2z"></path>
-        </symbol>
-        <!-- Marcas de estado. Van en el hueco entre respaldo y asiento (y 8 a 15),
-             que el icono deja vacio, y comparten viewBox con la butaca. -->
-        <symbol id="marca-elegida" viewBox="0 0 24 24"><path d="M8.5 11.5l2.5 2.5 4.5-4.5"></path></symbol>
-        <symbol id="marca-ocupada" viewBox="0 0 24 24"><path d="M9.5 9.5l5 4.5M14.5 9.5l-5 4.5"></path></symbol>
-        <symbol id="marca-bloqueada" viewBox="0 0 24 24"><path d="M8.5 11.75h7"></path></symbol>
-        <!-- Cuadros de la pista de baile: una celda del plano, en cuatro cuadros. -->
-        <pattern id="cuadros-pista" width="12" height="12" patternUnits="userSpaceOnUse">
-          <rect width="12" height="12" fill="#2a2638"></rect>
-          <rect width="6" height="6" fill="#383250"></rect>
-          <rect x="6" y="6" width="6" height="6" fill="#383250"></rect>
-        </pattern>
-      </defs>
-      <g id="muebles"></g>
-      <g id="butacas"></g>
-      <g id="subtitulos"></g>        <!-- nombres en el borde de verticales y bandas interiores, sobre las butacas -->
-      <g id="seleccion-banda"></g>   <!-- solo en modo editor: el contorno de la banda seleccionada -->
-      <g id="piezas"></g>   <!-- solo en modo editor: una zona movible por mesa -->
-      <g id="rotulo-seleccion"></g>   <!-- el nombre de la banda seleccionada, encima de todo -->
-    </svg>
-  </div>
-
-  <p class="aviso" id="aviso" role="status"></p>
-  <p class="estado" id="estado" role="status"></p>
-
-  <!-- Solo en modo editor: la sala como lista de bandas, de arriba abajo. -->
-  <section class="bandas" id="panel-bandas" aria-labelledby="titulo-bandas" hidden>
-    <h2 id="titulo-bandas">Diseño de la sala</h2>
-    <h3>Columnas</h3>
-    <!-- En un lienzo (mapa en blanco) no hay pasillos: solo el ancho. -->
-    <div class="columnas-sala" id="columnas-lienzo" hidden>
-      <label for="ancho-lienzo">Ancho del lienzo</label>
-      <input type="text" id="ancho-lienzo" inputmode="numeric" autocomplete="off"
-             placeholder="20" aria-describedby="ayuda-lienzo">
-      <button type="button" id="aplicar-ancho-lienzo">Aplicar</button>
+  <!-- Lateral izquierdo: leyenda, vista y herramientas del editor. Sticky en pantallas
+       anchas; en angostas pasa arriba del plano. Los grupos se pliegan (details). -->
+  <aside class="lateral lateral-herramientas" aria-label="Herramientas">
+    <details class="grupo" open>
+      <summary>Leyenda</summary>
+      <ul class="leyenda">
+        <!-- Las muestras reutilizan los <symbol> del plano: la leyenda no puede
+             desalinearse del dibujo real. -->
+        <li><svg class="muestra" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/></svg>Disponible</li>
+        <li><svg class="muestra elegida" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/><use class="marca" href="#marca-elegida"/></svg>Seleccionado</li>
+        <li><svg class="muestra ocupada" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/><use class="marca" href="#marca-ocupada"/></svg>Ocupado</li>
+        <li><svg class="muestra bloqueada" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/><use class="marca" href="#marca-bloqueada"/></svg>Bloqueado</li>
+      </ul>
+    </details>
+    <details class="grupo" open>
+      <summary>Vista</summary>
+      <div class="herramientas modos" role="group" aria-label="Modo">
+        <button type="button" id="modo-vista" aria-pressed="true"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-ver"></use></svg>Previsualizar</button>
+        <button type="button" id="modo-editor" aria-pressed="false"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-editar"></use></svg>Editar plano</button>
+      </div>
+      <!-- Botones de icono: sin title (algunos lectores lo anuncian en lugar de aria-label);
+           el nombre visible va en data-tooltip. -->
+      <div class="herramientas rejilla-iconos">
+        <button type="button" class="icono" id="acercar" aria-label="Acercar" data-tooltip="Acercar"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-acercar"></use></svg></button>
+        <button type="button" class="icono" id="alejar" aria-label="Alejar" data-tooltip="Alejar"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-alejar"></use></svg></button>
+        <button type="button" class="icono" id="ajustar" aria-label="Ajustar" data-tooltip="Ajustar a la sala"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-ajustar"></use></svg></button>
+      </div>
+      <!-- Las opciones salen de TIPOS_DE_SALA: el script las crea al cargar. -->
+      <div class="herramientas campo-ancho">
+        <label class="campo" for="tipo-sala" data-tooltip="Tipo de sala"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-sala"></use></svg><span class="solo-lector">Tipo de sala</span></label>
+        <select id="tipo-sala"></select>
+      </div>
+    </details>
+    <!-- Solo en modo editor. Los botones de pieza actuan sobre la pieza activa. -->
+    <div id="herramientas-editor" role="group" aria-label="Editar mesas, bloques, butacas y formas" hidden>
+      <details class="grupo" open>
+        <summary>Agregar</summary>
+        <!-- Los atajos van en aria-keyshortcuts y en el tooltip, y estan explicados en la pista. -->
+        <div class="herramientas rejilla-iconos">
+          <button type="button" class="icono" id="agregar-lados" aria-label="Lados: mesa de largo 2, dos lugares por lado" data-tooltip="Mesa de lados"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mesa-lados"></use></svg></button>
+          <button type="button" class="icono" id="agregar-cruz" aria-label="Cruz: mesa de largo 1, un lugar por lado y cabeceras" data-tooltip="Mesa en cruz"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mesa-cruz"></use></svg></button>
+          <button type="button" class="icono" id="agregar-barra" aria-label="Un lado: mesa de largo 4 con lugares en un solo lado" data-tooltip="Mesa de un lado"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mesa-un-lado"></use></svg></button>
+          <button type="button" class="icono" id="agregar-bloque" aria-label="Bloque de filas: 5 butacas por fila y 2 filas" data-tooltip="Bloque de filas"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-bloque"></use></svg></button>
+          <button type="button" class="icono" id="agregar-butaca" aria-label="Butaca suelta: una butaca de la zona General" data-tooltip="Butaca suelta"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-butaca"></use></svg></button>
+          <button type="button" class="icono" id="agregar-pista" aria-label="Pista de baile: 4 × 4 celdas" data-tooltip="Pista de baile"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-pista"></use></svg></button>
+          <button type="button" class="icono" id="agregar-forma-barra" aria-label="Barra: 4 × 1 celdas" data-tooltip="Barra"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-barra"></use></svg></button>
+        </div>
+      </details>
+      <details class="grupo" open>
+        <summary>Pieza seleccionada</summary>
+        <p class="mesa-activa" id="mesa-activa" aria-live="polite">Ninguna pieza seleccionada</p>
+        <div class="herramientas rejilla-iconos">
+          <button type="button" class="icono" data-accion="girar" aria-keyshortcuts="R" aria-label="Girar 90°" data-tooltip="Girar 90° · R"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-girar"></use></svg></button>
+          <button type="button" class="icono" data-accion="alargar" aria-keyshortcuts="+" aria-label="Alargar" data-tooltip="Alargar · +"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-alargar"></use></svg></button>
+          <button type="button" class="icono" data-accion="acortar" aria-keyshortcuts="-" aria-label="Acortar" data-tooltip="Acortar · −"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-acortar"></use></svg></button>
+          <button type="button" class="icono" data-accion="masfilas" aria-keyshortcuts="]" aria-label="Agregar fila" data-tooltip="Agregar fila · ]"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mas-fila"></use></svg></button>
+          <button type="button" class="icono" data-accion="menosfilas" aria-keyshortcuts="[" aria-label="Quitar fila" data-tooltip="Quitar fila · ["><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-menos-fila"></use></svg></button>
+          <button type="button" class="icono" data-accion="cabeceras" aria-pressed="false" aria-keyshortcuts="C" aria-label="Cabeceras" data-tooltip="Cabeceras · C"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-cabeceras"></use></svg></button>
+          <button type="button" class="icono" data-accion="unlado" aria-pressed="false" aria-keyshortcuts="U" aria-label="Un solo lado" data-tooltip="Un solo lado · U"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-un-solo-lado"></use></svg></button>
+          <button type="button" class="icono" data-accion="duplicar" aria-keyshortcuts="Control+D Meta+D" aria-label="Duplicar" data-tooltip="Duplicar · Ctrl+D"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-duplicar"></use></svg></button>
+          <button type="button" class="icono" data-accion="eliminar" aria-keyshortcuts="Delete" aria-label="Eliminar" data-tooltip="Eliminar · Supr"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-eliminar"></use></svg></button>
+        </div>
+        <!-- Las opciones salen de las zonas de la sala: se crean al dibujar. -->
+        <div class="herramientas campo-ancho">
+          <label class="campo" for="zona-pieza" data-tooltip="Zona"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-zona"></use></svg><span class="solo-lector">Zona</span></label>
+          <select id="zona-pieza" disabled></select>
+        </div>
+        <div class="herramientas campo-ancho">
+          <label class="campo" for="nombre-pieza" data-tooltip="Nombre"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-nombre"></use></svg><span class="solo-lector">Nombre</span></label>
+          <input type="text" id="nombre-pieza" maxlength="40" autocomplete="off" disabled placeholder="Ej.: Lateral izquierdo">
+        </div>
+      </details>
+      <details class="grupo" open>
+        <summary>Sala</summary>
+        <div class="herramientas rejilla-iconos">
+          <button type="button" class="icono" id="herramienta-bloquear" aria-pressed="false" aria-label="Bloquear butacas" data-tooltip="Bloquear butacas"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-bloquear"></use></svg></button>
+          <button type="button" class="icono" id="alternar-escenario" aria-label="Quitar escenario" data-tooltip="Quitar escenario"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-escenario-quitar"></use></svg></button>
+          <button type="button" class="icono" id="restablecer" aria-label="Restablecer sala" data-tooltip="Restablecer sala"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-restablecer"></use></svg></button>
+        </div>
+      </details>
     </div>
-    <p class="pista" id="ayuda-lienzo" hidden>
-      Columnas del lienzo, de 1 a 40. No hay pasillos fijos: el pasillo es el hueco que dejas entre
-      piezas. El alto es la suma de las bandas: cambia el alto de cada espacio con − y +.
-    </p>
-    <div class="columnas-sala" id="columnas-plantilla">
-      <label for="bloques-sala">Butacas por bloque</label>
-      <input type="text" id="bloques-sala" inputmode="numeric" autocomplete="off"
-             placeholder="4, 6, 4" aria-describedby="ayuda-columnas">
-      <label for="pasillos-sala">Anchos de pasillo</label>
-      <input type="text" id="pasillos-sala" inputmode="numeric" autocomplete="off"
-             placeholder="1, 1" aria-describedby="ayuda-columnas">
-      <button type="button" id="aplicar-columnas">Aplicar</button>
-    </div>
-    <p class="pista" id="ayuda-columnas">
-      Cada número es un bloque de butacas; entre bloques va un pasillo. «4, 6, 4» con pasillos
-      «1, 2» son 14 butacas por fila y 17 columnas. Sin anchos, cada pasillo mide 1 columna.
-    </p>
-    <h3>Zonas y precios</h3>
-    <ol class="zonas" id="lista-zonas"></ol>
-    <div class="herramientas">
-      <button type="button" id="agregar-zona">Agregar zona</button>
-    </div>
-    <p class="pista">
-      Precio por lugar, en pesos. Las filas, bloques y butacas sueltas eligen su zona; los lugares de
-      mesa son siempre de la zona de mesas. Una zona en uso no se puede eliminar.
-    </p>
-    <h3>Bandas</h3>
-    <ol id="lista-bandas"></ol>
-    <div class="herramientas">
-      <button type="button" id="agregar-banda-filas">Agregar banda de filas</button>
-      <button type="button" id="agregar-banda-mesas">Agregar zona de mesas</button>
-      <button type="button" id="agregar-espacio">Agregar espacio</button>
-      <button type="button" id="agregar-division">Agregar franja con bandas verticales</button>
-    </div>
-  </section>
+  </aside>
 
-  <p class="resumen" aria-live="polite">
-    Seleccionadas: <strong id="cuenta">0</strong> · Total <strong id="total">$0.00</strong>
-    <span id="vacio">— ninguna butaca seleccionada.</span>
-  </p>
-  <ul id="detalle"></ul>
+  <main class="centro">
+    <!-- Encabezado: solo textos de referencia e instrucciones. -->
+    <header class="encabezado">
+      <h1>Selector de asientos</h1>
+      <p class="bajada">Plano de butacas en SVG, sin dependencias. Filas numeradas, mesas y zona general en el mismo plano.</p>
+      <p class="pista" id="pista">Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer</p>
+      <p class="aforo" id="aforo"></p>
+    </header>
 
-  <p class="nota">
-    El plano se genera desde <code>butacas</code>, una lista plana con una fila por butaca:
-    identificador, fila, número, coordenadas, zona, grupo y estado. Es lo que devolvería tu
-    servidor. El SVG se produce al mostrar; nunca se almacena un SVG.
-  </p>
+    <div class="lienzo">
+      <svg id="plano" role="group" aria-label="Plano de butacas" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- El trazo se declara UNA vez y se instancia con <use>: el path no se
+               repite por butaca. -->
+          <symbol id="butaca" viewBox="0 0 24 24">
+            <path d="M4 18v3h3v-3h10v3h3v-6H4zm15-8h3v5h-3V10zM2 10h3v5H2V10zm3-6h14c1.1 0 2 .9 2 2v2H3V6c0-1.1.9-2 2-2z"></path>
+          </symbol>
+          <!-- Marcas de estado. Van en el hueco entre respaldo y asiento (y 8 a 15),
+               que el icono deja vacio, y comparten viewBox con la butaca. -->
+          <symbol id="marca-elegida" viewBox="0 0 24 24"><path d="M8.5 11.5l2.5 2.5 4.5-4.5"></path></symbol>
+          <symbol id="marca-ocupada" viewBox="0 0 24 24"><path d="M9.5 9.5l5 4.5M14.5 9.5l-5 4.5"></path></symbol>
+          <symbol id="marca-bloqueada" viewBox="0 0 24 24"><path d="M8.5 11.75h7"></path></symbol>
+          <!-- Cuadros de la pista de baile: una celda del plano, en cuatro cuadros. -->
+          <pattern id="cuadros-pista" width="12" height="12" patternUnits="userSpaceOnUse">
+            <rect width="12" height="12" fill="#2a2638"></rect>
+            <rect width="6" height="6" fill="#383250"></rect>
+            <rect x="6" y="6" width="6" height="6" fill="#383250"></rect>
+          </pattern>
+        </defs>
+        <g id="muebles"></g>
+        <g id="butacas"></g>
+        <g id="subtitulos"></g>        <!-- nombres en el borde de verticales y bandas interiores, sobre las butacas -->
+        <g id="seleccion-banda"></g>   <!-- solo en modo editor: el contorno de la banda seleccionada -->
+        <g id="piezas"></g>   <!-- solo en modo editor: una zona movible por mesa -->
+        <g id="rotulo-seleccion"></g>   <!-- el nombre de la banda seleccionada, encima de todo -->
+      </svg>
+    </div>
 
-  <p class="nota">
-    El selector de tipo de sala está aquí para comparar recintos: mixtos con distintos pasillos,
-    solo filas o solo mesas. En una aplicación real el recinto es fijo: se elegiría y editaría una
-    vez al crear su plano, y quedaría guardado en él. No sería un control para quien compra.
-  </p>
+    <!-- Linea de estado fija al pie del plano: los mensajes se ven aunque el plano sea alto. -->
+    <div class="barra-estado">
+      <p class="aviso" id="aviso" role="status"></p>
+      <p class="estado" id="estado" role="status"></p>
+    </div>
+
+    <footer class="pie">
+      <p class="resumen" aria-live="polite">
+        Seleccionadas: <strong id="cuenta">0</strong> · Total <strong id="total">$0.00</strong>
+        <span id="vacio">— ninguna butaca seleccionada.</span>
+      </p>
+      <ul id="detalle"></ul>
+
+      <p class="nota">
+        El plano se genera desde <code>butacas</code>, una lista plana con una fila por butaca:
+        identificador, fila, número, coordenadas, zona, grupo y estado. Es lo que devolvería tu
+        servidor. El SVG se produce al mostrar; nunca se almacena un SVG.
+      </p>
+      
+      <p class="nota">
+        El selector de tipo de sala está aquí para comparar recintos: mixtos con distintos pasillos,
+        solo filas o solo mesas. En una aplicación real el recinto es fijo: se elegiría y editaría una
+        vez al crear su plano, y quedaría guardado en él. No sería un control para quien compra.
+      </p>
+    </footer>
+  </main>
+
+  <!-- Lateral derecho, solo en modo editor: guardar el mapa y el diseño de la sala. -->
+  <aside class="lateral lateral-configuracion" id="lateral-configuracion" aria-label="Configuración del plano" hidden>
+    <details class="grupo" open>
+      <summary>Mapa</summary>
+      <!-- Guardar el diseño con nombre, en el navegador o como JSON. -->
+      <div class="herramientas" id="herramientas-mapa" role="group" aria-label="Guardar mapa" hidden>
+        <label class="campo" for="nombre-mapa">Nombre del mapa</label>
+        <input type="text" id="nombre-mapa" maxlength="80" autocomplete="off" placeholder="Ej.: Salón Jardín, boda">
+        <button type="button" id="guardar-mapa">Guardar</button>
+        <button type="button" id="eliminar-mapa" hidden>Eliminar mapa</button>
+        <button type="button" id="exportar-mapa">Exportar JSON</button>
+        <button type="button" id="importar-mapa">Importar JSON</button>
+        <input type="file" id="archivo-mapa" accept=".json,application/json" hidden>
+      </div>
+    </details>
+    <!-- La sala como columnas, zonas y lista de bandas, de arriba abajo. -->
+    <section class="bandas" id="panel-bandas" aria-labelledby="titulo-bandas" hidden>
+      <h2 class="solo-lector" id="titulo-bandas">Diseño de la sala</h2>
+      <details class="grupo" open>
+        <summary>Columnas</summary>
+        <!-- En un lienzo (mapa en blanco) no hay pasillos: solo el ancho. -->
+          <div class="columnas-sala" id="columnas-lienzo" hidden>
+            <label for="ancho-lienzo">Ancho del lienzo</label>
+            <input type="text" id="ancho-lienzo" inputmode="numeric" autocomplete="off"
+                   placeholder="20" aria-describedby="ayuda-lienzo">
+            <button type="button" id="aplicar-ancho-lienzo">Aplicar</button>
+          </div>
+          <p class="pista" id="ayuda-lienzo" hidden>
+            Columnas del lienzo, de 1 a 40. No hay pasillos fijos: el pasillo es el hueco que dejas entre
+            piezas. El alto es la suma de las bandas: cambia el alto de cada espacio con − y +.
+          </p>
+          <div class="columnas-sala" id="columnas-plantilla">
+            <label for="bloques-sala">Butacas por bloque</label>
+            <input type="text" id="bloques-sala" inputmode="numeric" autocomplete="off"
+                   placeholder="4, 6, 4" aria-describedby="ayuda-columnas">
+            <label for="pasillos-sala">Anchos de pasillo</label>
+            <input type="text" id="pasillos-sala" inputmode="numeric" autocomplete="off"
+                   placeholder="1, 1" aria-describedby="ayuda-columnas">
+            <button type="button" id="aplicar-columnas">Aplicar</button>
+          </div>
+          <p class="pista" id="ayuda-columnas">
+            Cada número es un bloque de butacas; entre bloques va un pasillo. «4, 6, 4» con pasillos
+            «1, 2» son 14 butacas por fila y 17 columnas. Sin anchos, cada pasillo mide 1 columna.
+          </p>
+      </details>
+      <details class="grupo" open>
+        <summary>Zonas y precios</summary>
+        <ol class="zonas" id="lista-zonas"></ol>
+          <div class="herramientas">
+            <button type="button" id="agregar-zona">Agregar zona</button>
+          </div>
+          <p class="pista">
+            Precio por lugar, en pesos. Las filas, bloques y butacas sueltas eligen su zona; los lugares de
+            mesa son siempre de la zona de mesas. Una zona en uso no se puede eliminar.
+          </p>
+      </details>
+      <details class="grupo" open>
+        <summary>Bandas</summary>
+        <ol id="lista-bandas"></ol>
+          <div class="herramientas">
+            <button type="button" id="agregar-banda-filas">Agregar banda de filas</button>
+            <button type="button" id="agregar-banda-mesas">Agregar zona de mesas</button>
+            <button type="button" id="agregar-espacio">Agregar espacio</button>
+            <button type="button" id="agregar-division">Agregar franja con bandas verticales</button>
+          </div>
+      </details>
+    </section>
+  </aside>
 
 </div>
 
@@ -2784,11 +2865,7 @@ function inicioDeFila(item, clase) {
   campo.dataset.op = 'nombre';
   campo.dataset.banda = item.id;
   nombre.appendChild(campo);
-  const marca = document.createElement('span');
-  marca.className = 'banda-seleccionada';
-  marca.textContent = '● seleccionada';
-  marca.setAttribute('aria-hidden', 'true');   // aria-current ya lo dice
-  li.append(muestra, nombre, marca, detalle);
+  li.append(muestra, nombre, detalle);   // la seleccionada: borde de su color y aria-current
   return { li, detalle };
 }
 
@@ -3801,6 +3878,58 @@ document.getElementById('nombre-pieza').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') aplicarNombreDeBloque();
 });
 
+// ---------------------------------------------------------------------------
+// Tooltip de los botones de icono. Un solo elemento con position: fixed, para que el
+// scroll de los laterales no lo recorte. Se muestra al pasar el raton (tambien sobre
+// botones desactivados, que no reciben eventos: por eso elementFromPoint) o al llegar
+// con Tab. Va a la derecha del control; si no cabe, a la izquierda o debajo.
+// ---------------------------------------------------------------------------
+const tooltip = document.createElement('div');
+tooltip.className = 'tooltip';
+tooltip.setAttribute('aria-hidden', 'true');   // el nombre ya esta en aria-label
+tooltip.hidden = true;
+document.body.appendChild(tooltip);
+let conTooltip = null;
+
+function mostrarTooltip(elemento) {
+  conTooltip = elemento;
+  tooltip.textContent = elemento.dataset.tooltip;
+  tooltip.hidden = false;
+  const r = elemento.getBoundingClientRect();
+  const t = tooltip.getBoundingClientRect();
+  let x = r.right + 8, y = r.top + (r.height - t.height) / 2;
+  if (x + t.width > innerWidth - 4) x = r.left - 8 - t.width;
+  if (x < 4) {
+    x = Math.min(Math.max(4, r.left + (r.width - t.width) / 2), innerWidth - t.width - 4);
+    y = r.bottom + 6;
+  }
+  tooltip.style.left = Math.round(x) + 'px';
+  tooltip.style.top = Math.round(Math.max(4, y)) + 'px';
+}
+function ocultarTooltip() {
+  conTooltip = null;
+  tooltip.hidden = true;
+}
+document.addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'touch') return;
+  const debajo = document.elementFromPoint(e.clientX, e.clientY);
+  const elemento = debajo && debajo.closest('[data-tooltip]');
+  if (elemento === conTooltip) return;
+  if (elemento) mostrarTooltip(elemento);
+  else ocultarTooltip();
+});
+document.addEventListener('focusin', (e) => {
+  const elemento = e.target.closest('[data-tooltip]');
+  if (elemento && e.target.matches(':focus-visible')) mostrarTooltip(elemento);
+  else ocultarTooltip();
+});
+document.addEventListener('focusout', ocultarTooltip);
+document.addEventListener('pointerdown', ocultarTooltip);
+document.addEventListener('scroll', ocultarTooltip, true);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') ocultarTooltip();
+});
+
 // Ctrl+D (Cmd+D en Mac) duplica lo seleccionado: la banda o, si no, la pieza activa.
 // En los campos de texto de fuera del panel de bandas no se intercepta.
 document.addEventListener('keydown', (e) => {
@@ -3849,6 +3978,8 @@ function cambiarModo(nuevo) {
   document.getElementById('modo-vista').setAttribute('aria-pressed', String(!editando));
   document.getElementById('modo-editor').setAttribute('aria-pressed', String(editando));
   document.getElementById('herramientas-editor').hidden = !editando;
+  document.getElementById('lateral-configuracion').hidden = !editando;
+  document.getElementById('app').classList.toggle('editando', editando);
   document.getElementById('panel-bandas').hidden = !editando;
   document.getElementById('herramientas-mapa').hidden = !editando;
   document.getElementById('pista').textContent = PISTAS[modo];

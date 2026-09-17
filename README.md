@@ -40,7 +40,8 @@ El total y los avisos están en regiones vivas, así que un lector de pantalla l
 
 **Barras con iconos.** Los botones del editor, del zoom y de agregar piezas son iconos de 32 × 32 px.
 Cada uno tiene su nombre completo en `aria-label` (el que anuncia un lector de pantalla) y un
-**tooltip visible** con el nombre y el atajo (*«Girar 90° · R»*) al pasar el ratón o al llegar con Tab.
+**tooltip visible** con el nombre y el atajo (*«Girar 90° · R»*) al pasar el ratón (también sobre un
+botón desactivado) o al llegar con Tab; Esc lo oculta.
 No se usa `title`, que algunos lectores anuncian en lugar del nombre. Previsualizar y Editar plano
 llevan icono y texto. Tipo de sala, Zona y Nombre tienen un icono como etiqueta visible y su texto
 para lectores de pantalla. Los iconos de mesas, bloques y formas se dibujan como en el plano.
@@ -214,7 +215,8 @@ la muestra de color de cada una.
 - **En el panel:** tocar cualquier control de una banda la selecciona.
 
 La seleccionada se ve con un **contorno continuo y grueso del color de su capa**, y su fila del panel
-marcada con *● seleccionada* (y `aria-current`), así que no depende solo del color. **Su nombre pasa
+con el campo del nombre en negrita y con borde de ese color (y `aria-current`), así que no depende
+solo del color. **Su nombre pasa
 al borde inferior**, en una etiqueta rellena del color de la capa y **por encima de todo** (butacas,
 mesas y piezas), para que no se pierda; mientras, su subtítulo de siempre se oculta (salvo la
 etiqueta que comparte con su vertical). Seleccionar una banda deselecciona la pieza activa, y al revés.
@@ -275,9 +277,37 @@ cambiar cualquier banda (alto, ancho, orden o eliminarla), la pieza conserva su 
 región, así que viaja con ella en vertical y en horizontal. Si la región se elimina, la pieza se
 quita (el escenario nunca). Como siempre, si algo deja de caber, el cambio no se aplica.
 
+## Disposición de la página
+
+```
+┌──────────────┬─────────────────────────────┬──────────────────┐
+│ Herramientas │ Encabezado: título, bajada, │ Configuración    │
+│ (sticky)     │ instrucciones y aforo       │ (sticky, solo    │
+│              ├─────────────────────────────┤  en el editor)   │
+│ Leyenda      │                             │                  │
+│ Vista        │           PLANO             │ Mapa             │
+│ Agregar      │                             │ Columnas         │
+│ Pieza        ├─────────────────────────────┤ Zonas y precios  │
+│ Sala         │ Línea de estado (fija)      │ Bandas           │
+│              │ Pie: resumen y notas        │                  │
+└──────────────┴─────────────────────────────┴──────────────────┘
+```
+
+- **Lateral izquierdo (herramientas):** leyenda; vista (Previsualizar / Editar plano, zoom y tipo de
+  sala); y en el editor, *Agregar*, *Pieza seleccionada* (acciones, zona y nombre) y *Sala* (bloquear
+  butacas, escenario, restablecer). Los iconos van en rejilla y su tooltip sale a la derecha.
+- **Lateral derecho (configuración), solo en el editor:** *Mapa* (nombre, guardar, exportar,
+  importar), *Columnas*, *Zonas y precios* y *Bandas*.
+- **Sticky:** los dos laterales se quedan fijos al hacer scroll y tienen su propio scroll si no caben.
+  Cada grupo se pliega haciendo clic en su título.
+- **Línea de estado:** los mensajes («Mesa 3 movida…») y avisos van en una línea fija al pie del
+  plano, así que se ven aunque el plano sea alto.
+- **Pantallas de menos de 900 px:** sin laterales; las herramientas pasan arriba del plano y la
+  configuración, debajo.
+
 ## Modo editor
 
-Dos modos, con los botones de arriba del plano:
+Dos modos, con los botones del grupo *Vista* del lateral:
 
 - **Previsualizar**: el plano como lo ve quien compra. Se eligen butacas.
 - **Editar plano**: se colocan, transforman, agregan y eliminan mesas. Las butacas no se eligen.
