@@ -1488,9 +1488,9 @@ function eliminarBanda(plano, sala, id) {
   return reanclarPiezas(plano, nuevo, sala.ancho, sala.ancho, idsDentro(u.item));
 }
 
-// Agrega al final de la sala una banda de filas, una zona de mesas o una franja
-// dividida en dos verticales (mesas a la izquierda, filas a la derecha). Los ids
-// no reutilizan los de bandas eliminadas.
+// Agrega al final de la sala una banda de filas, una zona de mesas, un espacio o una
+// franja dividida en dos verticales, cada una con un espacio vacio de 4 filas (sin
+// butacas: se llena despues). Los ids no reutilizan los de bandas eliminadas.
 function agregarBanda(plano, tipo, anchoSala = ANCHO_SALA) {
   const nuevo = copiarPlano(plano);
   const nuevoId = () => 'banda' + nuevo.siguienteBanda++;
@@ -1506,8 +1506,8 @@ function nuevaBanda(tipo, nuevoId, anchoSala) {
   return {
     id, tipo: 'division',
     verticales: [
-      { id: nuevoId(), ancho: Math.max(1, Math.floor(anchoSala / 2)), bandas: [nuevaBanda('mesas', nuevoId)] },
-      { id: nuevoId(), bandas: [nuevaBanda('filas', nuevoId)] },
+      { id: nuevoId(), ancho: Math.max(1, Math.floor(anchoSala / 2)), bandas: [nuevaBanda('espacio', nuevoId)] },
+      { id: nuevoId(), bandas: [nuevaBanda('espacio', nuevoId)] },
     ],
   };
 }
@@ -2743,7 +2743,7 @@ document.getElementById('ancho-lienzo').addEventListener('keydown', (e) => {
 
 document.getElementById('agregar-division').addEventListener('click', () => {
   aplicarBandas(agregarBanda(planoEditable(), 'division', salaActual.ancho),
-                'Franja con dos bandas verticales agregada al final: zona de mesas a la izquierda y filas a la derecha.');
+                'Franja con dos bandas verticales agregada al final, cada una con un espacio vacío de 4 filas.');
 });
 
 // ---------------------------------------------------------------------------
