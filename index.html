@@ -444,6 +444,12 @@ const BUTACAS_POR_BLOQUE = 40;
 const PASILLO_MAXIMO = 10;
 const ANCHO_MAXIMO = 60;
 const esEntero = (v, min, max) => Number.isInteger(v) && v >= min && v <= max;
+// Aforo maximo de un plano: mas butacas hacen lento el dibujo (varios nodos SVG por
+// butaca). Lo aplican validarMapa y el editor, asi que ningun mapa guardado lo supera.
+const BUTACAS_MAXIMAS = 20000;
+const numeroConMiles = (n) => n.toLocaleString('es-MX');
+const motivoDeAforo = (n) => (n > BUTACAS_MAXIMAS
+  ? 'la sala tendría ' + numeroConMiles(n) + ' butacas y el máximo es ' + numeroConMiles(BUTACAS_MAXIMAS) : null);
 
 // null si la distribucion es valida, o el motivo en palabras.
 function motivoDistribucion(d) {
@@ -1063,9 +1069,13 @@ function cambiarTamanoEscenario(e, dAncho, dAlto) {
   return { ...e, ancho, alto };
 }
 
-// Letra de la fila n (0 = A). Despues de la Z siguen AA, AB...
-const letraDeFila = (n) => (n < LETRAS.length ? LETRAS[n]
-  : LETRAS[Math.floor(n / LETRAS.length) - 1] + LETRAS[n % LETRAS.length]);
+// Letra de la fila n (0 = A). Despues de la Z siguen AA, AB... ZZ, AAA: como las
+// columnas de una hoja de calculo, sin limite de filas.
+function letraDeFila(n) {
+  let letras = '';
+  for (let k = n + 1; k > 0; k = Math.floor((k - 1) / LETRAS.length)) letras = LETRAS[(k - 1) % LETRAS.length] + letras;
+  return letras;
+}
 
 // La etiqueta visible de las butacas de fila, como en un teatro:
 // - Las que miran al escenario de frente (las bandas siempre; los bloques cuyo giro
@@ -1093,17 +1103,32 @@ function numerarFilas() {
     // Por distancia al escenario; a igual distancia, primero la de arriba.
     // Sin escenario todas estan a distancia infinita (Infinity - Infinity es NaN): manda la altura.
     const distancia = (y) => Math.abs(y + 0.5 - centro);
-    const alturas = [...new Set(lista.map((b) => b.y))].sort((a, c) => distancia(a) - distancia(c) || a - c);
+    // Agrupadas una sola vez por altura: filtrar la lista por cada altura era cuadratico
+    // (6 s con 100.000 butacas). push conserva el orden y sort es estable.
+    const porAltura = new Map();
+    for (const b of lista) {
+      if (!porAltura.has(b.y)) porAltura.set(b.y, []);
+      porAltura.get(b.y).push(b);
+    }
+    const alturas = [...porAltura.keys()].sort((a, c) => distancia(a) - distancia(c) || a - c);
     alturas.forEach((y, i) => {
-      lista.filter((b) => b.y === y).sort((a, c) => a.x - c.x).forEach((b, k) => {
+      porAltura.get(y).sort((a, c) => a.x - c.x).forEach((b, k) => {
         Object.assign(b, { fila: letraDeFila(i), numero: k + 1, seccion: zonas[zona].nombre });
       });
     });
   }
-  // Los rotulos de las bandas muestran la letra de su zona.
+  // Los rotulos de las bandas muestran la letra de su zona: la de la primera butaca de
+  // cada (banda, fila local), indexada una vez. Map anidado y no clave de texto, para
+  // no confundir una butaca sin banda (undefined) con una banda llamada «undefined».
+  const primeraDeFila = new Map();
+  for (const b of butacas) {
+    if (!primeraDeFila.has(b.banda)) primeraDeFila.set(b.banda, new Map());
+    const filas = primeraDeFila.get(b.banda);
+    if (!filas.has(b.filaLocal)) filas.set(b.filaLocal, b);
+  }
   for (const m of muebles) {
     if (m.tipo !== 'rotulo') continue;
-    const butaca = butacas.find((b) => b.banda === m.banda && b.filaLocal === m.filaLocal);
+    const butaca = primeraDeFila.get(m.banda)?.get(m.filaLocal);
     if (butaca) m.texto = butaca.fila;
   }
 }
@@ -1897,7 +1922,10 @@ function validarMapa(dato) {
     siguienteButaca: Math.max(esEntero(dato.siguienteButaca, 1, 1e6) ? dato.siguienteButaca : 1,
                               maximo(idsButaca, /^B(\d+)$/) + 1),
   };
-  const fallo = primeraPiezaQueNoCabe(generarPlano(definicionDeMapa(mapa)));
+  const sala = generarPlano(definicionDeMapa(mapa));
+  const aforo = motivoDeAforo(butacas.length);
+  if (aforo) return { errores: [aforo] };
+  const fallo = primeraPiezaQueNoCabe(sala);
   if (fallo) return { errores: [fallo.pieza.nombre + ' ' + fallo.motivo] };
   return { mapa };
 }
@@ -2543,7 +2571,7 @@ function aplicarBandas(resultado, mensaje) {
   const previo = planos[tipoActual];
   planos[tipoActual] = resultado;
   salaActual = generarPlano(tipoActual, resultado);
-  const errorDeBandas = salaActual.errorDeBandas;
+  const errorDeBandas = salaActual.errorDeBandas || motivoDeAforo(butacas.length);
   const fallo = !errorDeBandas && primeraPiezaQueNoCabe(salaActual);
   if (errorDeBandas || fallo) {
     planos[tipoActual] = previo;
@@ -3406,6 +3434,20 @@ function eliminarMesa(id) {
   regenerar(m.nombre + ' eliminad' + genero(m) + '.');
 }
 
+// Aplica un cambio de piezas y lo deshace si la sala pasa del aforo maximo. Las
+// piezas se editan sobre el plano guardado, asi que se copia antes.
+function conTopeDeAforo(cambio) {
+  const previo = planos[tipoActual] && copiarPlano(planos[tipoActual]);
+  const activa = mesaActiva;
+  cambio();
+  const motivo = motivoDeAforo(butacas.length);
+  if (!motivo) return;
+  if (previo) planos[tipoActual] = previo;
+  else delete planos[tipoActual];
+  mesaActiva = activa;   // la seleccion vuelve a la pieza de antes (no a una copia deshecha)
+  regenerar('No se pudo: ' + motivo + '.');
+}
+
 function ejecutarAccion(accion, id = mesaActiva) {
   const pieza = id && piezaPorId(id);
   if (!pieza) return;
@@ -3416,8 +3458,8 @@ function ejecutarAccion(accion, id = mesaActiva) {
     return;
   }
   if (accion === 'eliminar') eliminarMesa(id);
-  else if (accion === 'duplicar') duplicarPiezaPorId(id);
-  else transformarMesa(id, accion);
+  else if (accion === 'duplicar') conTopeDeAforo(() => duplicarPiezaPorId(id));
+  else conTopeDeAforo(() => transformarMesa(id, accion));
 }
 
 // Zona de un bloque o butaca suelta, y nombre de un bloque o forma.
@@ -3580,11 +3622,11 @@ document.getElementById('alternar-escenario').addEventListener('click', () => {
            escenario.ancho + ' × ' + escenario.alto + ' celdas. Arrástralo o cambia su tamaño.');
   asegurarVisible({ x: escenario.x, y: escenario.y, w: escenario.ancho, h: escenario.alto });
 });
-document.getElementById('agregar-lados').addEventListener('click', () => agregarMesaNueva('lados'));
-document.getElementById('agregar-cruz').addEventListener('click', () => agregarMesaNueva('cruz'));
-document.getElementById('agregar-barra').addEventListener('click', () => agregarMesaNueva('barra'));
-document.getElementById('agregar-bloque').addEventListener('click', agregarBloqueNuevo);
-document.getElementById('agregar-butaca').addEventListener('click', agregarButacaNueva);
+document.getElementById('agregar-lados').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('lados')));
+document.getElementById('agregar-cruz').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('cruz')));
+document.getElementById('agregar-barra').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('barra')));
+document.getElementById('agregar-bloque').addEventListener('click', () => conTopeDeAforo(agregarBloqueNuevo));
+document.getElementById('agregar-butaca').addEventListener('click', () => conTopeDeAforo(agregarButacaNueva));
 document.getElementById('agregar-pista').addEventListener('click', () => agregarFormaNueva('pista'));
 document.getElementById('agregar-forma-barra').addEventListener('click', () => agregarFormaNueva('barra'));
 for (const boton of botonesDeMesa()) {
@@ -3761,7 +3803,15 @@ function exportarMapa() {
   anunciar('Mapa «' + nombre + '» exportado como ' + enlace.download + '.');
 }
 
+// Un mapa real ocupa pocos KB: un archivo mayor no se lee, para no bloquear la pestaña
+// leyendo y validando algo que no es un mapa razonable.
+const ARCHIVO_MAXIMO = 1024 * 1024;
+
 async function importarMapa(archivo) {
+  if (archivo.size > ARCHIVO_MAXIMO) {
+    anunciar('No se pudo importar ' + archivo.name + ': es demasiado grande para ser un mapa (pasa de 1 MB).');
+    return;
+  }
   let dato;
   try {
     dato = JSON.parse(await archivo.text());

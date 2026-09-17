@@ -173,6 +173,14 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - **Un mapa guarda diseño, no venta:** pasillos, bandas, mesas, bloqueadas y contadores. Nunca la
   ocupación ni la selección. La ocupación de ejemplo vive en las plantillas (`ocupadas`,
   `mesasOcupadas`).
+- **Aforo máximo: `BUTACAS_MAXIMAS` (20.000).** `validarMapa` lo comprueba con `motivoDeAforo`;
+  `aplicarBandas` lo trata como un error de bandas y revierte; los cambios de piezas (agregar,
+  transformar, duplicar) pasan por `conTopeDeAforo`, que copia el plano antes y lo restaura si se
+  pasa. Si añades una acción que agrega butacas, envuélvela igual. `importarMapa` rechaza archivos de
+  más de `ARCHIVO_MAXIMO` (1 MB) antes de leerlos.
+- **Nada de recorridos anidados sobre todas las butacas** en lo que corre al generar (`generarPlano`,
+  `numerarFilas`): agrupa antes con un `Map`. Filtrar la lista dentro de otro recorrido llegó a tardar
+  6 s con 100.000 butacas; hay una prueba de tiempo que lo detecta.
 - **Todo mapa que entra se valida** con `validarMapa`, venga de un archivo o de `localStorage`: se
   descartan los campos desconocidos y se comprueba que las mesas quepan. No se confía en el archivo.
 - **Las bloqueadas son una lista de ids** (`plano.bloqueadas`). `bloqueadasAlFinal` de las plantillas
@@ -186,6 +194,10 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 
 ## Trampas conocidas
 
+- **`letraDeFila` no tiene límite:** sigue AA… ZZ, AAA como las columnas de una hoja de cálculo. La
+  versión anterior daba «undefined» a partir de la fila 703 de una zona (hay prueba).
+- **`String.replace` con un texto de reemplazo interpreta `$'`, `$&`…:** en scripts que editan el
+  código, pasa una función (`t.replace(de, () => a)`) o el reemplazo puede duplicar medio archivo.
 - **`setPointerCapture` retargetea los eventos al `<svg>`:** la butaca o la mesa agarrada se anota
   en `pointerdown`; en `pointerup`, `e.target` ya es el `<svg>`.
 - **El atributo `hidden` no funciona en elementos SVG:** usa la clase `.oculta`.
@@ -263,4 +275,5 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - Desplazar el plano solo al arrastrar una mesa hasta el borde con zoom.
 - Decidir si una mesa con lugares ocupados se puede mover, acortar o eliminar (hoy sí, con aviso).
 - Más formas: escenario secundario, cabina de DJ, columna.
+- Comprobar que las piezas caben sin recalcular las celdas por cada pieza (cuadrático con muchas piezas).
 - Zonas pintadas con su precio.
