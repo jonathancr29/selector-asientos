@@ -34,7 +34,7 @@ check, new_label, arrow_upward, arrow_downward, arrow_back, arrow_forward y
 add_column_right.
 
 Los iconos de mesas, bloque de filas, butaca suelta, pista de baile, filas,
-cabeceras, un solo lado, bloquear butacas, escenario, guias de fila y los de
+cabeceras, un solo lado, mesa redonda, bloquear butacas, escenario, guias de fila y los de
 agregar banda de filas, zona de mesas, espacio y franja dividida son obra
 original, salvo la butaca que reutilizan, que es el "event_seat" citado arriba.
 
