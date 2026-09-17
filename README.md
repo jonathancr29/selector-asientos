@@ -38,6 +38,13 @@ Se recorre el plano con las flechas, que se mueven por coordenadas, y se elige c
 El `tabindex` es móvil: hay un solo alto de tabulación para todo el plano, no uno por butaca.
 El total y los avisos están en regiones vivas, así que un lector de pantalla los anuncia al cambiar.
 
+**Barras con iconos.** Los botones del editor, del zoom y de agregar piezas son iconos de 32 × 32 px.
+Cada uno tiene su nombre completo en `aria-label` (el que anuncia un lector de pantalla) y un
+**tooltip visible** con el nombre y el atajo (*«Girar 90° · R»*) al pasar el ratón o al llegar con Tab.
+No se usa `title`, que algunos lectores anuncian en lugar del nombre. Previsualizar y Editar plano
+llevan icono y texto. Tipo de sala, Zona y Nombre tienen un icono como etiqueta visible y su texto
+para lectores de pantalla. Los iconos de mesas, bloques y formas se dibujan como en el plano.
+
 El estado no depende solo del color: la butaca seleccionada lleva una palomita, la ocupada un aspa
 y la bloqueada una raya. Todos los estados contrastan al menos 3:1 con el fondo del plano, y la
 leyenda reutiliza los mismos `<symbol>` que el dibujo.
@@ -312,8 +319,8 @@ En una mesa de dos lados, 0° y 180° ocupan las mismas celdas; lo que cambia es
 
 ### Qué se puede hacer
 
-Al elegir una mesa (clic o Tab), se activan los botones de la barra del editor. Cada acción tiene
-atajo de teclado sobre la mesa enfocada:
+Al elegir una mesa (clic o Tab), se activan los botones de la barra del editor. Son iconos: el nombre
+de la columna «Botón» es el de su tooltip. Cada acción tiene atajo de teclado sobre la mesa enfocada:
 
 | Acción | Botón | Tecla |
 |---|---|---|
