@@ -4,9 +4,24 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Franja nueva sin filas
+## Sin publicar — Zonas y precios editables
 
-Rama `claude/franja-vacia`.
+Rama `claude/zonas-editables`.
+
+### Añadido
+
+- **Zonas y precios** en el panel del editor: cambiar el nombre y el precio de cada zona, agregar
+  zonas nuevas (hasta 20) y eliminar las que no se usan. La zona de mesas siempre existe.
+- Cada sala o mapa guarda sus zonas: Guardar, Exportar e Importar JSON las incluyen, y
+  `validarMapa` las comprueba (ids, nombres sin repetir, precios, zona de mesas y al menos una para
+  filas). Los mapas sin zonas usan Luneta, Mesas y General.
+- Los selectores de zona de bandas, bloques y butacas sueltas muestran todas las zonas de filas.
+- Pruebas de editar, agregar y eliminar zonas, lectura de precios y mapas con zonas (98 en total).
+
+## 2026-09-17 — PR #13: franja nueva sin filas
+
+[PR #13](https://github.com/jonathancr29/selector-asientos/pull/13), fusionado en `main` con el
+commit `7534c94`.
 
 ### Cambiado
 
