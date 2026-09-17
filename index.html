@@ -3141,17 +3141,77 @@ let vista, vistaInicial;
 // rotulos de fila), y la sala entera aunque una zona de mesas este vacia, mas
 // una celda de margen. Cada elemento ocupa una celda
 // salvo que declare w y h.
+//
+// Si el plano tiene un alto fijo (Previsualizar: ajustado a la pantalla), el encuadre
+// se ensancha o se alarga para tener la misma proporcion que el <svg>, centrado. Asi
+// el viewBox llena el elemento sin franjas y cada pixel sigue siendo una misma
+// distancia en unidades, que es lo que suponen enUnidades y el arrastre.
 function calcularEncuadre() {
   const cajas = [...butacas, ...muebles, { x: 0, y: 0, w: salaActual.ancho + 1, h: salaActual.alto }];
   const margen = PASO;
-  const x = Math.min(...cajas.map((c) => c.x)) * PASO - margen;
-  const y = Math.min(...cajas.map((c) => c.y)) * PASO - margen;
-  const w = Math.max(...cajas.map((c) => c.x + (c.w || 1))) * PASO + margen - x;
-  const h = Math.max(...cajas.map((c) => c.y + (c.h || 1))) * PASO + margen - y;
+  let x = Math.min(...cajas.map((c) => c.x)) * PASO - margen;
+  let y = Math.min(...cajas.map((c) => c.y)) * PASO - margen;
+  let w = Math.max(...cajas.map((c) => c.x + (c.w || 1))) * PASO + margen - x;
+  let h = Math.max(...cajas.map((c) => c.y + (c.h || 1))) * PASO + margen - y;
+  const caja = svg.getBoundingClientRect();
+  if (svg.style.height && caja.width > 0 && caja.height > 0) {
+    const proporcion = caja.width / caja.height;
+    if (w / h < proporcion) {
+      const ancho = h * proporcion;
+      x -= (ancho - w) / 2;
+      w = ancho;
+    } else {
+      const alto = w / proporcion;
+      y -= (alto - h) / 2;
+      h = alto;
+    }
+  }
   vistaInicial = { x, y, w, h };
   vista = { ...vistaInicial };
   aplicarVista();
 }
+
+// En Previsualizar, el plano ocupa el alto que queda en la pantalla bajo el encabezado,
+// dejando la linea de estado a la vista: cualquier sala se ve completa sin scroll. En
+// el editor, y en pantallas angostas (donde las herramientas van arriba), el alto sale
+// del ancho, como siempre.
+const ALTO_MINIMO_DEL_PLANO = 320;
+function ajustarAltoDelPlano() {
+  if (modo !== 'vista' || innerWidth <= 900) {
+    svg.style.height = '';
+    return;
+  }
+  const lienzo = svg.parentElement;
+  const arriba = lienzo.getBoundingClientRect().top + scrollY;
+  const barra = document.querySelector('.barra-estado');
+  const estiloBarra = getComputedStyle(barra);
+  const bordes = lienzo.offsetHeight - lienzo.clientHeight;
+  const abajo = barra.offsetHeight + parseFloat(estiloBarra.marginTop) + bordes +
+                parseFloat(getComputedStyle(document.getElementById('app')).paddingBottom);
+  svg.style.height = Math.max(ALTO_MINIMO_DEL_PLANO, Math.floor(innerHeight - arriba - abajo)) + 'px';
+}
+
+// Vuelve a ajustar el alto y el encuadre. Con 'conservarZoom', mantiene el centro y la
+// proporcion de zoom de la vista actual (al cambiar el tamaño de la ventana).
+function reencuadrar(conservarZoom = false) {
+  const anterior = conservarZoom && vista && vistaInicial
+    ? { factor: vista.w / vistaInicial.w, cx: vista.x + vista.w / 2, cy: vista.y + vista.h / 2 } : null;
+  ajustarAltoDelPlano();
+  calcularEncuadre();
+  if (anterior && anterior.factor < 0.999) {
+    vista.w = vistaInicial.w * anterior.factor;
+    vista.h = vistaInicial.h * anterior.factor;
+    vista.x = anterior.cx - vista.w / 2;
+    vista.y = anterior.cy - vista.h / 2;
+    aplicarVista();
+  }
+}
+
+let esperaDeTamano = null;
+addEventListener('resize', () => {
+  clearTimeout(esperaDeTamano);
+  esperaDeTamano = setTimeout(() => reencuadrar(true), 120);
+});
 
 function aplicarVista() {
   // La vista no puede salir del encuadre inicial: el plano nunca se pierde de
@@ -3994,6 +4054,8 @@ function cambiarModo(nuevo) {
   anunciar(editando
     ? 'Modo editor: arrastra las mesas para colocarlas.'
     : 'Previsualización: el plano como lo verá quien compra.');
+  // La pista y los laterales cambian el hueco del plano: se vuelve a ajustar.
+  reencuadrar();
 }
 
 // Colocando mesas, las butacas son decorado y el lector de pantalla recorre mesas.
@@ -4147,10 +4209,10 @@ function redibujar(tipo) {
   dibujarTodo();
   anunciar('');
 
-  calcularEncuadre();
   actualizarResumen();
   actualizarAforo(salaActual);
   actualizarControles();
+  reencuadrar();
   document.getElementById('aviso').textContent = [
     frase(ausentes, 'esta sala no tiene', 'esta sala no tiene'),
     frase(noLibres, 'en esta sala no está libre', 'en esta sala no están libres'),

@@ -302,8 +302,11 @@ quita (el escenario nunca). Como siempre, si algo deja de caber, el cambio no se
   Cada grupo se pliega haciendo clic en su título.
 - **Línea de estado:** los mensajes («Mesa 3 movida…») y avisos van en una línea fija al pie del
   plano, así que se ven aunque el plano sea alto.
+- **Previsualizar ajustado a la pantalla:** el plano ocupa el alto que queda bajo el encabezado, con la
+  línea de estado a la vista, así que cualquier sala se ve completa sin scroll. Al cambiar el tamaño
+  de la ventana se reajusta y conserva el zoom. En el editor el alto sale del ancho, como antes.
 - **Pantallas de menos de 900 px:** sin laterales; las herramientas pasan arriba del plano y la
-  configuración, debajo.
+  configuración, debajo. El plano no se ajusta al alto.
 
 ## Modo editor
 

@@ -181,6 +181,10 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
     de la rejilla). Los controles se buscan por id: moverlos de grupo no rompe el script.
   - **`.subtitulo` es del SVG** (nombres de banda, letra de 4 px). El subtítulo de la página es
     `.bajada`; no reutilices la clase o la letra se queda diminuta (pasó).
+  - **El viewBox tiene la proporción del `<svg>`:** en Previsualizar, `ajustarAltoDelPlano` fija el alto
+    del plano y `calcularEncuadre` ensancha o alarga el encuadre hasta esa proporción. Si no, el
+    navegador dejaría franjas y `enUnidades` (clics, arrastre, zoom) apuntaría a otra celda. Tras
+    cambiar algo que mueva el hueco del plano (modo, encabezado, ventana), llama a `reencuadrar`.
   - `#estado` y `#aviso` son `role="status"`; el resumen es `aria-live`.
   - El estado no depende solo del color (palomita, aspa, raya; sombra roja con contorno discontinuo).
   - Los colores de estado contrastan al menos 3:1 con el fondo del plano.
