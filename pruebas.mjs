@@ -1784,38 +1784,38 @@ const dibujoDeRedonda = (api, lugares, giro = 0) => {
   return rejilla.map((f) => f.join(''));
 };
 
-test('una mesa redonda reparte sus lugares en el anillo, mirando al centro', () => {
+test('una mesa redonda pone sus sillas por parejas en cada lado, sin usar las esquinas', () => {
   const api = cargar();
-  // 8 lugares: tablero de 1 celda, huella 3 × 3, y las esquinas a 45 grados.
+  // 8 lugares: tablero de 2 celdas, huella 4 × 4 y dos sillas por lado.
   const ocho = api.geometriaMesaRedonda({ lugares: 8 });
   assert.deepEqual([ocho.ancho, ocho.alto, ocho.tablero, ocho.redonda],
-    [3, 3, null, { dx: 1, dy: 1, diametro: 1 }]);
-  assert.deepEqual(dibujoDeRedonda(api, 8), ['812', '7●3', '654']);
-  assert.deepEqual(ocho.lugares.map((l) => l.mira), [0, 45, 90, 135, 180, 225, 270, 315]);
-  // Dos lugares: uno enfrente del otro.
+    [4, 4, null, { dx: 1, dy: 1, diametro: 2 }]);
+  assert.deepEqual(dibujoDeRedonda(api, 8), ['.12.', '8●●3', '7●●4', '.65.']);
+  assert.deepEqual(ocho.lugares.map((l) => l.mira), [0, 0, 90, 90, 180, 180, 270, 270]);
+  // Dos lugares: uno enfrente del otro. Cuatro: en cruz.
   assert.deepEqual(dibujoDeRedonda(api, 2), ['.1.', '.●.', '.2.']);
-  assert.deepEqual(api.geometriaMesaRedonda({ lugares: 2 }).lugares.map((l) => l.mira), [0, 180]);
-  // Cuatro: en cruz, como la mesa «cruz».
   assert.deepEqual(dibujoDeRedonda(api, 4), ['.1.', '4●2', '.3.']);
-  // El tablero crece con los lugares: 9 a 12 en 4 × 4; 13 a 16 en 5 × 5.
-  assert.deepEqual([api.geometriaMesaRedonda({ lugares: 9 }).ancho, api.geometriaMesaRedonda({ lugares: 12 }).ancho,
-                    api.geometriaMesaRedonda({ lugares: 13 }).ancho, api.geometriaMesaRedonda({ lugares: 16 }).ancho],
-    [4, 4, 5, 5]);
-  // 12 lugares llenan el anillo de 4 × 4 (12 celdas), mirando al centro desde cada una.
-  const doce = api.geometriaMesaRedonda({ lugares: 12 });
-  assert.equal(new Set(doce.lugares.map((l) => l.dx + ',' + l.dy)).size, 12);
-  assert.ok(doce.lugares.every((l) => l.dx === 0 || l.dy === 0 || l.dx === 3 || l.dy === 3));
-  assert.deepEqual(doce.lugares[0], { lado: '1', dx: 2, dy: 0, mira: 0 });
-  // Girar mueve los lugares alrededor del anillo; la huella es cuadrada y no se mueve.
+  // Diez: la mesa crece a 5 × 5, con tres sillas arriba y abajo y dos a cada lado.
+  assert.deepEqual(dibujoDeRedonda(api, 10), ['.123.', '0●●●4', '9●●●5', '.●●●.', '.876.']
+    .map((f) => f.replace('0', '10')));
+  // El tablero crece con los lugares: cuatro sillas por lado como maximo.
+  assert.deepEqual([2, 4, 6, 8, 10, 12, 14, 16].map((n) => api.geometriaMesaRedonda({ lugares: n }).redonda.diametro),
+    [1, 1, 2, 2, 3, 3, 4, 4]);
+  // Los lugares son pares: un numero impar se redondea.
+  assert.equal(api.geometriaMesaRedonda({ lugares: 9 }).lugares.length, 10);
+  assert.equal(api.geometriaMesaRedonda({ lugares: 1 }).lugares.length, 2);
+  assert.equal(api.geometriaMesaRedonda({ lugares: 40 }).lugares.length, 16);
+  // Girar lleva las sillas al lado siguiente; la huella es cuadrada y no se mueve.
   assert.deepEqual(dibujoDeRedonda(api, 4, 90), ['.4.', '3●1', '.2.']);
   assert.deepEqual(api.geometriaMesaRedonda({ lugares: 4, giro: 90 }).lugares.map((l) => l.mira), [90, 180, 270, 0]);
-  assert.deepEqual(api.huellaDe(redonda('M1', 2, 2, 16)).ancho, 5);
+  assert.deepEqual(api.huellaDe(redonda('M1', 2, 2, 16)).ancho, 6);
 });
 
-test('quitar y poner lugares en una mesa redonda, con sus topes', () => {
+test('quitar y poner lugares en una mesa redonda, de dos en dos y con sus topes', () => {
   const api = cargar();
-  assert.equal(api.cambiarLugaresRedonda(redonda('M1', 1, 1, 8), 1).lugares, 9);
-  assert.equal(api.cambiarLugaresRedonda(redonda('M1', 1, 1, 8), -1).lugares, 7);
+  assert.equal(api.cambiarLugaresRedonda(redonda('M1', 1, 1, 8), 1).lugares, 10);
+  assert.equal(api.cambiarLugaresRedonda(redonda('M1', 1, 1, 8), -1).lugares, 6);
+  assert.equal(api.cambiarLugaresRedonda(redonda('M1', 1, 1, 14), 1).lugares, 16);
   assert.equal(api.cambiarLugaresRedonda(redonda('M1', 1, 1, 2), -1), null);
   assert.equal(api.cambiarLugaresRedonda(redonda('M1', 1, 1, 16), 1), null);
   // La esquina de la huella no se mueve al cambiar los lugares.
@@ -1826,44 +1826,47 @@ test('quitar y poner lugares en una mesa redonda, con sus topes', () => {
 test('una mesa redonda ocupa toda su huella y respeta los pasillos', () => {
   const api = cargar();
   const { plano } = planoDe(api, 'mixta-ambos');
-  const conRedonda = { ...plano, mesas: [...plano.mesas, redonda('M7', 2, 14, 8)], siguiente: 8 };
+  // Huella de 4 × 4: cabe en el bloque de columnas 1 a 4 de «ambos».
+  const conRedonda = { ...plano, mesas: [...plano.mesas, redonda('M7', 1, 14, 8)], siguiente: 8 };
   const sala = api.generarPlano('mixta-ambos', conRedonda);
   assert.equal(api.primeraPiezaQueNoCabe(sala), null);
   const lugares = api.butacas.filter((b) => b.grupo && b.grupo.id === 'M7');
   assert.deepEqual(lugares.map((b) => b.id).slice(0, 3), ['M7-1', 'M7-2', 'M7-3']);
   assert.deepEqual([lugares.length, lugares[0].zona, etiquetaDeLugarDeMesa(api, 'M7-1')], [8, 'mesas', 'Mesa 7, lugar 1']);
   const ocupadas = api.celdasOcupadas('M7');
-  // El tablero y los ocho lugares: 9 celdas de la sala.
-  assert.equal(api.motivoNoCabe(sala, ocupadas, redonda('M9', 2, 14, 8)), null);
-  assert.equal(api.motivoNoCabe(sala, api.celdasOcupadas(null), redonda('M9', 2, 14, 8)), 'choca con Mesa 7');
+  // Sus propias celdas no le estorban; las de otra mesa si.
+  assert.equal(api.motivoNoCabe(sala, ocupadas, redonda('M9', 1, 14, 8)), null);
+  assert.equal(api.motivoNoCabe(sala, api.celdasOcupadas(null), redonda('M9', 1, 14, 8)), 'choca con Mesa 7');
   // Como cualquier mesa, no puede caer sobre un pasillo (la columna 5 de «ambos»).
-  assert.equal(api.motivoNoCabe(sala, api.celdasOcupadas(null), redonda('M9', 8, 14, 8)), 'cae sobre un pasillo');
+  assert.equal(api.motivoNoCabe(sala, api.celdasOcupadas(null), redonda('M9', 7, 14, 8)), 'cae sobre un pasillo');
   // El tablero se dibuja como un mueble redondo con su diametro.
   assert.deepEqual(api.muebles.filter((m) => m.tipo === 'mesa-redonda').map((m) => [m.mesa, m.x, m.y, m.w]),
-    [['M7', 3, 15, 1]]);
+    [['M7', 2, 15, 2]]);
 });
 
 test('las mesas redondas se guardan en el plano y en el mapa, y se validan al leer', () => {
   const api = cargar();
   const { plano } = planoDe(api, 'mixta-ambos');
-  const conRedonda = { ...plano, mesas: [...plano.mesas, redonda('M7', 1, 14, 10, 90)], siguiente: 8 };
+  const conRedonda = { ...plano, mesas: [...plano.mesas, redonda('M7', 1, 14, 8, 90)], siguiente: 8 };
   const sala = api.generarPlano('mixta-ambos', conRedonda);
   const extraido = api.planoDesdeSala('mixta-ambos', sala);
-  assert.deepEqual(extraido.mesas.at(-1), redonda('M7', 1, 14, 10, 90));
+  assert.deepEqual(extraido.mesas.at(-1), redonda('M7', 1, 14, 8, 90));
   assert.deepEqual(extraido.mesas[0], { id: 'M1', x: 2, y: 7, largo: 2, cabeceras: false, unLado: false, giro: 0 });
   const mapa = JSON.parse(JSON.stringify(api.mapaDesdePlano('Redondas', extraido, null)));
   const { mapa: leido, errores } = api.validarMapa(mapa);
   assert.equal(errores, undefined);
-  assert.deepEqual(leido.mesas.at(-1), redonda('M7', 1, 14, 10, 90));
+  assert.deepEqual(leido.mesas.at(-1), redonda('M7', 1, 14, 8, 90));
   api.generarPlano(api.registrarMapa(leido));
-  assert.equal(api.butacas.filter((b) => b.grupo && b.grupo.id === 'M7').length, 10);
+  assert.equal(api.butacas.filter((b) => b.grupo && b.grupo.id === 'M7').length, 8);
 
   const con = (cambio) => { const m = JSON.parse(JSON.stringify(mapa)); cambio(m); return api.validarMapa(m).errores || []; };
-  assert.ok(con((m) => { m.mesas.at(-1).lugares = 1; }).includes('M7: los lugares de una mesa redonda deben ser de 2 a 16'));
-  assert.ok(con((m) => { m.mesas.at(-1).lugares = 17; }).includes('M7: los lugares de una mesa redonda deben ser de 2 a 16'));
+  const fueraDeRango = 'M7: los lugares de una mesa redonda deben ser un número par de 2 a 16';
+  assert.ok(con((m) => { m.mesas.at(-1).lugares = 1; }).includes(fueraDeRango));
+  assert.ok(con((m) => { m.mesas.at(-1).lugares = 18; }).includes(fueraDeRango));
+  assert.ok(con((m) => { m.mesas.at(-1).lugares = 9; }).includes(fueraDeRango));
   assert.ok(con((m) => { m.mesas.at(-1).giro = 45; }).includes('M7: giro no válido'));
   assert.ok(con((m) => { m.mesas[0].tipo = 'ovalada'; }).includes('M1: tipo de mesa desconocido'));
   // Duplicar una redonda copia sus lugares.
   const copia = api.duplicarPieza(conRedonda, sala, 'M7');
-  assert.deepEqual(copia.mesas.at(-1), redonda('M8', 6, 14, 10, 90));
+  assert.deepEqual(copia.mesas.at(-1), redonda('M8', 6, 14, 8, 90));
 });
