@@ -355,33 +355,40 @@ ninguna otra mesa puede ocuparlas.
 
 ### Mesas redondas
 
-Una mesa redonda se describe con **una sola medida: cuántos lugares tiene**, de 2 a 16. El diámetro
-del tablero sale de ahí, porque los lugares van en el anillo de celdas que lo rodea:
+Una mesa redonda se describe con **una sola medida: cuántos lugares tiene**, siempre un número **par**
+de 2 a 16. Las sillas van **por parejas en cada lado**, sin usar las esquinas, así que caben tantas
+por lado como mida el tablero y el diámetro sale de los lugares:
 
-| Lugares | Tablero | Huella | Celdas del anillo |
+| Lugares | Tablero | Huella | Por lado (arriba · lados · abajo) |
 |---|---|---|---|
-| 2 a 8 | 1 celda | 3 × 3 | 8 |
-| 9 a 12 | 2 celdas | 4 × 4 | 12 |
-| 13 a 16 | 3 celdas | 5 × 5 | 16 |
+| 2 | 1 celda | 3 × 3 | 1 · 0 · 1 |
+| 4 | 1 celda | 3 × 3 | 1 · 1 · 1 |
+| 6 | 2 celdas | 4 × 4 | 2 · 1 · 2 |
+| 8 | 2 celdas | 4 × 4 | 2 · 2 · 2 |
+| 10 | 3 celdas | 5 × 5 | 3 · 2 · 3 |
+| 12 | 3 celdas | 5 × 5 | 3 · 3 · 3 |
+| 14 | 4 celdas | 6 × 6 | 4 · 3 · 4 |
+| 16 | 4 celdas | 6 × 6 | 4 · 4 · 4 |
 
 ```
- ▣ ▣ ▣        Mesa redonda de 8 lugares.
- ▣ ● ▣        ● es el tablero; cada ▣ mira al centro,
- ▣ ▣ ▣        y los de las esquinas van a 45°.
+ .  ▣ ▣  .      Mesa redonda de 8 lugares: dos sillas por lado,
+ ▣  ● ●  ▣      ninguna en las esquinas y todas mirando al centro
+ ▣  ● ●  ▣      (arriba hacia abajo, a los lados hacia dentro).
+ .  ▣ ▣  .
 ```
 
-- **Reparto:** los lugares se colocan por ángulo desde arriba, en sentido horario, y cada uno toma la
-  celda libre del anillo más cercana a su ángulo. Con 6 lugares en un anillo de 8 celdas quedan
-  simétricos.
-- **Lugares:** **Alargar** y **Acortar** (+ y −) ponen y quitan un lugar, de 2 a 16. Al pasar de 8 a 9
-  o de 12 a 13, el tablero crece y la esquina de la huella se queda donde está.
-- **Girar (R):** mueve el reparto alrededor del anillo. Con 8 lugares en 8 celdas no cambia nada; con
-  6, sí.
+- **Reparto:** las sillas se reparten de cuatro en cuatro, una por lado; si sobran dos, van arriba y
+  abajo. En cada lado quedan centradas.
+- **Lugares:** **Alargar** y **Acortar** (+ y −) ponen y quitan **dos** sillas de una vez, de 2 a 16.
+  Al pasar de 4 a 6, de 8 a 10 o de 12 a 14, el tablero crece; la esquina de la huella no se mueve.
+- **Girar (R):** lleva las sillas al lado siguiente. Con el mismo número de sillas en los cuatro
+  lados no cambia nada visible; con 10, sí.
 - **Huella cuadrada:** tablero más una celda por lado, así que cabe, choca, se arrastra y se duplica
   igual que las demás mesas. Como toda mesa, no puede caer sobre un pasillo.
 - **Ids por posición:** `M7-1`, `M7-2`… empezando arriba y en sentido horario. Girar o mover la mesa
   no los cambia, así que la selección y las bloqueadas se conservan.
-- **Marcas de estado:** en los lugares en diagonal se quedan derechas, que se leen mejor.
+- **Marcas de estado:** solo giran en las sillas a 90° y 270°; en cualquier otro ángulo se quedan
+  derechas, que se leen mejor.
 - **Dato:** `{ id, tipo: 'redonda', x, y, lugares, giro }`. Las mesas rectangulares no llevan `tipo`,
   así que los mapas anteriores se siguen leyendo.
 
@@ -412,7 +419,7 @@ de la columna «Botón» es el de su tooltip. Cada acción tiene atajo de teclad
 | Duplicar junto al original | Duplicar | Ctrl+D |
 | Eliminar | Eliminar | Supr |
 | Agregar una mesa nueva | Lados / Cruz / Un lado / Mesa redonda | — |
-| Lugares de una mesa redonda | Alargar / Acortar | + / − |
+| Lugares de una mesa redonda (de dos en dos) | Alargar / Acortar | + / − |
 | Agregar un bloque de filas | Bloque de filas | — |
 | Butacas por fila de un bloque | Alargar / Acortar | + / − |
 | Filas de un bloque | + fila / − fila | ] / [ |

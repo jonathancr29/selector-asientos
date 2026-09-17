@@ -1127,58 +1127,53 @@ const LUGARES_MINIMOS_REDONDA = 2;
 const LUGARES_MAXIMOS_REDONDA = 16;
 const esMesaRedonda = (pieza) => Boolean(pieza) && pieza.tipo === 'redonda';
 const esMesa = (pieza) => !pieza.tipo || esMesaRedonda(pieza);
-const diametroRedonda = (lugares) => (lugares <= 8 ? 1 : lugares <= 12 ? 2 : 3);
+// El diametro crece con los lugares: caben 'diametro' sillas por lado, sin usar las
+// esquinas, asi que el diametro es los lugares entre cuatro, redondeando hacia arriba.
+const diametroRedonda = (lugares) => Math.max(1, Math.ceil(lugares / 4));
 
-// Las celdas del anillo, en sentido horario y empezando por la de arriba mas
-// cercana al centro.
-function anilloDeCeldas(lado) {
-  const celdas = [];
-  for (let dx = 0; dx < lado; dx++) celdas.push({ dx, dy: 0 });
-  for (let dy = 1; dy < lado; dy++) celdas.push({ dx: lado - 1, dy });
-  for (let dx = lado - 2; dx >= 0; dx--) celdas.push({ dx, dy: lado - 1 });
-  for (let dy = lado - 2; dy >= 1; dy--) celdas.push({ dx: 0, dy });
-  const centro = (lado - 1) / 2;
-  const angulo = ({ dx, dy }) => (Math.atan2(dx - centro, centro - dy) + 2 * Math.PI) % (2 * Math.PI);
-  const arriba = celdas.reduce((mejor, c, i) => (angulo(c) < angulo(celdas[mejor]) ? i : mejor), 0);
-  return [...celdas.slice(arriba), ...celdas.slice(0, arriba)];
+// Cuantas sillas van en cada lado. Se reparten de cuatro en cuatro y, si sobran dos,
+// van arriba y abajo: 8 lugares son dos por lado; 10, tres arriba, tres abajo y dos a
+// cada costado.
+function ladosDeRedonda(lugares) {
+  const porLado = Math.floor(lugares / 4);
+  const sobran = lugares - porLado * 4;   // 0 o 2, porque los lugares son pares
+  return { arriba: porLado + (sobran ? 1 : 0), derecha: porLado,
+           abajo: porLado + (sobran ? 1 : 0), izquierda: porLado };
 }
 
-// Cuanto girar el icono de una celda para que mire al centro, en pasos de 45
-// grados. El icono sin girar mira hacia abajo.
-function miraAlCentro(dx, dy, centro) {
-  // El icono sin girar mira hacia abajo: mira = angulo tal que R(mira)·(0,1) apunta al centro.
-  const grados = Math.round((Math.atan2(dx - centro, centro - dy) * 180) / Math.PI / 45) * 45;
-  return (grados + 360) % 360;
-}
+// Las sillas de un lado, centradas en el: con 2 sillas en un lado de 3 celdas, quedan
+// en las dos primeras.
+const arranqueDeLado = (cuantas, diametro) => Math.floor((diametro - cuantas) / 2);
 
+// Las sillas miran al centro: la de arriba hacia abajo (0), la derecha hacia la
+// izquierda (90), la de abajo hacia arriba (180) y la izquierda hacia la derecha (270).
 function geometriaMesaRedonda({ lugares, giro = 0 }) {
-  const cuantos = Math.min(Math.max(lugares, LUGARES_MINIMOS_REDONDA), LUGARES_MAXIMOS_REDONDA);
+  const cuantos = lugaresValidosRedonda(lugares);
   const diametro = diametroRedonda(cuantos);
   const lado = diametro + 2;
-  const centro = (lado - 1) / 2;
-  const anillo = anilloDeCeldas(lado);
-  const angulo = ({ dx, dy }) => (Math.atan2(dx - centro, centro - dy) + 2 * Math.PI) % (2 * Math.PI);
-  // Cada lugar toma la celda libre del anillo mas cercana a su angulo ideal.
-  const libres = anillo.map((c) => ({ ...c, angulo: angulo(c) }));
-  const lugaresColocados = [];
-  for (let i = 0; i < cuantos; i++) {
-    const ideal = (2 * Math.PI * i) / cuantos;
-    const distancia = (a) => Math.min(Math.abs(a - ideal), 2 * Math.PI - Math.abs(a - ideal));
-    let mejor = 0;
-    libres.forEach((c, k) => { if (distancia(c.angulo) < distancia(libres[mejor].angulo)) mejor = k; });
-    const celda = libres.splice(mejor, 1)[0];
-    lugaresColocados.push({ lado: String(i + 1), dx: celda.dx, dy: celda.dy,
-                            mira: miraAlCentro(celda.dx, celda.dy, centro) });
-  }
-  let geo = { ancho: lado, alto: lado, tablero: null, lugares: lugaresColocados };
+  const { arriba, derecha, abajo, izquierda } = ladosDeRedonda(cuantos);
+  const celdas = [];
+  // En sentido horario: arriba de izquierda a derecha, la derecha de arriba abajo,
+  // abajo de derecha a izquierda y la izquierda de abajo arriba.
+  for (let i = 0; i < arriba; i++) celdas.push({ dx: 1 + arranqueDeLado(arriba, diametro) + i, dy: 0, mira: 0 });
+  for (let i = 0; i < derecha; i++) celdas.push({ dx: lado - 1, dy: 1 + arranqueDeLado(derecha, diametro) + i, mira: 90 });
+  for (let i = abajo - 1; i >= 0; i--) celdas.push({ dx: 1 + arranqueDeLado(abajo, diametro) + i, dy: lado - 1, mira: 180 });
+  for (let i = izquierda - 1; i >= 0; i--) celdas.push({ dx: 0, dy: 1 + arranqueDeLado(izquierda, diametro) + i, mira: 270 });
+  let geo = { ancho: lado, alto: lado, tablero: null,
+              lugares: celdas.map((celda, i) => ({ lado: String(i + 1), ...celda })) };
   for (let g = 0; g < giro; g += 90) geo = girar90(geo);
   // El tablero redondo: centrado en la huella, con el diametro en celdas.
   return { ...geo, redonda: { dx: 1, dy: 1, diametro } };
 }
 
-// Quita o pone lugares a una mesa redonda; la esquina de la huella no se mueve.
-function cambiarLugaresRedonda(mesa, delta) {
-  const lugares = mesa.lugares + delta;
+// Los lugares de una mesa redonda son pares, de LUGARES_MINIMOS a LUGARES_MAXIMOS.
+const lugaresValidosRedonda = (lugares) =>
+  Math.min(Math.max(Math.round(lugares / 2) * 2, LUGARES_MINIMOS_REDONDA), LUGARES_MAXIMOS_REDONDA);
+
+// Quita o pone sillas a una mesa redonda, de dos en dos ('pasos' de 1 o -1): dos
+// sillas mas o dos menos. La esquina de la huella no se mueve.
+function cambiarLugaresRedonda(mesa, pasos) {
+  const lugares = mesa.lugares + pasos * 2;
   if (lugares < LUGARES_MINIMOS_REDONDA || lugares > LUGARES_MAXIMOS_REDONDA) return null;
   return { ...mesa, lugares };
 }
@@ -2196,9 +2191,9 @@ function validarMapa(dato) {
     if (![0, 90, 180, 270].includes(m.giro)) errores.push(m.id + ': giro no válido');
     // Mesa redonda: solo lugares. Las rectangulares no llevan 'tipo' (mapas anteriores).
     if (m.tipo === 'redonda') {
-      if (!esEntero(m.lugares, LUGARES_MINIMOS_REDONDA, LUGARES_MAXIMOS_REDONDA)) {
-        errores.push(m.id + ': los lugares de una mesa redonda deben ser de ' + LUGARES_MINIMOS_REDONDA +
-                     ' a ' + LUGARES_MAXIMOS_REDONDA);
+      if (!esEntero(m.lugares, LUGARES_MINIMOS_REDONDA, LUGARES_MAXIMOS_REDONDA) || m.lugares % 2) {
+        errores.push(m.id + ': los lugares de una mesa redonda deben ser un número par de ' +
+                     LUGARES_MINIMOS_REDONDA + ' a ' + LUGARES_MAXIMOS_REDONDA);
       }
       return { id: m.id, tipo: 'redonda', x: m.x, y: m.y, lugares: m.lugares, giro: m.giro };
     }
@@ -3944,13 +3939,13 @@ const TRANSFORMACIONES = {
                  : esBloqueFilas(c) ? cambiarAncho(c, 1) : cambiarLargo(c, 1)),
                tope: (m) => (esMesaRedonda(m) ? 'el máximo de lugares (' + LUGARES_MAXIMOS_REDONDA + ')' : 'el largo máximo'),
                fallo: (m) => 'No se pudo alargar ' + m.nombre,
-               hecho: (m) => (esMesaRedonda(m) ? 'con un lugar más' : 'alargad' + genero(m)) },
+               hecho: (m) => (esMesaRedonda(m) ? 'con dos lugares más' : 'alargad' + genero(m)) },
   acortar:   { calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, -1, 0) : esForma(c) ? cambiarTamanoForma(c, -1, 0)
                  : esMesaRedonda(c) ? cambiarLugaresRedonda(c, -1)
                  : esBloqueFilas(c) ? cambiarAncho(c, -1) : cambiarLargo(c, -1)),
                tope: (m) => (esMesaRedonda(m) ? 'el mínimo de lugares (' + LUGARES_MINIMOS_REDONDA + ')' : 'el largo mínimo'),
                fallo: (m) => 'No se pudo acortar ' + m.nombre,
-               hecho: (m) => (esMesaRedonda(m) ? 'con un lugar menos' : 'acortad' + genero(m)) },
+               hecho: (m) => (esMesaRedonda(m) ? 'con dos lugares menos' : 'acortad' + genero(m)) },
   masfilas:  { calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, 0, 1)
                  : esForma(c) ? cambiarTamanoForma(c, 0, 1) : cambiarFilasBloque(c, 1)),
                tope: 'el máximo de filas',

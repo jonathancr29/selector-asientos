@@ -4,9 +4,22 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Mesas redondas
+## Sin publicar — Sillas de la mesa redonda por parejas
 
-Rama `claude/mesa-redonda`.
+Rama `claude/redonda-parejas`.
+
+### Cambiado
+
+- **Las sillas de una mesa redonda van por parejas en cada lado**, sin usar las esquinas: la de 8
+  lugares es un tablero de 2 celdas con dos sillas por lado (huella 4 × 4).
+- **Los lugares crecen de dos en dos** (2 a 16, siempre par) y el tablero crece con ellos: 1 celda
+  hasta 4 lugares, 2 hasta 8, 3 hasta 12 y 4 hasta 16.
+- Los mapas validan que los lugares de una mesa redonda sean pares.
+
+## 2026-09-17 — PR #21: mesas redondas
+
+[PR #21](https://github.com/jonathancr29/selector-asientos/pull/21), fusionado en `main` con el
+commit `cb522fd`.
 
 ### Añadido
 

@@ -105,8 +105,10 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   la columna `numero`.
 - **Una mesa nunca queda partida por un pasillo**, ni en el reparto automático ni en el editor:
   `motivoNoCabe` lo decide con `esMesa` (sin `tipo`, o `tipo: 'redonda'`).
-- **Una mesa redonda solo guarda sus lugares** (2 a 16); el diámetro sale de `diametroRedonda` y los
-  lugares se reparten por ángulo en el anillo (`geometriaMesaRedonda`). Su huella es cuadrada, así que
+- **Una mesa redonda solo guarda sus lugares** (un número par de 2 a 16); el diámetro sale de
+  `diametroRedonda` (los lugares entre cuatro, hacia arriba) y las sillas van por parejas en cada
+  lado, sin esquinas (`ladosDeRedonda`, `geometriaMesaRedonda`). `cambiarLugaresRedonda` recibe pasos
+  de ±1 que valen dos sillas. Su huella es cuadrada, así que
   todo lo demás (caber, arrastrar, duplicar, bandas) funciona sin casos especiales. `configDeMesa`
   guarda la forma que toque.
 - **Las columnas son de toda la sala:** `plano.distribucion` (o la del mapa, o la de la plantilla).
