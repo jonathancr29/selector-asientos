@@ -4,9 +4,20 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Rendimiento de la numeración y topes
+## Sin publicar — Franja nueva sin filas
 
-Rama `claude/rendimiento-y-topes`. Sale de una revisión externa del commit `159ef63`.
+Rama `claude/franja-vacia`.
+
+### Cambiado
+
+- **«Agregar franja con bandas verticales»** crea dos verticales con un espacio vacío de 4 filas cada
+  una, sin butacas. Antes traía una zona de mesas a la izquierda y dos filas de General a la derecha.
+- Prueba de la franja nueva (94 en total).
+
+## 2026-09-17 — PR #12: rendimiento de la numeración y topes
+
+[PR #12](https://github.com/jonathancr29/selector-asientos/pull/12), fusionado en `main` con el
+commit `bab9619`. Sale de una revisión externa del commit `159ef63`.
 
 ### Corregido
 

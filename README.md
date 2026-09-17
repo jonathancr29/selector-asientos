@@ -231,6 +231,10 @@ vertical apila bandas horizontales de filas o zonas de mesas:
 - **Rótulos de fila:** a la izquierda si la banda empieza en el borde izquierdo de la sala, a la
   derecha si acaba en el derecho; en una vertical del medio no se dibujan.
 
+**Una franja nueva** (botón «Agregar franja con bandas verticales») trae dos verticales de medio
+ancho, cada una con un **espacio vacío** de 4 filas y sin butacas: sus subtítulos dicen *Vertical 1 ·
+Espacio 2* y *Vertical 2 · Espacio 3*. Se llenan después con piezas, o agregando filas o mesas dentro.
+
 En el panel, cada franja muestra sus verticales anidadas, y cada vertical, sus bandas:
 
 - **Franja:** «+ vertical» (hasta 6; la última se parte por la mitad), ↑ / ↓ y Eliminar.

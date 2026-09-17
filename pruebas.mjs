@@ -1087,7 +1087,10 @@ test('el mapa guarda el escenario, y sin el se usa el de la franja', () => {
 //                 · banda4 vertical derecha (el resto) con banda5 filas de General (2)
 const conFranja = (api, preparar = (plano) => plano) => {
   const { plano } = planoDe(api, 'mixta-ambos');
-  const nuevo = preparar(api.agregarBanda(plano, 'division', 14));
+  const franja = { id: 'banda1', tipo: 'division', verticales: [
+    { id: 'banda2', ancho: 7, bandas: [{ id: 'banda3', tipo: 'mesas', alto: 4 }] },
+    { id: 'banda4', bandas: [{ id: 'banda5', tipo: 'filas', zona: 'general', filas: 2 }] }] };
+  const nuevo = preparar({ ...plano, bandas: [...plano.bandas, franja], siguienteBanda: 6 });
   return { plano: nuevo, sala: api.generarPlano('mixta-ambos', nuevo) };
 };
 const mesa = (id, x, y) => ({ id, x, y, largo: 2, cabeceras: false, unLado: false, giro: 0 });
@@ -1420,9 +1423,9 @@ test('los espacios: alto propio, nombre numerado, guias de fila y dentro de vert
   const conEspacio = api.agregarBandaEnVertical(franja, api.generarPlano('mapa-en-blanco', franja), 'banda5', 'espacio');
   const guiada = api.alternarGuias(conEspacio, 'banda7');
   const salaGuiada = api.generarPlano('mapa-en-blanco', guiada);
-  assert.deepEqual(api.ubicar(salaGuiada.bandas, 'banda7').item.nombre, 'Espacio 3');
+  assert.deepEqual(api.ubicar(salaGuiada.bandas, 'banda7').item.nombre, 'Espacio 5');
   assert.deepEqual(api.muebles.filter((m) => m.tipo === 'guia' && m.banda === 'banda7').map((m) => [m.texto, m.x, m.y]),
-    [['A', 21, 16], ['B', 21, 17], ['C', 21, 18], ['D', 21, 19]]);
+    [['A', 21, 18], ['B', 21, 19], ['C', 21, 20], ['D', 21, 21]]);
 });
 
 test('sin escenario las filas miran arriba y la fila A es la de mas arriba de cada zona', () => {
@@ -1651,4 +1654,19 @@ test('un mapa no puede pasar de 20.000 butacas', () => {
     ['la sala tendría 21,840 butacas y el máximo es 20,000']);
   assert.equal(api.motivoDeAforo(20000), null);
   assert.equal(api.motivoDeAforo(20001), 'la sala tendría 20,001 butacas y el máximo es 20,000');
+});
+
+test('una franja nueva trae dos verticales con un espacio vacio cada una, sin butacas', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const nuevo = api.agregarBanda(plano, 'division', 14);
+  assert.deepEqual(nuevo.bandas.at(-1), { id: 'banda1', tipo: 'division', verticales: [
+    { id: 'banda2', ancho: 7, bandas: [{ id: 'banda3', tipo: 'espacio', alto: 4 }] },
+    { id: 'banda4', bandas: [{ id: 'banda5', tipo: 'espacio', alto: 4 }] }] });
+  assert.equal(nuevo.siguienteBanda, 6);
+  const antes = api.butacas.length;
+  const sala = api.generarPlano('mixta-ambos', nuevo);
+  assert.deepEqual([api.butacas.length, sala.bandas.at(-1).alto, sala.alto], [antes, 4, 24]);
+  assert.deepEqual(api.muebles.filter((m) => m.tipo === 'subtitulo' && m.lugar === 'borde').map((m) => m.texto),
+    ['Vertical 1 · Espacio', 'Vertical 2 · Espacio 2']);
 });
