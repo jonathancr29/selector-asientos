@@ -4,9 +4,21 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Menús laterales
+## Sin publicar — Previsualizar ajustado a la pantalla
 
-Rama `claude/menus-laterales`.
+Rama `claude/previsualizar-ajustado`.
+
+### Cambiado
+
+- **En Previsualizar, el plano se ve completo:** ocupa el alto de la pantalla bajo el encabezado, con
+  la línea de estado a la vista, y el encuadre toma la proporción del plano para no dejar franjas.
+- **Al cambiar el tamaño de la ventana** se reajusta conservando el zoom y el centro.
+- En el editor y en pantallas de menos de 900 px, el alto sigue saliendo del ancho.
+
+## 2026-09-17 — PR #16: menús laterales
+
+[PR #16](https://github.com/jonathancr29/selector-asientos/pull/16), fusionado en `main` con el
+commit `14c8de4`.
 
 ### Cambiado
 
