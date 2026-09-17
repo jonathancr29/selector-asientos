@@ -4,9 +4,33 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Iconos en las barras
+## Sin publicar — Menús laterales
 
-Rama `claude/iconos-barra`.
+Rama `claude/menus-laterales`.
+
+### Cambiado
+
+- **Lateral izquierdo sticky** con las herramientas: leyenda, vista (modo, zoom, tipo de sala) y, en
+  el editor, agregar, pieza seleccionada y sala. Iconos en rejilla.
+- **Lateral derecho sticky**, solo en el editor, con la configuración: mapa, columnas, zonas y
+  precios, y bandas.
+- **Grupos plegables** en los dos laterales.
+- **Encabezado** con título, bajada, instrucciones y aforo; **pie** con el resumen y las notas.
+- **Línea de estado fija** al pie del plano para los mensajes y avisos.
+- **Pantallas de menos de 900 px:** herramientas arriba del plano y configuración debajo, sin sticky.
+- **Tooltip** colocado por el script con `position: fixed`, a la derecha del icono: no lo recorta el
+  scroll del lateral y también sale sobre botones desactivados.
+- **Bandas:** la fila seleccionada ya no dice «● seleccionada»; la marca el borde de su color.
+
+### Corregido
+
+- **El subtítulo de la página se veía diminuto:** compartía la clase `.subtitulo` con los nombres de
+  banda del SVG (letra de 4 px). Ahora es `.bajada`.
+
+## 2026-09-17 — PR #15: iconos en las barras
+
+[PR #15](https://github.com/jonathancr29/selector-asientos/pull/15), fusionado en `main` con el
+commit `4ff01df`.
 
 ### Cambiado
 

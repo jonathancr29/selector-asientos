@@ -167,12 +167,20 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   - Nada de `title` en botones: algunos lectores lo anuncian en su lugar. Los atajos van en
     `aria-keyshortcuts`.
   - **Botones de icono:** clase `icono`, `aria-label` con el nombre y `data-tooltip` con el nombre y el
-    atajo, que el CSS muestra al pasar el ratón o con `:focus-visible`. El icono es
+    atajo. Lo muestra el script en un único `.tooltip` con `position: fixed` (al pasar el ratón,
+    buscando con `elementFromPoint` para que funcione en botones desactivados, o con `:focus-visible`),
+    porque un `::after` quedaría recortado por el scroll de los laterales. El icono es
     `<svg class="ico" aria-hidden="true"><use href="#i-..."></use></svg>`; los `<symbol>` están en el
     `<svg class="sprite">` del principio del `<body>`. Si un botón cambia de función (escenario), cambia
     `aria-label`, `data-tooltip` y el `href` del `<use>`, nunca `textContent` (borraría el icono).
     Un icono de Material Symbols nuevo se añade a `NOTICE`.
   - `tabindex` móvil: una sola parada de tabulación por capa, gestionada en `focusin`.
+  - **Disposición:** `<div class="app">` con `<aside class="lateral">` de herramientas, `<main>`
+    (encabezado, plano, `.barra-estado` sticky y pie) y `<aside id="lateral-configuracion">`, que
+    `cambiarModo` muestra solo en el editor junto con la clase `editando` de `#app` (tercera columna
+    de la rejilla). Los controles se buscan por id: moverlos de grupo no rompe el script.
+  - **`.subtitulo` es del SVG** (nombres de banda, letra de 4 px). El subtítulo de la página es
+    `.bajada`; no reutilices la clase o la letra se queda diminuta (pasó).
   - `#estado` y `#aviso` son `role="status"`; el resumen es `aria-live`.
   - El estado no depende solo del color (palomita, aspa, raya; sombra roja con contorno discontinuo).
   - Los colores de estado contrastan al menos 3:1 con el fondo del plano.
