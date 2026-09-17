@@ -4,9 +4,21 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Iconos y campos del panel de configuración
+## Sin publicar — Textos de referencia plegables
 
-Rama `claude/panel-iconos`.
+Rama `claude/textos-plegables`.
+
+### Añadido
+
+- **«Qué es y cómo se usa»** en el encabezado (descripción e instrucciones) y **«Notas del
+  proyecto»** en el pie se pliegan con su flecha. Las notas empiezan cerradas.
+- Al plegar o desplegar, el plano se reencuadra: con las instrucciones cerradas gana su alto (de 697
+  a 753 px en una pantalla de 900).
+
+## 2026-09-17 — PR #18: iconos y campos del panel de configuración
+
+[PR #18](https://github.com/jonathancr29/selector-asientos/pull/18), fusionado en `main` con el
+commit `278d75b`.
 
 ### Cambiado
 

@@ -49,6 +49,11 @@
   .lateral .bandas { margin: 0; padding: 0; background: none; border: 0; }
   .encabezado { margin: 0 0 10px; }
   .encabezado .pista { margin: 0 0 6px; }
+  /* Textos de referencia plegables (encabezado y pie). */
+  .plegable > summary { padding: 2px 0; font-size: 12px; font-weight: 700; color: #cbd5e1; cursor: pointer; }
+  .plegable > summary:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; border-radius: 4px; }
+  .plegable[open] > summary { margin-bottom: 6px; }
+  .plegable .nota:first-of-type { margin-top: 0; }
   /* Linea de estado: fija al pie del plano mientras se hace scroll por el. */
   .barra-estado { position: sticky; bottom: 0; z-index: 5; min-height: 34px; margin-top: 8px; padding: 8px 10px;
     background: #23232b; border: 1px solid #2c2c36; border-radius: 8px; }
@@ -422,8 +427,12 @@
     <!-- Encabezado: solo textos de referencia e instrucciones. -->
     <header class="encabezado">
       <h1>Selector de asientos</h1>
-      <p class="bajada">Plano de butacas en SVG, sin dependencias. Filas numeradas, mesas y zona general en el mismo plano.</p>
-      <p class="pista" id="pista">Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer</p>
+      <!-- Los textos de referencia se pliegan: al cerrarlos, el plano gana alto. -->
+      <details class="plegable" open>
+        <summary>Qué es y cómo se usa</summary>
+        <p class="bajada">Plano de butacas en SVG, sin dependencias. Filas numeradas, mesas y zona general en el mismo plano.</p>
+        <p class="pista" id="pista">Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer</p>
+      </details>
       <p class="aforo" id="aforo"></p>
     </header>
 
@@ -469,17 +478,19 @@
       </p>
       <ul id="detalle"></ul>
 
-      <p class="nota">
-        El plano se genera desde <code>butacas</code>, una lista plana con una fila por butaca:
-        identificador, fila, número, coordenadas, zona, grupo y estado. Es lo que devolvería tu
-        servidor. El SVG se produce al mostrar; nunca se almacena un SVG.
-      </p>
-      
-      <p class="nota">
-        El selector de tipo de sala está aquí para comparar recintos: mixtos con distintos pasillos,
-        solo filas o solo mesas. En una aplicación real el recinto es fijo: se elegiría y editaría una
-        vez al crear su plano, y quedaría guardado en él. No sería un control para quien compra.
-      </p>
+      <details class="plegable">
+        <summary>Notas del proyecto</summary>
+        <p class="nota">
+          El plano se genera desde <code>butacas</code>, una lista plana con una fila por butaca:
+          identificador, fila, número, coordenadas, zona, grupo y estado. Es lo que devolvería tu
+          servidor. El SVG se produce al mostrar; nunca se almacena un SVG.
+        </p>
+        <p class="nota">
+          El selector de tipo de sala está aquí para comparar recintos: mixtos con distintos pasillos,
+          solo filas o solo mesas. En una aplicación real el recinto es fijo: se elegiría y editaría una
+          vez al crear su plano, y quedaría guardado en él. No sería un control para quien compra.
+        </p>
+      </details>
     </footer>
   </main>
 
@@ -3259,6 +3270,10 @@ function reencuadrar(conservarZoom = false) {
     vista.y = anterior.cy - vista.h / 2;
     aplicarVista();
   }
+}
+
+for (const plegable of document.querySelectorAll('.centro .plegable')) {
+  plegable.addEventListener('toggle', () => reencuadrar(true));
 }
 
 let esperaDeTamano = null;
