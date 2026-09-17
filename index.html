@@ -182,6 +182,10 @@
   .oculta { display: none; }
 
   .mueble { fill: #26262f; stroke: #3a3a46; stroke-width: .6; }
+  /* Formas: la pista con cuadros suaves, la barra como un mostrador macizo. */
+  .forma-pista { fill: url(#cuadros-pista); stroke: #8b7fc4; stroke-width: .6; }
+  .forma-barra { fill: #4a3b2c; stroke: #a0805c; stroke-width: .8; }
+  .rotulo.forma-texto { fill: #e2e8f0; }
   .rotulo { fill: #94a3b8; font-size: 4.2px; text-anchor: middle; dominant-baseline: middle; }
   /* Guias de fila de un espacio: referencia, mas apagadas que un rotulo de butacas. */
   .rotulo.guia { fill: #64748b; }
@@ -232,7 +236,7 @@
     </label>
   </div>
   <!-- Solo en modo editor. Los botones de mesa actuan sobre la mesa activa. -->
-  <div class="herramientas" id="herramientas-editor" role="group" aria-label="Editar mesas y bloques de filas" hidden>
+  <div class="herramientas" id="herramientas-editor" role="group" aria-label="Editar mesas, bloques, butacas y formas" hidden>
     <button type="button" id="herramienta-bloquear" aria-pressed="false">Bloquear butacas</button>
     <span class="separador" aria-hidden="true"></span>
     <span class="campo">Agregar</span>
@@ -242,6 +246,9 @@
     <button type="button" id="agregar-cruz" aria-label="Cruz: mesa de largo 1, un lugar por lado y cabeceras">Cruz</button>
     <button type="button" id="agregar-barra" aria-label="Un lado: mesa de largo 4 con lugares en un solo lado">Un lado</button>
     <button type="button" id="agregar-bloque" aria-label="Bloque de filas: 5 butacas por fila y 2 filas">Bloque de filas</button>
+    <button type="button" id="agregar-butaca" aria-label="Butaca suelta: una butaca de la zona General">Butaca suelta</button>
+    <button type="button" id="agregar-pista" aria-label="Pista de baile: 4 × 4 celdas">Pista de baile</button>
+    <button type="button" id="agregar-forma-barra" aria-label="Barra: 4 × 1 celdas">Barra</button>
     <span class="separador" aria-hidden="true"></span>
     <span class="mesa-activa" id="mesa-activa" aria-live="polite">Ninguna pieza seleccionada</span>
     <button type="button" data-accion="girar" aria-keyshortcuts="R">Girar 90°</button>
@@ -292,6 +299,12 @@
         <symbol id="marca-elegida" viewBox="0 0 24 24"><path d="M8.5 11.5l2.5 2.5 4.5-4.5"></path></symbol>
         <symbol id="marca-ocupada" viewBox="0 0 24 24"><path d="M9.5 9.5l5 4.5M14.5 9.5l-5 4.5"></path></symbol>
         <symbol id="marca-bloqueada" viewBox="0 0 24 24"><path d="M8.5 11.75h7"></path></symbol>
+        <!-- Cuadros de la pista de baile: una celda del plano, en cuatro cuadros. -->
+        <pattern id="cuadros-pista" width="12" height="12" patternUnits="userSpaceOnUse">
+          <rect width="12" height="12" fill="#2a2638"></rect>
+          <rect width="6" height="6" fill="#383250"></rect>
+          <rect x="6" y="6" width="6" height="6" fill="#383250"></rect>
+        </pattern>
       </defs>
       <g id="muebles"></g>
       <g id="butacas"></g>
@@ -699,6 +712,22 @@ const columnasDeBanda = (sala, banda) =>
 // a ella en 'nuevo'. Asi una mesa viaja con su banda, tanto en vertical como en
 // horizontal. Las que estaban en una region de 'quitar' se eliminan (el escenario
 // nunca: se queda donde esta).
+// Las piezas que se guardan en listas del plano: su lista, el prefijo de su id y el
+// contador que da ids nuevos (nunca se reutilizan). El escenario va aparte.
+const LISTAS_DE_PIEZAS = [
+  { lista: 'mesas', prefijo: 'M', contador: 'siguiente' },
+  { lista: 'bloquesFilas', prefijo: 'F', contador: 'siguienteBloque' },
+  { lista: 'formas', prefijo: 'P', contador: 'siguienteForma' },
+  { lista: 'butacasSueltas', prefijo: 'B', contador: 'siguienteButaca' },
+];
+const listaDeId = (id) => LISTAS_DE_PIEZAS.find((l) => new RegExp('^' + l.prefijo + '\\d+$').test(id)) || null;
+// Da el siguiente id de una lista y avanza su contador.
+function nuevoIdDe(plano, { prefijo, contador }) {
+  const n = plano[contador] || 1;
+  plano[contador] = n + 1;
+  return prefijo + n;
+}
+
 function reanclarPiezas(antes, nuevo, anchoAntes, anchoDespues, quitar = []) {
   const regionesAntes = disponerBandas(antes.bandas, anchoAntes).regiones;
   const despues = new Map(disponerBandas(nuevo.bandas, anchoDespues).regiones.map((r) => [r.id, r]));
@@ -716,8 +745,7 @@ function reanclarPiezas(antes, nuevo, anchoAntes, anchoDespues, quitar = []) {
     }
     return true;
   };
-  nuevo.mesas = nuevo.mesas.filter((m) => recolocar(m));
-  nuevo.bloquesFilas = nuevo.bloquesFilas.filter((b) => recolocar(b));
+  for (const { lista } of LISTAS_DE_PIEZAS) nuevo[lista] = (nuevo[lista] || []).filter((p) => recolocar(p));
   if (nuevo.escenario) recolocar(nuevo.escenario, false);
   return nuevo;
 }
@@ -903,9 +931,65 @@ function geometriaBloqueFilas({ ancho, filas, giro = 0 }) {
   return geo;
 }
 
-// La huella de cualquier pieza: mesa o bloque de filas.
-const huellaDe = (pieza) => (esEscenario(pieza) ? { ancho: pieza.ancho, alto: pieza.alto, tablero: null, lugares: [] }
+// La huella de cualquier pieza: mesa, bloque de filas, forma, butaca suelta o escenario.
+const huellaDe = (pieza) => (esEscenario(pieza) || esForma(pieza)
+  ? { ancho: pieza.ancho, alto: pieza.alto, tablero: null, lugares: [] }
+  : esButacaSuelta(pieza)
+  ? { ancho: 1, alto: 1, tablero: null, lugares: [{ dx: 0, dy: 0, mira: (MIRA_ESCENARIO + (pieza.giro || 0)) % 360 }] }
   : esBloqueFilas(pieza) ? geometriaBloqueFilas(pieza) : geometriaMesa(pieza));
+
+// ---------------------------------------------------------------------------
+// Formas: pista de baile y barra.
+//
+// Rectangulos con nombre que ocupan sus celdas (nada se les pone encima) y no
+// tienen lugares: { id: 'P1', tipo: 'forma', forma, x, y, ancho, alto, nombre? }.
+// Se mueven, giran (intercambian ancho y alto), cambian de tamaño y se duplican.
+// Pueden cruzar pasillos.
+// ---------------------------------------------------------------------------
+const FORMAS = {
+  pista: { nombre: 'Pista de baile', ancho: 4, alto: 4 },
+  barra: { nombre: 'Barra', ancho: 4, alto: 1 },
+};
+const FORMA_ANCHO_MAXIMO = 40;
+const FORMA_ALTO_MAXIMO = 20;
+const formas = [];   // {id, tipo: 'forma', forma, x, y, ancho, alto, nombre, nombrePropio, geo}
+const esForma = (pieza) => Boolean(pieza) && pieza.tipo === 'forma';
+const esFormaConocida = (forma) => Object.prototype.hasOwnProperty.call(FORMAS, forma);
+
+function agregarForma(config) {
+  const nombre = config.nombre || FORMAS[config.forma].nombre + ' ' + config.id.slice(1);
+  formas.push({ ...config, nombre, nombrePropio: config.nombre || null, geo: huellaDe(config) });
+  muebles.push({ tipo: 'forma', forma: config.forma, pieza: config.id, x: config.x, y: config.y,
+                 w: config.ancho, h: config.alto, texto: nombre });
+}
+
+function cambiarTamanoForma(f, dAncho, dAlto) {
+  const ancho = f.ancho + dAncho, alto = f.alto + dAlto;
+  if (ancho < 1 || ancho > FORMA_ANCHO_MAXIMO || alto < 1 || alto > FORMA_ALTO_MAXIMO) return null;
+  return { ...f, ancho, alto };
+}
+
+const configDeForma = ({ id, forma, x, y, ancho, alto, nombrePropio }) =>
+  ({ id, tipo: 'forma', forma, x, y, ancho, alto, ...(nombrePropio ? { nombre: nombrePropio } : {}) });
+
+// ---------------------------------------------------------------------------
+// Butacas sueltas.
+//
+// Una sola butaca que se coloca en cualquier hueco: { id: 'B1', tipo: 'butaca', x,
+// y, zona, giro }. Su id de butaca es el de la pieza (B1). Se numera con las demas
+// butacas de su zona, por altura y de izquierda a derecha, mire hacia donde mire.
+// ---------------------------------------------------------------------------
+const butacasSueltas = [];   // {id, tipo: 'butaca', x, y, zona, giro, nombre, geo}
+const esButacaSuelta = (pieza) => Boolean(pieza) && pieza.tipo === 'butaca';
+
+function agregarButacaSuelta(config) {
+  const geo = huellaDe(config);
+  butacasSueltas.push({ ...config, nombre: 'Butaca suelta ' + config.id.slice(1), geo });
+  butacas.push({ id: config.id, fila: 'A', numero: 1, suelta: config.id, x: config.x, y: config.y,
+                 mira: geo.lugares[0].mira, zona: config.zona, grupo: null, estado: 'libre' });
+}
+
+const configDeButaca = ({ id, x, y, zona, giro }) => ({ id, tipo: 'butaca', x, y, zona, giro });
 
 function agregarBloqueFilas(config) {
   const geo = geometriaBloqueFilas(config);
@@ -1078,6 +1162,8 @@ function generarPlano(tipo, plano = null) {
   muebles.length = 0;
   mesas.length = 0;
   bloquesFilas.length = 0;
+  formas.length = 0;
+  butacasSueltas.length = 0;
   // Columnas: la distribucion editada, la de un mapa guardado o la de la plantilla.
   const sala = rejillaDeBloques((plano && plano.distribucion) || definicion.distribucion ||
                                 distribucionDePasillos(definicion.pasillos));
@@ -1121,6 +1207,8 @@ function generarPlano(tipo, plano = null) {
   for (const config of (plano && plano.bloquesFilas) || definicion.bloquesFilas || []) {
     agregarBloqueFilas(config);
   }
+  for (const config of (plano && plano.formas) || definicion.formas || []) agregarForma(config);
+  for (const config of (plano && plano.butacasSueltas) || definicion.butacasSueltas || []) agregarButacaSuelta(config);
 
   // Bloqueadas: la lista del plano o del mapa manda; si no hay, las de las bandas.
   const bloqueadas = new Set((plano && plano.bloqueadas) || definicion.bloqueadas ||
@@ -1149,13 +1237,19 @@ const celda = (x, y) => x + ',' + y;
 function celdasOcupadas(excluir) {
   const ocupadas = new Map();
   for (const b of butacas) {
-    if (b.grupo || (b.bloque && b.bloque === excluir)) continue;
-    ocupadas.set(celda(b.x, b.y), 'la fila ' + b.fila + ' de ' + b.seccion);
+    if (b.grupo || (b.bloque && b.bloque === excluir) || (b.suelta && b.suelta === excluir)) continue;
+    ocupadas.set(celda(b.x, b.y), (b.suelta ? 'la butaca ' + b.fila + b.numero : 'la fila ' + b.fila) + ' de ' + b.seccion);
   }
   for (const m of mesas) {
     if (m.id === excluir) continue;
     for (let dy = 0; dy < m.geo.alto; dy++) {
       for (let dx = 0; dx < m.geo.ancho; dx++) ocupadas.set(celda(m.x + dx, m.y + dy), m.nombre);
+    }
+  }
+  for (const f of formas) {
+    if (f.id === excluir) continue;
+    for (let dy = 0; dy < f.alto; dy++) {
+      for (let dx = 0; dx < f.ancho; dx++) ocupadas.set(celda(f.x + dx, f.y + dy), f.nombre);
     }
   }
   if (excluir !== 'escenario' && !escenario.ausente) {
@@ -1171,8 +1265,8 @@ function celdasOcupadas(excluir) {
 // ocupar columnas de pasillo: sus pasillos son el espacio que se deja entre bloques.
 function motivoNoCabe(sala, ocupadas, pieza) {
   const { ancho, alto } = huellaDe(pieza);
-  // Solo las mesas respetan los pasillos; los bloques y el escenario pueden cruzarlos.
-  const respetaPasillos = !esBloqueFilas(pieza) && !esEscenario(pieza);
+  // Solo las mesas (las piezas sin 'tipo') respetan los pasillos; el resto puede cruzarlos.
+  const respetaPasillos = !pieza.tipo;
   for (let dy = 0; dy < alto; dy++) {
     for (let dx = 0; dx < ancho; dx++) {
       const cx = pieza.x + dx, cy = pieza.y + dy;
@@ -1201,8 +1295,9 @@ function buscarHueco(sala, ocupadas, mesa, dx, dy) {
 }
 
 // Coloca la configuracion en su sitio o, si ahi no cabe, en el mas cercano a
-// una celda de distancia (primero en cruz, luego en diagonal). Devuelve la
-// configuracion colocada, o { motivo } con la razon del sitio original.
+// una celda de distancia (primero en cruz, luego en diagonal). Si se sale por un
+// borde (una barra larga girada junto a la pared), prueba tambien metida en la sala.
+// Devuelve la configuracion colocada, o { motivo } con la razon del sitio original.
 function colocarCerca(sala, ocupadas, mesa) {
   const desplazamientos = [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1],
                            [-1, -1], [1, -1], [-1, 1], [1, 1]];
@@ -1210,6 +1305,11 @@ function colocarCerca(sala, ocupadas, mesa) {
     const intento = { ...mesa, x: mesa.x + dx, y: mesa.y + dy };
     if (!motivoNoCabe(sala, ocupadas, intento)) return intento;
   }
+  const { ancho, alto } = huellaDe(mesa);
+  const dentro = (v, min, max) => Math.min(Math.max(v, min), Math.max(min, max));
+  const metida = { ...mesa, x: dentro(mesa.x, 1, sala.ancho - ancho + 1),
+                   y: dentro(mesa.y, sala.filas.min, sala.filas.max - alto + 1) };
+  if ((metida.x !== mesa.x || metida.y !== mesa.y) && !motivoNoCabe(sala, ocupadas, metida)) return metida;
   return { motivo: motivoNoCabe(sala, ocupadas, mesa) };
 }
 
@@ -1284,7 +1384,7 @@ function buscarSitioLibre(sala, ocupadas, config) {
 // Tras cambiar bandas o columnas, la primera pieza (mesa o bloque) que ya no cabe
 // (se sale, choca con una fila u otra pieza), o null si todas caben.
 function primeraPiezaQueNoCabe(sala) {
-  for (const pieza of [...(escenario.ausente ? [] : [escenario]), ...mesas, ...bloquesFilas]) {
+  for (const pieza of [...(escenario.ausente ? [] : [escenario]), ...mesas, ...bloquesFilas, ...formas, ...butacasSueltas]) {
     const motivo = motivoNoCabe(sala, celdasOcupadas(pieza.id), pieza);
     if (motivo) return { pieza, motivo };
   }
@@ -1298,11 +1398,12 @@ function primeraPiezaQueNoCabe(sala) {
 // ella; las que estan dentro de una banda que se mueve, viajan con la banda.
 // ---------------------------------------------------------------------------
 const copiarPlano = (plano) => ({
-  ...plano, bandas: copiarBandas(plano.bandas), mesas: plano.mesas.map((m) => ({ ...m })),
-  bloquesFilas: (plano.bloquesFilas || []).map((b) => ({ ...b })),
+  ...plano, bandas: copiarBandas(plano.bandas),
+  ...Object.fromEntries(LISTAS_DE_PIEZAS.map(({ lista }) => [lista, (plano[lista] || []).map((p) => ({ ...p }))])),
   ...(plano.escenario ? { escenario: { ...plano.escenario } } : {}),   // null (sin escenario) llega con ...plano
 });
-const piezasDe = (plano) => [...plano.mesas, ...plano.bloquesFilas, ...(plano.escenario ? [plano.escenario] : [])];
+const piezasDe = (plano) => [...LISTAS_DE_PIEZAS.flatMap(({ lista }) => plano[lista] || []),
+                             ...(plano.escenario ? [plano.escenario] : [])];
 // Una banda o vertical de una sala ya dispuesta, por id (con nombre, x, y, alto...).
 const bandaDe = (sala, id) => { const u = ubicar(sala.bandas, id); return u && u.item; };
 
@@ -1448,6 +1549,8 @@ function planoDesdeSala(tipo, sala) {
     bandas: limpiar(sala.bandas),
     mesas: mesas.map(({ id, x, y, largo, cabeceras, unLado, giro }) => ({ id, x, y, largo, cabeceras, unLado, giro })),
     bloquesFilas: bloquesFilas.map(configDeBloque),
+    formas: formas.map(configDeForma),
+    butacasSueltas: butacasSueltas.map(configDeButaca),
     escenario: escenario.ausente ? null : configDeEscenario(escenario),
     ...(sala.lienzo ? { lienzo: true } : {}),
     distribucion: distribucionDeSala(sala),
@@ -1455,6 +1558,8 @@ function planoDesdeSala(tipo, sala) {
     siguiente: Math.max(definicion.siguiente || 0, ...mesas.map((m) => Number(m.id.slice(1)) + 1), 1),
     siguienteBanda: Math.max(definicion.siguienteBanda || 1, 1),
     siguienteBloque: Math.max(definicion.siguienteBloque || 1, ...bloquesFilas.map((b) => Number(b.id.slice(1)) + 1), 1),
+    siguienteForma: Math.max(definicion.siguienteForma || 1, ...formas.map((f) => Number(f.id.slice(1)) + 1), 1),
+    siguienteButaca: Math.max(definicion.siguienteButaca || 1, ...butacasSueltas.map((b) => Number(b.id.slice(1)) + 1), 1),
   };
 }
 
@@ -1544,12 +1649,16 @@ function mapaDesdePlano(nombre, plano, guardado, idsExistentes = null) {
     bandas: limpiarBandasParaMapa(plano.bandas),
     mesas: plano.mesas.map(({ id, x, y, largo, cabeceras, unLado, giro }) => ({ id, x, y, largo, cabeceras, unLado, giro })),
     bloquesFilas: (plano.bloquesFilas || []).map((b) => ({ ...b })),
+    formas: (plano.formas || []).map((f) => ({ ...f })),
+    butacasSueltas: (plano.butacasSueltas || []).map((b) => ({ ...b })),
     ...(plano.escenario !== undefined ? { escenario: plano.escenario && { ...plano.escenario } } : {}),
     ...(plano.lienzo ? { lienzo: true } : {}),
     bloqueadas: (plano.bloqueadas || []).filter((id) => !idsExistentes || idsExistentes.has(id)),
     siguiente: plano.siguiente,
     siguienteBanda: plano.siguienteBanda,
     siguienteBloque: plano.siguienteBloque || 1,
+    siguienteForma: plano.siguienteForma || 1,
+    siguienteButaca: plano.siguienteButaca || 1,
   };
 }
 
@@ -1561,8 +1670,10 @@ const limpiarBandasParaMapa = (lista) => lista.map(({ ocupadas, bloqueadasAlFina
 
 const definicionDeMapa = (mapa) => ({
   nombre: mapa.nombre, grupo: GRUPO_MAPAS, lienzo: Boolean(mapa.lienzo), distribucion: mapa.distribucion, bandas: mapa.bandas,
-  mesas: mapa.mesas, bloquesFilas: mapa.bloquesFilas, escenario: mapa.escenario, bloqueadas: mapa.bloqueadas,
+  mesas: mapa.mesas, bloquesFilas: mapa.bloquesFilas, formas: mapa.formas, butacasSueltas: mapa.butacasSueltas,
+  escenario: mapa.escenario, bloqueadas: mapa.bloqueadas,
   siguiente: mapa.siguiente, siguienteBanda: mapa.siguienteBanda, siguienteBloque: mapa.siguienteBloque,
+  siguienteForma: mapa.siguienteForma, siguienteButaca: mapa.siguienteButaca,
 });
 
 function registrarMapa(mapa) {
@@ -1709,6 +1820,42 @@ function validarMapa(dato) {
     return limpio;
   });
 
+  // Formas y butacas sueltas: opcionales (los mapas anteriores no las tienen).
+  const listaOpcional = (campo, nombreLista) => {
+    if (dato[campo] === undefined) return [];
+    if (Array.isArray(dato[campo])) return dato[campo];
+    errores.push('la lista de ' + nombreLista + ' no es válida');
+    return [];
+  };
+  const idsForma = new Set();
+  const formasLimpias = listaOpcional('formas', 'formas').map((f, i) => {
+    if (!f || typeof f.id !== 'string' || !/^P[1-9]\d{0,5}$/.test(f.id) || idsForma.has(f.id)) {
+      errores.push('forma ' + (i + 1) + ': id no válido o repetido');
+      return null;
+    }
+    idsForma.add(f.id);
+    if (!esFormaConocida(f.forma)) errores.push(f.id + ': forma desconocida');
+    if (!esEntero(f.x, 0, 999) || !esEntero(f.y, 0, 999)) errores.push(f.id + ': posición no válida');
+    if (!esEntero(f.ancho, 1, FORMA_ANCHO_MAXIMO) || !esEntero(f.alto, 1, FORMA_ALTO_MAXIMO)) {
+      errores.push(f.id + ': tamaño fuera de rango');
+    }
+    const limpia = { id: f.id, tipo: 'forma', forma: f.forma, x: f.x, y: f.y, ancho: f.ancho, alto: f.alto };
+    if (typeof f.nombre === 'string' && f.nombre.trim()) limpia.nombre = f.nombre.trim().slice(0, NOMBRE_MAXIMO);
+    return limpia;
+  });
+  const idsButaca = new Set();
+  const butacasLimpias = listaOpcional('butacasSueltas', 'butacas sueltas').map((b, i) => {
+    if (!b || typeof b.id !== 'string' || !/^B[1-9]\d{0,5}$/.test(b.id) || idsButaca.has(b.id)) {
+      errores.push('butaca suelta ' + (i + 1) + ': id no válido o repetido');
+      return null;
+    }
+    idsButaca.add(b.id);
+    if (!esEntero(b.x, 0, 999) || !esEntero(b.y, 0, 999)) errores.push(b.id + ': posición no válida');
+    if (!['luneta', 'general'].includes(b.zona)) errores.push(b.id + ': zona desconocida');
+    if (![0, 90, 180, 270].includes(b.giro)) errores.push(b.id + ': giro no válido');
+    return { id: b.id, tipo: 'butaca', x: b.x, y: b.y, zona: b.zona, giro: b.giro };
+  });
+
   // Escenario: opcional (sin el, la franja de la banda «escenario» a todo el ancho;
   // con null, desde la version 3, no hay escenario).
   let escenarioLimpio;
@@ -1737,6 +1884,7 @@ function validarMapa(dato) {
     guardado: typeof dato.guardado === 'string' ? dato.guardado.slice(0, 40) : null,
     ...(lienzo ? { lienzo: true } : {}),
     distribucion, bandas, mesas: mesasLimpias, bloquesFilas: bloquesLimpios,
+    formas: formasLimpias, butacasSueltas: butacasLimpias,
     ...(escenarioLimpio !== undefined ? { escenario: escenarioLimpio } : {}),
     bloqueadas: [...new Set(bloqueadas)],
     siguiente: Math.max(esEntero(dato.siguiente, 1, 1e6) ? dato.siguiente : 1, maximo(idsMesa, /^M(\d+)$/) + 1),
@@ -1744,6 +1892,10 @@ function validarMapa(dato) {
                              maximo(idsBanda, /^banda(\d+)$/) + 1),
     siguienteBloque: Math.max(esEntero(dato.siguienteBloque, 1, 1e6) ? dato.siguienteBloque : 1,
                               maximo(idsBloque, /^F(\d+)$/) + 1),
+    siguienteForma: Math.max(esEntero(dato.siguienteForma, 1, 1e6) ? dato.siguienteForma : 1,
+                             maximo(idsForma, /^P(\d+)$/) + 1),
+    siguienteButaca: Math.max(esEntero(dato.siguienteButaca, 1, 1e6) ? dato.siguienteButaca : 1,
+                              maximo(idsButaca, /^B(\d+)$/) + 1),
   };
   const fallo = primeraPiezaQueNoCabe(generarPlano(definicionDeMapa(mapa)));
   if (fallo) return { errores: [fallo.pieza.nombre + ' ' + fallo.motivo] };
@@ -1821,31 +1973,31 @@ function renombrarBanda(plano, id, nombre) {
 function copiarBloqueadas(bloqueadas = [], ids) {
   const copias = [];
   for (const id of bloqueadas) {
+    // Una butaca suelta no lleva guion: su id es el de la pieza.
     const guion = id.indexOf('-');
-    const nuevo = guion > 0 && ids.get(id.slice(0, guion));
-    if (nuevo) copias.push(nuevo + id.slice(guion));
+    const corte = guion > 0 ? guion : id.length;
+    const nuevo = ids.get(id.slice(0, corte));
+    if (nuevo) copias.push(nuevo + id.slice(corte));
   }
   return [...bloqueadas, ...copias];
 }
 
-// La copia de una mesa o bloque, con id nuevo, junto a la original: a su derecha,
-// si no debajo, y si no en el sitio libre mas cercano. Usa las celdas de la sala
-// generada desde 'plano' (butacas, mesas y bloques actuales). Devuelve el plano
-// nuevo (el id de la copia es el siguiente del contador) o { motivo }.
+// La copia de una mesa, bloque, forma o butaca suelta, con id nuevo, junto a la
+// original: a su derecha, si no debajo, y si no en el sitio libre mas cercano. Usa
+// las celdas de la sala generada desde 'plano'. Devuelve el plano nuevo (el id de
+// la copia es el del contador de su lista antes de llamar) o { motivo }.
 function duplicarPieza(plano, sala, id) {
   if (id === 'escenario') return { motivo: 'el escenario no se puede duplicar' };
+  const tipoDeLista = listaDeId(id);
   const nuevo = copiarPlano(plano);
-  const esBloque = nuevo.bloquesFilas.some((b) => b.id === id);
-  const lista = esBloque ? nuevo.bloquesFilas : nuevo.mesas;
-  const original = lista.find((p) => p.id === id);
+  const lista = tipoDeLista && nuevo[tipoDeLista.lista];
+  const original = lista && lista.find((p) => p.id === id);
   if (!original) return { motivo: 'esa pieza ya no existe' };
-  const copia = { ...original, id: esBloque ? 'F' + nuevo.siguienteBloque : 'M' + nuevo.siguiente };
+  const copia = { ...original, id: nuevoIdDe(nuevo, tipoDeLista) };
   if (copia.nombre) copia.nombre = nombreDeCopia(copia.nombre);
   const sitio = sitioParaCopia(sala, celdasOcupadas(null), copia);
   if (!sitio) return { motivo: 'no hay sitio libre para la copia' };
   lista.push(sitio);
-  if (esBloque) nuevo.siguienteBloque++;
-  else nuevo.siguiente++;
   nuevo.bloqueadas = copiarBloqueadas(nuevo.bloqueadas, new Map([[id, copia.id]]));
   return nuevo;
 }
@@ -1924,9 +2076,10 @@ function duplicarBanda(plano, sala, id) {
     return { ...p, id: nuevoIdPieza, x: destino.x + (p.x - antes.x), y: destino.y + (p.y - antes.y),
              ...(p.nombre ? { nombre: nombreDeCopia(p.nombre) } : {}) };
   };
-  for (const m of plano.mesas.filter(dentro)) resultado.mesas.push(trasladar(m, 'M' + resultado.siguiente++));
-  for (const b of (plano.bloquesFilas || []).filter(dentro)) {
-    resultado.bloquesFilas.push(trasladar(b, 'F' + resultado.siguienteBloque++));
+  for (const tipoDeLista of LISTAS_DE_PIEZAS) {
+    for (const p of (plano[tipoDeLista.lista] || []).filter(dentro)) {
+      resultado[tipoDeLista.lista].push(trasladar(p, nuevoIdDe(resultado, tipoDeLista)));
+    }
   }
   resultado.bloqueadas = copiarBloqueadas(resultado.bloqueadas, ids);
   return resultado;
@@ -2032,6 +2185,14 @@ function dibujarMuebles() {
       const rotulo = texto('rotulo', cx, cy, unaCelda ? m.numero : m.texto);
       if (!unaCelda && m.h > m.w) rotulo.setAttribute('transform', `rotate(-90 ${cx} ${cy})`);
       rect.dataset.pieza = rotulo.dataset.pieza = m.mesa;
+      capaMuebles.append(rect, rotulo);
+    } else if (m.tipo === 'forma') {
+      const rect = nodo('rect', { class: 'forma-' + m.forma, x: m.x * PASO + 1, y: m.y * PASO + 1,
+        width: m.w * PASO - 2, height: m.h * PASO - 2, rx: 3 });
+      const cx = (m.x + m.w / 2) * PASO, cy = (m.y + m.h / 2) * PASO;
+      const rotulo = texto('rotulo forma-texto', cx, cy, m.texto);
+      if (m.h > m.w) rotulo.setAttribute('transform', `rotate(-90 ${cx} ${cy})`);
+      rect.dataset.pieza = rotulo.dataset.pieza = m.pieza;
       capaMuebles.append(rect, rotulo);
     } else if (m.tipo === 'rotulo') {
       capaMuebles.appendChild(texto('rotulo', (m.x + 0.5) * PASO, (m.y + 0.5) * PASO, m.texto));
@@ -2142,6 +2303,7 @@ function dibujarButacas() {
     g.dataset.id = b.id;
     if (b.grupo) g.dataset.pieza = b.grupo.id;
     else if (b.bloque) g.dataset.pieza = b.bloque;
+    else if (b.suelta) g.dataset.pieza = b.suelta;
     // El area sensible es la celda entera: contigua con sus vecinas y sin solaparlas.
     g.appendChild(nodo('rect', { class: 'toque', x: b.x * PASO, y: b.y * PASO,
       width: PASO, height: PASO, rx: 2 }));
@@ -2168,6 +2330,10 @@ function dibujarButacas() {
 // huella. Es lo que se agarra con el raton y lo que recibe el foco con el teclado.
 const etiquetaPieza = (m) => (esEscenario(m)
   ? 'Escenario, ' + m.ancho + ' × ' + m.alto + ' celdas'
+  : esForma(m)
+  ? m.nombre + ', ' + FORMAS[m.forma].nombre.toLowerCase() + ' de ' + m.ancho + ' × ' + m.alto + ' celdas'
+  : esButacaSuelta(m)
+  ? m.nombre + ', zona ' + zonas[m.zona].nombre + (m.giro ? ', girada ' + m.giro + '°' : '')
   : esBloqueFilas(m)
   ? m.nombre + ', bloque de ' + m.filas + ' × ' + m.ancho + ' butacas, zona ' + zonas[m.zona].nombre +
     (m.giro ? ', girado ' + m.giro + '°' : '')
@@ -2177,7 +2343,7 @@ const etiquetaPieza = (m) => (esEscenario(m)
 
 function dibujarPiezas() {
   if (modo !== 'editor' || herramienta === 'bloquear') return;
-  const piezas = [...(escenario.ausente ? [] : [escenario]), ...mesas, ...bloquesFilas];
+  const piezas = [...(escenario.ausente ? [] : [escenario]), ...mesas, ...bloquesFilas, ...formas, ...butacasSueltas];
   // Si la pieza activa ya no existe (se elimino), el punto de tabulacion va a la primera.
   const hayActiva = piezas.some((m) => m.id === mesaActiva);
   piezas.forEach((m, indice) => {
@@ -2373,7 +2539,7 @@ function aplicarBandas(resultado, mensaje) {
     return false;
   }
   const antes = fotoDeButacas();
-  const mesasAntes = new Map([...mesas, ...bloquesFilas].map((m) => [m.id, m.nombre]));
+  const mesasAntes = new Map([...mesas, ...bloquesFilas, ...formas, ...butacasSueltas].map((m) => [m.id, m.nombre]));
   const previo = planos[tipoActual];
   planos[tipoActual] = resultado;
   salaActual = generarPlano(tipoActual, resultado);
@@ -2864,17 +3030,20 @@ let tipoActual, salaActual;
 // una mesa o banda eliminada.
 const planos = {};
 
-// 'mesaActiva' guarda el id de la pieza activa: una mesa (M3) o un bloque de filas (F2).
+// 'mesaActiva' guarda el id de la pieza activa: mesa (M3), bloque (F2), forma (P1),
+// butaca suelta (B4) o el escenario.
 const piezaPorId = (id) => (id === 'escenario' ? (escenario.ausente ? null : escenario)
-  : mesas.find((m) => m.id === id) || bloquesFilas.find((b) => b.id === id));
+  : [...mesas, ...bloquesFilas, ...formas, ...butacasSueltas].find((p) => p.id === id) || null);
 const anunciar = (mensaje) => { document.getElementById('estado').textContent = mensaje; };
 const configDe = ({ id, x, y, largo, cabeceras, unLado, giro }) =>
   ({ id, x, y, largo, cabeceras, unLado, giro });
 const configDePieza = (p) => (esEscenario(p) ? { id: 'escenario', tipo: 'escenario', ...configDeEscenario(p) }
-  : esBloqueFilas(p) ? configDeBloque(p) : configDe(p));
+  : esBloqueFilas(p) ? configDeBloque(p) : esForma(p) ? configDeForma(p)
+  : esButacaSuelta(p) ? configDeButaca(p) : configDe(p));
 // Concordancia: «Mesa 3 movida», «Bloque 2 movido».
 const genero = (p) => (esBloqueFilas(p) || esEscenario(p) ? 'o' : 'a');
-const resumenDePieza = (p) => (esEscenario(p) ? p.ancho + ' × ' + p.alto + ' celdas' : esBloqueFilas(p)
+const resumenDePieza = (p) => (esEscenario(p) || esForma(p) ? p.ancho + ' × ' + p.alto + ' celdas'
+  : esButacaSuelta(p) ? 'zona ' + zonas[p.zona].nombre : esBloqueFilas(p)
   ? p.filas + ' × ' + p.ancho + ' butacas'
   : p.geo.lugares.length + ' lugares');
 
@@ -2913,8 +3082,11 @@ const ACCIONES_DE = {
   mesa: new Set(['girar', 'alargar', 'acortar', 'cabeceras', 'unlado', 'duplicar', 'eliminar']),
   bloque: new Set(['girar', 'alargar', 'acortar', 'masfilas', 'menosfilas', 'duplicar', 'eliminar']),
   escenario: new Set(['girar', 'alargar', 'acortar', 'masfilas', 'menosfilas']),
+  forma: new Set(['girar', 'alargar', 'acortar', 'masfilas', 'menosfilas', 'duplicar', 'eliminar']),
+  butaca: new Set(['girar', 'duplicar', 'eliminar']),
 };
-const tipoDePieza = (p) => (esEscenario(p) ? 'escenario' : esBloqueFilas(p) ? 'bloque' : 'mesa');
+const tipoDePieza = (p) => (esEscenario(p) ? 'escenario' : esBloqueFilas(p) ? 'bloque'
+  : esForma(p) ? 'forma' : esButacaSuelta(p) ? 'butaca' : 'mesa');
 const aplica = (accion, p) => ACCIONES_DE[tipoDePieza(p)].has(accion);
 
 function actualizarControles() {
@@ -2922,14 +3094,16 @@ function actualizarControles() {
   document.getElementById('mesa-activa').textContent = m
     ? m.nombre + ' · ' + resumenDePieza(m)
     : 'Ninguna pieza seleccionada';
-  const bloque = esBloqueFilas(m);
+  const bloque = esBloqueFilas(m), forma = esForma(m), suelta = esButacaSuelta(m);
   for (const boton of botonesDeMesa()) {
     const accion = boton.dataset.accion;
     const deEscenario = esEscenario(m);
-    const largo = bloque || deEscenario ? m.ancho : m && m.largo;
-    const maximo = deEscenario ? ESCENARIO_ANCHO_MAXIMO : bloque ? ANCHO_BLOQUE_MAXIMO : LARGO_MAXIMO;
-    const filas = deEscenario ? m.alto : m && m.filas;
-    const filasMaximas = deEscenario ? ESCENARIO_ALTO_MAXIMO : FILAS_MAXIMAS;
+    // Largo: ancho del escenario, de una forma o de un bloque. Filas: alto del escenario o de una forma.
+    const largo = bloque || deEscenario || forma ? m.ancho : m && m.largo;
+    const maximo = deEscenario ? ESCENARIO_ANCHO_MAXIMO : forma ? FORMA_ANCHO_MAXIMO
+      : bloque ? ANCHO_BLOQUE_MAXIMO : LARGO_MAXIMO;
+    const filas = deEscenario || forma ? m.alto : m && m.filas;
+    const filasMaximas = deEscenario ? ESCENARIO_ALTO_MAXIMO : forma ? FORMA_ALTO_MAXIMO : FILAS_MAXIMAS;
     boton.disabled = !m || !aplica(accion, m) ||
       (accion === 'alargar' && largo >= maximo) ||
       (accion === 'acortar' && largo <= 1) ||
@@ -2939,12 +3113,13 @@ function actualizarControles() {
     if (accion === 'unlado') boton.setAttribute('aria-pressed', String(Boolean(m && m.unLado)));
   }
   document.getElementById('alternar-escenario').textContent = escenario.ausente ? 'Agregar escenario' : 'Quitar escenario';
-  // Zona y nombre: solo para bloques de filas. No se pisa lo que se esta escribiendo.
+  // Zona: bloques y butacas sueltas. Nombre: bloques y formas. No se pisa lo que se esta escribiendo.
   const zona = document.getElementById('zona-pieza');
   const nombre = document.getElementById('nombre-pieza');
-  zona.disabled = nombre.disabled = !bloque;
-  if (bloque) zona.value = m.zona;
-  if (document.activeElement !== nombre) nombre.value = bloque ? m.nombrePropio || '' : '';
+  zona.disabled = !(bloque || suelta);
+  nombre.disabled = !(bloque || forma);
+  if (bloque || suelta) zona.value = m.zona;
+  if (document.activeElement !== nombre) nombre.value = bloque || forma ? m.nombrePropio || '' : '';
 }
 
 // Atenua la mesa original (tablero, rotulo y lugares) mientras se arrastra.
@@ -3058,7 +3233,7 @@ function reemplazarMesa(config) {
     plano.escenario = configDeEscenario(config);
     return;
   }
-  const lista = esBloqueFilas(config) ? 'bloquesFilas' : 'mesas';
+  const { lista } = listaDeId(config.id);
   plano[lista] = plano[lista].map((c) => (c.id === config.id ? config : c));
 }
 
@@ -3076,25 +3251,27 @@ const posicionTexto = (antes, despues) =>
 // Girar, alargar, acortar y cabeceras: se calcula la configuracion nueva, se
 // coloca en su sitio o en el mas cercano, y si no cabe se anuncia por que.
 const TRANSFORMACIONES = {
-  girar:     { calcular: (c) => (esEscenario(c) ? girarEscenario(c) : girarPieza(c)),
+  girar:     { calcular: (c) => (esEscenario(c) || esForma(c) ? girarEscenario(c) : girarPieza(c)),
                fallo: (m) => 'No se pudo girar ' + m.nombre,
-               hecho: (m) => (esEscenario(m) ? 'girado 90°'
+               hecho: (m) => (esEscenario(m) || esForma(m) ? 'girad' + genero(m) + ' 90°'
                  : m.giro ? 'girad' + genero(m) + ' ' + m.giro + '°' : 'de vuelta a su posición original') },
-  alargar:   { calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, 1, 0)
+  alargar:   { calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, 1, 0) : esForma(c) ? cambiarTamanoForma(c, 1, 0)
                  : esBloqueFilas(c) ? cambiarAncho(c, 1) : cambiarLargo(c, 1)),
                tope: 'el largo máximo',
                fallo: (m) => 'No se pudo alargar ' + m.nombre,
                hecho: (m) => 'alargad' + genero(m) },
-  acortar:   { calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, -1, 0)
+  acortar:   { calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, -1, 0) : esForma(c) ? cambiarTamanoForma(c, -1, 0)
                  : esBloqueFilas(c) ? cambiarAncho(c, -1) : cambiarLargo(c, -1)),
                tope: 'el largo mínimo',
                fallo: (m) => 'No se pudo acortar ' + m.nombre,
                hecho: (m) => 'acortad' + genero(m) },
-  masfilas:  { calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, 0, 1) : cambiarFilasBloque(c, 1)),
+  masfilas:  { calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, 0, 1)
+                 : esForma(c) ? cambiarTamanoForma(c, 0, 1) : cambiarFilasBloque(c, 1)),
                tope: 'el máximo de filas',
                fallo: (m) => 'No se pudo agregar una fila a ' + m.nombre,
                hecho: () => 'con una fila más' },
-  menosfilas:{ calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, 0, -1) : cambiarFilasBloque(c, -1)),
+  menosfilas:{ calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, 0, -1)
+                 : esForma(c) ? cambiarTamanoForma(c, 0, -1) : cambiarFilasBloque(c, -1)),
                tope: 'una sola fila',
                fallo: (m) => 'No se pudo quitar una fila a ' + m.nombre,
                hecho: () => 'con una fila menos' },
@@ -3171,7 +3348,8 @@ function agregarBloqueNuevo() {
 function duplicarPiezaPorId(id) {
   const m = piezaPorId(id);
   const plano = planoEditable();
-  const nuevoId = esBloqueFilas(m) ? 'F' + plano.siguienteBloque : 'M' + plano.siguiente;
+  const tipoDeLista = listaDeId(id);
+  const nuevoId = tipoDeLista.prefijo + (plano[tipoDeLista.contador] || 1);
   const resultado = duplicarPieza(plano, salaActual, id);
   if (resultado.motivo) {
     anunciar('No se pudo duplicar ' + m.nombre + ': ' + resultado.motivo + '.');
@@ -3185,10 +3363,45 @@ function duplicarPiezaPorId(id) {
   asegurarVisible({ x: copia.x, y: copia.y, w: copia.geo.ancho, h: copia.geo.alto });
 }
 
+// Butaca suelta de la zona General en el primer hueco libre, mirando al escenario.
+function agregarButacaNueva() {
+  const plano = planoEditable();
+  const tipoDeLista = listaDeId('B1');
+  const id = 'B' + (plano.siguienteButaca || 1);
+  const sitio = buscarSitioLibre(salaActual, celdasOcupadas(null), { id, tipo: 'butaca', x: 0, y: 0, zona: 'general', giro: 0 });
+  if (!sitio) {
+    anunciar('No hay sitio libre para otra butaca. Haz espacio o agrega un espacio.');
+    return;
+  }
+  nuevoIdDe(plano, tipoDeLista);
+  plano.butacasSueltas = [...(plano.butacasSueltas || []), { ...sitio, giro: giroHaciaEscenario(sitio.x + 0.5, sitio.y + 0.5) }];
+  mesaActiva = id;
+  regenerar('Butaca suelta ' + id.slice(1) + ' agregada en columna ' + sitio.x + ', fila ' + sitio.y + ', zona General.');
+  asegurarVisible({ x: sitio.x, y: sitio.y });
+}
+
+// Pista de baile (4 × 4) o barra (4 × 1) en el primer hueco libre.
+function agregarFormaNueva(forma) {
+  const plano = planoEditable();
+  const { nombre, ancho, alto } = FORMAS[forma];
+  const tipoDeLista = listaDeId('P1');
+  const id = 'P' + (plano.siguienteForma || 1);
+  const sitio = buscarSitioLibre(salaActual, celdasOcupadas(null), { id, tipo: 'forma', forma, x: 0, y: 0, ancho, alto });
+  if (!sitio) {
+    anunciar('No hay sitio libre para ' + nombre.toLowerCase() + ' de ' + ancho + ' × ' + alto + ' celdas.');
+    return;
+  }
+  nuevoIdDe(plano, tipoDeLista);
+  plano.formas = [...(plano.formas || []), sitio];
+  mesaActiva = id;
+  regenerar(nombre + ' ' + id.slice(1) + ' agregada en columna ' + sitio.x + ', fila ' + sitio.y + '.');
+  asegurarVisible({ x: sitio.x, y: sitio.y, w: ancho, h: alto });
+}
+
 function eliminarMesa(id) {
   const m = piezaPorId(id);
   const plano = planoEditable();
-  const lista = esBloqueFilas(m) ? 'bloquesFilas' : 'mesas';
+  const { lista } = listaDeId(id);
   plano[lista] = plano[lista].filter((c) => c.id !== id);
   regenerar(m.nombre + ' eliminad' + genero(m) + '.');
 }
@@ -3198,7 +3411,8 @@ function ejecutarAccion(accion, id = mesaActiva) {
   if (!pieza) return;
   if (!aplica(accion, pieza)) {
     anunciar(esEscenario(pieza) ? 'El escenario no admite esa acción.'
-      : esBloqueFilas(pieza) ? 'Esa acción no es para bloques de filas.' : 'Esa acción no es para mesas.');
+      : 'Esa acción no es para ' + { mesa: 'mesas', bloque: 'bloques de filas', forma: 'formas',
+                                     butaca: 'butacas sueltas' }[tipoDePieza(pieza)] + '.');
     return;
   }
   if (accion === 'eliminar') eliminarMesa(id);
@@ -3206,11 +3420,11 @@ function ejecutarAccion(accion, id = mesaActiva) {
   else transformarMesa(id, accion);
 }
 
-// Zona y nombre del bloque activo.
+// Zona de un bloque o butaca suelta, y nombre de un bloque o forma.
 function cambiarDatoDeBloque(cambio, mensaje) {
   const b = piezaPorId(mesaActiva);
-  if (!esBloqueFilas(b)) return;
-  reemplazarMesa({ ...configDeBloque(b), ...cambio });
+  if (!esBloqueFilas(b) && !esButacaSuelta(b)) return;
+  reemplazarMesa({ ...configDePieza(b), ...cambio });
   regenerar(mensaje(b));
 }
 document.getElementById('zona-pieza').addEventListener('change', (e) => {
@@ -3218,14 +3432,14 @@ document.getElementById('zona-pieza').addEventListener('change', (e) => {
 });
 function aplicarNombreDeBloque() {
   const b = piezaPorId(mesaActiva);
-  if (!esBloqueFilas(b)) return;
+  if (!esBloqueFilas(b) && !esForma(b)) return;
   const nombre = document.getElementById('nombre-pieza').value.trim().slice(0, 40);
   if (nombre === (b.nombrePropio || '')) return;
-  const cambio = { ...configDeBloque(b) };
+  const cambio = { ...configDePieza(b) };
   if (nombre) cambio.nombre = nombre;
   else delete cambio.nombre;
   reemplazarMesa(cambio);
-  regenerar(nombre ? 'El bloque se llama ahora «' + nombre + '».' : 'El bloque vuelve a su nombre por defecto.');
+  regenerar(nombre ? b.nombre + ' se llama ahora «' + nombre + '».' : b.nombre + ' vuelve a su nombre por defecto.');
 }
 document.getElementById('nombre-pieza').addEventListener('change', aplicarNombreDeBloque);
 document.getElementById('nombre-pieza').addEventListener('keydown', (e) => {
@@ -3263,9 +3477,9 @@ const PISTAS = {
   bloquear: 'Haz clic en una butaca, o Enter sobre ella, para bloquearla o desbloquearla · ' +
             'flechas para recorrer · las bloqueadas se guardan con el mapa',
   vista: 'Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer',
-  editor: 'Arrastra el escenario, una mesa o un bloque de filas para moverlo · con teclado, Tab ' +
-          'hasta la pieza: flechas la mueven, R la gira, + y − cambian su largo, ] y [ agregan o ' +
-          'quitan filas (o alto, en el escenario), C pone o quita cabeceras, U alterna uno o dos ' +
+  editor: 'Arrastra el escenario, una mesa, un bloque, una butaca o una forma para moverlo · con teclado, Tab ' +
+          'hasta la pieza: flechas la mueven, R la gira, + y − cambian su largo (o ancho), ] y [ agregan o ' +
+          'quitan filas (o alto, en el escenario y las formas), C pone o quita cabeceras, U alterna uno o dos ' +
           'lados, Ctrl+D la duplica, Supr la elimina · Esc cancela un arrastre · clic en el fondo ' +
           'selecciona una banda (otro clic, la que la contiene) y Ctrl+D la duplica · doble clic en ' +
           'un subtítulo para renombrar su banda',
@@ -3370,6 +3584,9 @@ document.getElementById('agregar-lados').addEventListener('click', () => agregar
 document.getElementById('agregar-cruz').addEventListener('click', () => agregarMesaNueva('cruz'));
 document.getElementById('agregar-barra').addEventListener('click', () => agregarMesaNueva('barra'));
 document.getElementById('agregar-bloque').addEventListener('click', agregarBloqueNuevo);
+document.getElementById('agregar-butaca').addEventListener('click', agregarButacaNueva);
+document.getElementById('agregar-pista').addEventListener('click', () => agregarFormaNueva('pista'));
+document.getElementById('agregar-forma-barra').addEventListener('click', () => agregarFormaNueva('barra'));
 for (const boton of botonesDeMesa()) {
   boton.addEventListener('click', () => ejecutarAccion(boton.dataset.accion));
 }
@@ -3423,6 +3640,8 @@ function actualizarAforo(sala) {
       : plural(filas, 'fila', 'filas') + ' en bandas',
     mesas.length ? plural(mesas.length, 'mesa', 'mesas') : 'sin mesas',
     ...(bloquesFilas.length ? [plural(bloquesFilas.length, 'bloque de filas', 'bloques de filas')] : []),
+    ...(butacasSueltas.length ? [plural(butacasSueltas.length, 'butaca suelta', 'butacas sueltas')] : []),
+    ...(formas.length ? [plural(formas.length, 'forma', 'formas')] : []),
     ...(escenario.ausente ? ['sin escenario'] : []),
     butacas.length + ' lugares en total',
   ].join(' · ');
