@@ -145,7 +145,8 @@ En el modo editor, el panel **Bandas de la sala** lista las bandas con sus contr
 
 - **− / +:** quita o agrega una fila (bandas de filas) o una fila de alto (zonas de mesas).
 - **Nombre:** un campo con el nombre propio de la banda. Vacío, toma el de por defecto.
-- **Zona:** Luneta o General, con su precio. El nombre por defecto sigue a la zona; uno propio se queda.
+- **Zona:** cualquier zona de la sala salvo la de mesas, con su precio. El nombre por defecto sigue a
+  la zona; uno propio se queda.
 - **↑ / ↓:** sube o baja la banda. Sus piezas viajan con ella.
 - **Duplicar:** crea una copia justo debajo, con todo lo que tiene dentro (ver más abajo).
 - **Eliminar:** quita la banda y las piezas que empiezan dentro de ella; lo de debajo sube.
@@ -157,6 +158,25 @@ explica (*«No se pudo: Mesa 4 choca con la fila A de General»*). Las butacas e
 que desaparecen se avisan igual que al acortar una mesa.
 
 Las bandas sin nombre propio toman el de su zona, numerado si se repite: *General*, *General 2*.
+
+### Zonas y precios
+
+Cada sala o mapa tiene **sus propias zonas**: al empezar, *Luneta* ($350), *Mesas* ($500) y *General*
+($200). En el panel **Diseño de la sala**, la sección **Zonas y precios** las lista:
+
+- **Nombre y precio** se editan en su campo y se aplican con Enter o al salir (Esc deshace lo
+  escrito). El precio es por lugar, en pesos: `350`, `350.50` o `$1,200.00`, de 0 a 1,000,000. Los
+  nombres no se repiten.
+- **Agregar zona** crea *Zona N* a $0 y lleva a su nombre. Hasta 20 zonas.
+- **Eliminar** solo se puede con una zona que no use ninguna banda de filas, bloque ni butaca suelta.
+  La zona de mesas no se elimina, y siempre queda al menos una zona para filas.
+- Cada fila muestra cuántos lugares tiene la zona.
+
+Las bandas de filas, los bloques y las butacas sueltas eligen su zona entre todas menos la de mesas;
+los lugares de mesa son siempre de la zona de mesas. Todo lo que muestra la zona usa sus valores
+actuales: la etiqueta de las butacas (*«VIP, fila A, butaca 1»*), el nombre por defecto de las bandas,
+los selectores y el resumen con su total. Las filas nuevas nacen en *General* o, si no existe, en la
+primera zona de filas. **Restablecer sala** vuelve a las tres de siempre.
 
 ### Nombres, capas y selección de bandas
 
@@ -473,7 +493,7 @@ El diseño se guarda **sin base de datos**, como JSON, de dos formas:
   a otro equipo o para versionarlo en git.
 
 Un mapa guarda el **diseño**, no la venta: nombre, columnas (bloques y pasillos), bandas, mesas con su forma y posición,
-butacas bloqueadas y los contadores de ids. No guarda la ocupación ni la selección.
+butacas bloqueadas, **zonas con sus nombres y precios** y los contadores de ids. No guarda la ocupación ni la selección.
 
 **Límites:** una sala tiene como máximo **20.000 butacas** (contando las de mesas, bloques y butacas
 sueltas). Más harían lento el dibujo del plano. El editor no aplica un cambio que pase de ahí (agregar

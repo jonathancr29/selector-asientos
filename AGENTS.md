@@ -43,7 +43,8 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    con nombre de las plantillas ('ambos'...) y `rejillaDeSala` es el atajo para ellas;
    `distribucionDeSala` hace el camino inverso. `motivoDistribucion` y `leerDistribucion` validan y
    leen lo que se escribe en el editor. `repartirMesas` coloca mesas dentro de los bloques.
-3. **Datos y tipos de sala:** `zonas`, `butacas`, `muebles`, `TIPOS_DE_SALA` (pasillos y bandas de
+3. **Datos y tipos de sala:** `zonas` (índice de la sala generada), `ZONAS_POR_DEFECTO`, `usarZonas`,
+   `zonaParaFilas`, `butacas`, `muebles`, `TIPOS_DE_SALA` (pasillos y bandas de
    cada tipo), `altoDeBanda`, `agregarFilas`.
 4. **Mesas:** `geometriaMesa({ largo, cabeceras, unLado, giro })` calcula huella, tablero y lugares,
    cada uno con `mira` (giro del icono hacia el tablero); `girar90` da el cuarto de vuelta.
@@ -60,7 +61,7 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    devuelven configuraciones de pieza (mesa `{ id, x, y, largo, cabeceras, unLado, giro }` o bloque
    `{ id, tipo: 'filas', x, y, ancho, filas, zona, giro, nombre? }`); nunca modifican la actual.
    **Bandas y columnas:** `planoDesdeSala`, `cambiarDistribucion`, `redimensionarBanda`, `moverBanda`, `eliminarBanda`, `agregarBanda`,
-   `cambiarZonaBanda`, `agregarVertical`, `cambiarAnchoVertical`, `agregarBandaEnVertical`,
+   `cambiarZonaBanda`, `agregarZona`, `editarZona`, `eliminarZona`, `usosDeZona`, `leerPrecio`, `agregarVertical`, `cambiarAnchoVertical`, `agregarBandaEnVertical`,
    `renombrarBanda`, `duplicarBanda` y `duplicarPieza`. Devuelven un plano nuevo o `{ motivo }`.
    **Butacas sueltas y formas:** `agregarButacaSuelta`, `configDeButaca`, `agregarForma`,
    `configDeForma`, `cambiarTamanoForma` y `FORMAS`. `LISTAS_DE_PIEZAS` (lista, prefijo y contador de
@@ -173,6 +174,12 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - **Un mapa guarda diseño, no venta:** pasillos, bandas, mesas, bloqueadas y contadores. Nunca la
   ocupación ni la selección. La ocupación de ejemplo vive en las plantillas (`ocupadas`,
   `mesasOcupadas`).
+- **Las zonas son del plano:** `plano.zonas` es una lista `[{ id, nombre, precio }]` (precio en
+  centavos). `generarPlano` la vuelca en el índice `zonas` con `usarZonas` antes de disponer las
+  bandas, así que `zonas[id]` siempre es de la sala actual. `validarMapa` también llama a
+  `usarZonas` antes de `disponerBandas`. No escribas ids de zona fijos (`'luneta'`, `'general'`):
+  valida contra la lista y usa `zonaParaFilas` para las filas nuevas. La zona `mesas` es la de los
+  lugares de mesa: siempre existe y no se asigna a filas.
 - **Aforo máximo: `BUTACAS_MAXIMAS` (20.000).** `validarMapa` lo comprueba con `motivoDeAforo`;
   `aplicarBandas` lo trata como un error de bandas y revierte; los cambios de piezas (agregar,
   transformar, duplicar) pasan por `conTopeDeAforo`, que copia el plano antes y lo restaura si se
@@ -277,3 +284,4 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - Más formas: escenario secundario, cabina de DJ, columna.
 - Comprobar que las piezas caben sin recalcular las celdas por cada pieza (cuadrático con muchas piezas).
 - Zonas pintadas con su precio.
+- Elegir la zona de cada mesa (hoy todos los lugares de mesa son de la zona de mesas).
