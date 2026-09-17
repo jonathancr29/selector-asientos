@@ -164,8 +164,14 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - **Accesibilidad:**
   - Cada butaca es `role="checkbox"` con `aria-label`; cada mesa del editor, `role="button"` con
     `aria-pressed` si es la activa.
-  - Nada de `title` en botones con texto: algunos lectores lo anuncian en su lugar. Los atajos van en
+  - Nada de `title` en botones: algunos lectores lo anuncian en su lugar. Los atajos van en
     `aria-keyshortcuts`.
+  - **Botones de icono:** clase `icono`, `aria-label` con el nombre y `data-tooltip` con el nombre y el
+    atajo, que el CSS muestra al pasar el ratón o con `:focus-visible`. El icono es
+    `<svg class="ico" aria-hidden="true"><use href="#i-..."></use></svg>`; los `<symbol>` están en el
+    `<svg class="sprite">` del principio del `<body>`. Si un botón cambia de función (escenario), cambia
+    `aria-label`, `data-tooltip` y el `href` del `<use>`, nunca `textContent` (borraría el icono).
+    Un icono de Material Symbols nuevo se añade a `NOTICE`.
   - `tabindex` móvil: una sola parada de tabulación por capa, gestionada en `focusin`.
   - `#estado` y `#aviso` son `role="status"`; el resumen es `aria-live`.
   - El estado no depende solo del color (palomita, aspa, raya; sombra roja con contorno discontinuo).

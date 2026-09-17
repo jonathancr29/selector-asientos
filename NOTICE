@@ -15,6 +15,26 @@ El trazo SVG de la butaca, declarado en index.html dentro de
 <symbol id="butaca">, procede del icono "event_seat" de Material Icons y se
 usa sin modificaciones.
 
+------------------------------------------------------------------------------
+Material Symbols (Rounded, peso 400) — iconos de las barras del editor
+Copyright (c) Google LLC
+Licencia: Apache License, Version 2.0
+https://github.com/google/material-design-icons
+Tomados del paquete npm @material-symbols/svg-400, version 0.47.3
+(https://github.com/marella/material-symbols), que redistribuye esos iconos.
+https://www.apache.org/licenses/LICENSE-2.0
+------------------------------------------------------------------------------
+
+Los trazos de estos iconos se declaran en index.html dentro del <svg
+class="sprite">, como <symbol id="i-...">, sin modificaciones (el de "compress"
+se gira 90 grados al usarlo): visibility, edit, zoom_in, zoom_out, fit_screen,
+restart_alt, rotate_90_degrees_cw, arrow_range, compress, content_copy, delete,
+local_bar, stadium, sell, label y add.
+
+Los iconos de mesas, bloque de filas, butaca suelta, pista de baile, filas,
+cabeceras, un solo lado, bloquear butacas y escenario son obra original, salvo
+la butaca que reutilizan, que es el "event_seat" citado arriba.
+
 Todo el codigo restante —renderizador, rejilla de sala, reparto de mesas,
 zoom por viewBox, seleccion, navegacion por teclado y estilos— es obra
 original del titular del copyright indicado arriba, bajo licencia MIT.

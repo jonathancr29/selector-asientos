@@ -4,9 +4,27 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Zonas y precios editables
+## Sin publicar — Iconos en las barras
 
-Rama `claude/zonas-editables`.
+Rama `claude/iconos-barra`.
+
+### Cambiado
+
+- **Botones de icono** en la barra de modo y zoom y en la del editor: zoom, ajustar, bloquear
+  butacas, agregar (mesas de lados, cruz y un lado, bloque, butaca suelta, pista y barra), acciones
+  de la pieza (girar, alargar, acortar, agregar y quitar fila, cabeceras, un solo lado, duplicar,
+  eliminar), escenario y restablecer. Botones de 32 × 32 px en lugar de texto.
+- **Previsualizar y Editar plano** llevan icono y texto. Tipo de sala, Zona y Nombre, un icono como
+  etiqueta.
+- **Tooltip visible** con nombre y atajo al pasar el ratón o al llegar con Tab; el nombre completo
+  sigue en `aria-label`.
+- Iconos de Material Symbols (Apache 2.0, añadidos a `NOTICE`) y propios para mesas, bloque,
+  pista, filas, cabeceras, un solo lado, bloquear y escenario, dibujados como en el plano.
+
+## 2026-09-17 — PR #14: zonas y precios editables
+
+[PR #14](https://github.com/jonathancr29/selector-asientos/pull/14), fusionado en `main` con el
+commit `903c404`.
 
 ### Añadido
 
