@@ -4,9 +4,27 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Previsualizar ajustado a la pantalla
+## Sin publicar — Iconos y campos del panel de configuración
 
-Rama `claude/previsualizar-ajustado`.
+Rama `claude/panel-iconos`.
+
+### Cambiado
+
+- **Columnas:** «Butacas por bloque» y «Anchos de pasillo» van en su propia línea, con etiquetas
+  alineadas y campos más cortos, y «Aplicar» pasa a un icono ✓. Igual el ancho del lienzo.
+- **Botones del panel con icono** y tooltip, como en la barra de herramientas: mapa (guardar,
+  exportar, importar, eliminar), zonas (eliminar, agregar zona), bandas (quitar y agregar fila,
+  subir, bajar, duplicar, eliminar, guías), verticales (ancho, mover, agregar filas, mesas o
+  espacio) y agregar banda de filas, zona de mesas, espacio o franja.
+- **Filas del panel más compactas:** cada zona cabe en una línea (nombre, precio y papelera) y cada
+  banda en dos (nombre y detalle arriba; los controles debajo).
+- Iconos nuevos de Material Symbols (añadidos a `NOTICE`) y propios para guías de fila y los cuatro
+  de agregar banda.
+
+## 2026-09-17 — PR #17: previsualizar ajustado a la pantalla
+
+[PR #17](https://github.com/jonathancr29/selector-asientos/pull/17), fusionado en `main` con el
+commit `7fafcab`.
 
 ### Cambiado
 
