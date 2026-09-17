@@ -26,7 +26,8 @@ const cargar = () => new Function(html.slice(inicio, fin) +
   ' cambiarFilasBloque, letraDeFila, escenario, girarEscenario, cambiarTamanoEscenario,' +
   ' giroHaciaEscenario, disponerBandas, hojasDe, ubicar, agregarVertical, cambiarAnchoVertical,' +
   ' agregarBandaEnVertical, duplicarPieza, duplicarBanda, renombrarBanda, capasDe, bandaEnCelda,' +
-  ' alternarGuias, quitarEscenario, agregarEscenario, cambiarAnchoLienzo };')();
+  ' alternarGuias, quitarEscenario, agregarEscenario, cambiarAnchoLienzo,' +
+  ' formas, butacasSueltas, cambiarTamanoForma };')();
 
 const DISPOSICIONES = ['ninguno', 'izquierda', 'derecha', 'ambos'];
 const rango = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
@@ -1501,4 +1502,112 @@ test('mapas version 3: lienzo, sin escenario y espacios con guias, y se validan 
   const leidoV2 = api.validarMapa(v2).mapa;
   api.generarPlano(api.registrarMapa(leidoV2));
   assert.deepEqual([leidoV2.escenario, api.escenario.ausente, api.escenario.ancho], [undefined, false, 14]);
+});
+
+// --- Fase B: butacas sueltas y formas -------------------------------------------
+
+const forma = (id, tipoForma, x, y, extra = {}) =>
+  ({ id, tipo: 'forma', forma: tipoForma, x, y, ancho: 4, alto: tipoForma === 'pista' ? 4 : 1, ...extra });
+const suelta = (id, x, y, extra = {}) => ({ id, tipo: 'butaca', x, y, zona: 'general', giro: 0, ...extra });
+
+test('una butaca suelta es una butaca con el id de la pieza, que se numera con su zona', () => {
+  const api = cargar();
+  const { sala } = conLienzo(api, (p) => ({ ...p, siguienteBloque: 2, siguienteButaca: 4,
+    bloquesFilas: [bloque('F1', 5, 2, { ancho: 3, filas: 1, zona: 'general' })],
+    butacasSueltas: [suelta('B1', 1, 2), suelta('B2', 12, 2, { giro: 90 }), suelta('B3', 3, 5, { zona: 'luneta', giro: 270 })] }));
+  assert.equal(api.primeraPiezaQueNoCabe(sala), null);
+  const b2 = api.butacas.find((b) => b.id === 'B2');
+  assert.deepEqual([b2.suelta, b2.mira, b2.grupo], ['B2', 270, null]);
+  // Misma altura que el bloque: B1 va antes (mas a la izquierda) y B2 despues, aunque mire de lado.
+  assert.deepEqual(['B1', 'F1-1-1', 'F1-1-3', 'B2', 'B3'].map((id) => etiqueta(api, id)),
+    ['General A1', 'General A2', 'General A4', 'General A5', 'Luneta A1']);
+  // Ocupa su celda y cruza pasillos como un bloque.
+  assert.equal(api.celdasOcupadas(null).get('1,2'), 'la butaca A1 de General');
+  assert.equal(api.motivoNoCabe(sala, api.celdasOcupadas('B1'), suelta('B1', 1, 2)), null);
+  const conPasillos = api.generarPlano('mixta-ambos');
+  assert.equal(api.motivoNoCabe(conPasillos, api.celdasOcupadas(null), suelta('B9', 5, 16)), null);   // la 5 es pasillo
+});
+
+test('las formas ocupan sus celdas, giran sobre su centro y cambian de tamaño', () => {
+  const api = cargar();
+  const { sala } = conLienzo(api, (p) => ({ ...p, siguienteForma: 3,
+    formas: [forma('P1', 'pista', 2, 2), forma('P2', 'barra', 10, 0, { nombre: 'Barra libre' })] }));
+  assert.deepEqual(api.formas.map((f) => [f.id, f.nombre, f.geo.ancho, f.geo.alto]),
+    [['P1', 'Pista de baile 1', 4, 4], ['P2', 'Barra libre', 4, 1]]);
+  assert.deepEqual(api.muebles.filter((m) => m.tipo === 'forma').map((m) => [m.forma, m.pieza, m.x, m.y, m.w, m.h, m.texto]),
+    [['pista', 'P1', 2, 2, 4, 4, 'Pista de baile 1'], ['barra', 'P2', 10, 0, 4, 1, 'Barra libre']]);
+  assert.equal(api.butacas.length, 0);   // no tienen lugares
+  const ocupadas = api.celdasOcupadas(null);
+  assert.deepEqual([ocupadas.get('5,5'), ocupadas.get('13,0'), ocupadas.get('6,2')], ['Pista de baile 1', 'Barra libre', undefined]);
+  assert.equal(api.motivoNoCabe(sala, ocupadas, suelta('B1', 3, 3)), 'choca con Pista de baile 1');
+  assert.equal(api.primeraPiezaQueNoCabe(sala), null);
+  // Girar intercambia ancho y alto; dos giros la dejan donde estaba.
+  const barra = forma('P2', 'barra', 10, 4);
+  assert.deepEqual(api.girarEscenario(barra), { ...barra, x: 11, y: 2, ancho: 1, alto: 4 });
+  assert.deepEqual(api.girarEscenario(api.girarEscenario(barra)), barra);
+  assert.deepEqual(api.cambiarTamanoForma(barra, 1, 1), { ...barra, ancho: 5, alto: 2 });
+  assert.equal(api.cambiarTamanoForma(barra, 0, -1), null);
+  assert.equal(api.cambiarTamanoForma({ ...barra, ancho: 40 }, 1, 0), null);
+});
+
+test('colocarCerca mete en la sala una pieza que se sale por un borde', () => {
+  const api = cargar();
+  const { sala } = conLienzo(api);
+  // Una barra de 4 × 1 en la fila 0 girada queda de 1 × 4 empezando en la fila -2.
+  const girada = api.girarEscenario(forma('P1', 'barra', 5, 0));
+  assert.deepEqual([girada.x, girada.y], [6, -2]);
+  assert.deepEqual(api.colocarCerca(sala, api.celdasOcupadas(null), girada), { ...girada, y: 0 });
+});
+
+test('duplicar formas y butacas sueltas, y copiarlas con su banda y sus bloqueadas', () => {
+  const api = cargar();
+  const { plano, sala } = conLienzo(api, (p) => ({ ...p, siguienteForma: 2, siguienteButaca: 2, bloqueadas: ['B1'],
+    formas: [forma('P1', 'pista', 2, 2, { nombre: 'Pista central' })], butacasSueltas: [suelta('B1', 10, 3, { zona: 'luneta' })] }));
+  const pista = api.duplicarPieza(plano, sala, 'P1');
+  assert.deepEqual([pista.formas.at(-1), pista.siguienteForma],
+    [{ id: 'P2', tipo: 'forma', forma: 'pista', x: 6, y: 2, ancho: 4, alto: 4, nombre: 'Pista central (copia)' }, 3]);
+  const butaca = api.duplicarPieza(plano, sala, 'B1');
+  assert.deepEqual([butaca.butacasSueltas.at(-1), butaca.siguienteButaca, butaca.bloqueadas],
+    [{ id: 'B2', tipo: 'butaca', x: 11, y: 3, zona: 'luneta', giro: 0 }, 3, ['B1', 'B2']]);
+  // Con el espacio entero: la copia va debajo con sus piezas y la butaca sigue bloqueada.
+  const espacio = api.duplicarBanda(plano, sala, 'espacio');
+  assert.deepEqual(espacio.formas.map((f) => [f.id, f.x, f.y]), [['P1', 2, 2], ['P2', 2, 12]]);
+  assert.deepEqual(espacio.butacasSueltas.map((b) => [b.id, b.x, b.y]), [['B1', 10, 3], ['B2', 10, 13]]);
+  assert.deepEqual(espacio.bloqueadas, ['B1', 'B2']);
+  const salaCopia = api.generarPlano('mapa-en-blanco', espacio);
+  assert.deepEqual([salaCopia.alto, api.primeraPiezaQueNoCabe(salaCopia)], [20, null]);
+  // Eliminar la banda quita sus piezas; moverla, las lleva.
+  const sin = api.eliminarBanda(espacio, salaCopia, 'banda1');
+  assert.deepEqual([sin.formas.length, sin.butacasSueltas.length], [1, 1]);
+  const arriba = api.moverBanda(espacio, salaCopia, 'banda1', -1);
+  assert.deepEqual(arriba.formas.map((f) => [f.id, f.y]), [['P1', 12], ['P2', 2]]);
+});
+
+test('planoDesdeSala y los mapas guardan formas, butacas sueltas y sus contadores', () => {
+  const api = cargar();
+  const { sala } = conLienzo(api, (p) => ({ ...p, siguienteForma: 5, siguienteButaca: 2,
+    formas: [forma('P4', 'barra', 1, 0, { nombre: 'Barra libre' })], butacasSueltas: [suelta('B1', 8, 3, { giro: 180 })] }));
+  const plano = api.planoDesdeSala('mapa-en-blanco', sala);
+  assert.deepEqual([plano.formas, plano.butacasSueltas, plano.siguienteForma, plano.siguienteButaca],
+    [[forma('P4', 'barra', 1, 0, { nombre: 'Barra libre' })], [suelta('B1', 8, 3, { giro: 180 })], 5, 2]);
+  const mapa = JSON.parse(JSON.stringify(api.mapaDesdePlano('Salón', plano, null)));
+  const { mapa: leido, errores } = api.validarMapa(mapa);
+  assert.equal(errores, undefined);
+  api.generarPlano(api.registrarMapa(leido));
+  assert.deepEqual([api.formas.length, api.butacasSueltas.length, api.butacas[0].mira], [1, 1, 0]);
+
+  const con = (cambio) => { const m = JSON.parse(JSON.stringify(mapa)); cambio(m); return api.validarMapa(m).errores || []; };
+  assert.ok(con((m) => { m.formas[0].forma = 'toString'; }).includes('P4: forma desconocida'));
+  assert.ok(con((m) => { m.formas[0].alto = 21; }).includes('P4: tamaño fuera de rango'));
+  assert.ok(con((m) => { m.formas.push({ ...m.formas[0] }); }).includes('forma 2: id no válido o repetido'));
+  assert.ok(con((m) => { m.formas = 'no'; }).includes('la lista de formas no es válida'));
+  assert.ok(con((m) => { m.butacasSueltas[0].zona = 'vip'; }).includes('B1: zona desconocida'));
+  assert.ok(con((m) => { m.butacasSueltas[0].giro = 45; }).includes('B1: giro no válido'));
+  assert.ok(con((m) => { m.butacasSueltas[0].id = 'F1'; }).includes('butaca suelta 1: id no válido o repetido'));
+  assert.deepEqual(con((m) => { m.butacasSueltas[0].x = 2; m.butacasSueltas[0].y = 0; }), ['Barra libre choca con la butaca A1 de General']);
+  // Sin las listas (mapas anteriores), vacias; los contadores no bajan de lo que existe.
+  const viejo = api.validarMapa({ ...mapa, formas: undefined, butacasSueltas: undefined, siguienteForma: undefined });
+  assert.deepEqual([viejo.mapa.formas, viejo.mapa.butacasSueltas, viejo.mapa.siguienteForma], [[], [], 1]);
+  const bajo = api.validarMapa({ ...mapa, siguienteForma: 1 });
+  assert.equal(bajo.mapa.siguienteForma, 5);
 });

@@ -305,6 +305,9 @@ atajo de teclado sobre la mesa enfocada:
 | Butacas por fila de un bloque | Alargar / Acortar | + / − |
 | Filas de un bloque | + fila / − fila | ] / [ |
 | Zona y nombre de un bloque | Zona / Nombre | — |
+| Agregar una butaca suelta | Butaca suelta | — |
+| Agregar una pista de baile o una barra | Pista de baile / Barra | — |
+| Zona de una butaca suelta, nombre de una forma | Zona / Nombre | — |
 | Volver a la sala de su tipo | Restablecer sala | — |
 | Bloquear o desbloquear butacas | Bloquear butacas, y clic en la butaca | Enter o Espacio |
 
@@ -401,6 +404,28 @@ cero, por ejemplo un salón de eventos. Al elegirla se abre directamente el modo
   el ancho si cabe, si no de 8 o de 4 columnas. Después se mueve y cambia de tamaño como siempre.
 - **Guardar:** con un nombre, en «Mis mapas», como cualquier mapa (versión 3 del formato).
 
+### Butacas sueltas y formas
+
+Tres piezas más en la barra del editor, en cualquier sala (no solo en el mapa en blanco). Se colocan
+en el primer hueco libre, se arrastran o se mueven con flechas, y se duplican (Ctrl+D) y eliminan
+como las demás. Pueden cruzar pasillos.
+
+- **Butaca suelta:** una sola butaca de la zona General, que se crea mirando al escenario. Se gira
+  de 90 en 90 (R) y se cambia de zona con el selector **Zona**. **Se numera con las demás butacas de
+  su zona**, por altura y de izquierda a derecha, mire hacia donde mire: junto a un bloque de General
+  en la misma fila, puede ser la *General A1* y el bloque seguir en A2. Su id es el de la pieza (`B3`).
+- **Pista de baile** (4 × 4) y **barra** (4 × 1): rectángulos con nombre que ocupan sus celdas, así que
+  nada se les pone encima. No tienen lugares. La pista se dibuja con cuadros suaves y la barra como un
+  mostrador macizo, las dos con su nombre dentro.
+  - **Girar (R):** intercambia ancho y alto sobre su centro. Si al girar se saldría por un borde, se
+    mete en la sala.
+  - **Ancho:** Alargar / Acortar (+ / −), de 1 a 40. **Alto:** + fila / − fila (] / [), de 1 a 20.
+  - **Nombre:** el campo **Nombre** de la barra; vacío, vuelve a *Pista de baile N* o *Barra N* (N es
+    el número de su id, compartido por todas las formas).
+
+Al duplicar una banda o eliminarla, sus butacas sueltas y formas se copian o se quitan con ella, igual
+que las mesas y los bloques.
+
 ### El escenario
 
 El escenario es una pieza más: `{ x, y, ancho, alto }` en celdas. Por defecto ocupa la franja inicial
@@ -469,7 +494,8 @@ butacas bloqueadas y los contadores de ids. No guarda la ocupación ni la selecc
 
 **Versión 3** (la actual) añade `lienzo` (mapa en blanco, sin pasillos), `escenario: null` (sin
 escenario) y bandas de tipo `espacio` (con `guias`); el escenario ya no tiene que ser la primera
-banda. Los mapas de la versión 2 se leen igual que antes.
+banda. También guarda `formas` y `butacasSueltas` (listas opcionales) con sus contadores
+`siguienteForma` y `siguienteButaca`. Los mapas de la versión 2 se leen igual que antes.
 
 Los mapas de la versión 1 (que guardaban `"pasillos": "ambos"`) se siguen leyendo: se convierten a
 bloques y pasillos al cargarlos.
@@ -491,8 +517,7 @@ seguir usando **Exportar JSON**.
 - **Desplazar el plano** solo al arrastrar una mesa hasta el borde con zoom.
 - **Zonas pintadas con su precio:** marcar un área del plano con una zona y su precio, en lugar de
   asignarlo pieza a pieza.
-- **Más herramientas para el mapa en blanco** (fase B, prevista): butacas sueltas y formas como pista
-  de baile o barra.
+- **Más formas:** escenario secundario, cabina de DJ, columna u otros obstáculos del recinto.
 
 ## Pruebas
 
@@ -502,7 +527,7 @@ node --test pruebas.mjs
 
 Cubren la rejilla, el reparto de mesas, el aforo de la tabla anterior, la conciliación de la
 selección al cambiar de sala, los tipos de sala y las bandas, y las reglas del editor: geometría de las mesas, hacia dónde
-mira cada silla, dónde caben, girar, alargar, cabeceras, un solo lado y sitio para mesas nuevas; también el mapa en blanco (lienzo, espacios, guías, escenario opcional y mapas versión 3), duplicar piezas y bandas, renombrar bandas, subtítulos y selección de bandas por clic. No hay copia del código: `pruebas.mjs` lee `index.html` y
+mira cada silla, dónde caben, girar, alargar, cabeceras, un solo lado y sitio para mesas nuevas; también el mapa en blanco (lienzo, espacios, guías, escenario opcional y mapas versión 3), butacas sueltas y formas, duplicar piezas y bandas, renombrar bandas, subtítulos y selección de bandas por clic. No hay copia del código: `pruebas.mjs` lee `index.html` y
 evalúa la parte del script anterior a la marca *«Fin de la parte sin DOM»*, así que el proyecto
 sigue siendo un solo archivo. Requiere Node 18 o posterior.
 

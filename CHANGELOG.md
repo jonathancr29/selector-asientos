@@ -4,9 +4,33 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Mapa en blanco (fase A)
+## Sin publicar — Butacas sueltas y formas (fase B)
 
-Rama `claude/mapa-en-blanco`.
+Rama `claude/butacas-y-formas`.
+
+### Añadido
+
+- **Butaca suelta:** una butaca que se coloca en cualquier hueco, gira de 90 en 90, cambia de zona y
+  se duplica. Se numera con las demás butacas de su zona.
+- **Pista de baile y barra:** formas con nombre que ocupan sus celdas, sin lugares. Se mueven,
+  giran, cambian de ancho y alto, se renombran y se duplican. La pista con cuadros; la barra como
+  mostrador.
+- Duplicar o eliminar una banda copia o quita también sus butacas sueltas y formas.
+- Los mapas (versión 3) guardan y validan `formas` y `butacasSueltas` con sus contadores.
+- Pruebas de numeración de butacas sueltas, celdas y giro de formas, duplicar, bandas y mapas (91 en
+  total).
+
+### Cambiado
+
+- **Girar junto a un borde:** si una pieza girada se saldría de la sala, se prueba metida dentro
+  (antes solo a una celda de distancia).
+- Las listas de piezas (mesas, bloques, formas y butacas sueltas) se recorren con una sola tabla,
+  `LISTAS_DE_PIEZAS`.
+
+## 2026-09-16 — PR #10: mapa en blanco (fase A)
+
+[PR #10](https://github.com/jonathancr29/selector-asientos/pull/10), fusionado en `main` con el
+commit `f276b20`.
 
 ### Añadido
 

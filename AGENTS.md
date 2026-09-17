@@ -62,6 +62,9 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    **Bandas y columnas:** `planoDesdeSala`, `cambiarDistribucion`, `redimensionarBanda`, `moverBanda`, `eliminarBanda`, `agregarBanda`,
    `cambiarZonaBanda`, `agregarVertical`, `cambiarAnchoVertical`, `agregarBandaEnVertical`,
    `renombrarBanda`, `duplicarBanda` y `duplicarPieza`. Devuelven un plano nuevo o `{ motivo }`.
+   **Butacas sueltas y formas:** `agregarButacaSuelta`, `configDeButaca`, `agregarForma`,
+   `configDeForma`, `cambiarTamanoForma` y `FORMAS`. `LISTAS_DE_PIEZAS` (lista, prefijo y contador de
+   cada tipo), `listaDeId` y `nuevoIdDe`.
    **Lienzo y escenario opcional:** `cambiarAnchoLienzo`, `alternarGuias`, `agregarGuias`,
    `quitarEscenario`, `agregarEscenario` y `tieneAlto` (mesas y espacios guardan su alto).
    **Capas y subtítulos:** `capasDe` (orden de color), `bandaEnCelda` (selección por clic),
@@ -139,6 +142,15 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - **Un lienzo no tiene pasillos:** `lienzo: true` con `distribucion` de un solo bloque. Su ancho se
   cambia con `cambiarAnchoLienzo`, no con `cambiarDistribucion` (que recolocaría las piezas).
 - **Las guías de fila son decorado** (muebles `guia`): no son butacas, no ocupan celdas ni se numeran.
+- **Las piezas en listas se recorren con `LISTAS_DE_PIEZAS`:** mesas (`M`), bloques (`F`), formas
+  (`P`) y butacas sueltas (`B`). Copiar, reanclar, duplicar y buscar su lista (`listaDeId`) salen de
+  ahí. Si añades un tipo de pieza, agrégalo a la tabla y a `piezaPorId`, `primeraPiezaQueNoCabe`,
+  `dibujarPiezas`, `planoDesdeSala`, `mapaDesdePlano` y `validarMapa`.
+- **Solo las mesas respetan los pasillos:** `motivoNoCabe` lo decide por `!pieza.tipo` (las mesas son
+  las únicas piezas sin `tipo`).
+- **Una butaca suelta no lleva guion en su id** (`B3`): `copiarBloqueadas` usa el id entero como
+  prefijo cuando no hay guion.
+- **Las formas no tienen lugares** pero ocupan celdas (`celdasOcupadas`) con su nombre.
 - **Los ids son estables.** Bloques: bloque + fila + butaca locales (`F1-2-3`). Filas de banda: banda + fila + número dentro de la banda
   (`luneta-A1`), aunque la etiqueta visible siga la numeración por zona. Mesas: mesa + lado (`M2-N1`, `M2-S2`,
   `M2-C1`), nunca un número de orden. Mover, girar o cambiar de sala mixta no renombra lugares;
@@ -234,6 +246,8 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
      una mesa sin caber, y que el foco vuelva al mismo control.
    - **Mapa en blanco:** elegirlo abre el editor; ancho del lienzo, agregar espacios y guías, agregar
      y quitar escenario, guardar y recargar.
+   - **Butacas sueltas y formas:** agregar, mover, girar (una barra junto al borde), cambiar tamaño,
+     zona y nombre, duplicar, guardar, y elegir una butaca suelta en Previsualizar.
    - **Duplicar y nombres:** Duplicar y Ctrl+D en una mesa, un bloque, una banda, una vertical y una
      franja; clic en el fondo para seleccionar bandas (y subir de nivel); renombrar en el panel y con
      doble clic en un subtítulo; que los subtítulos se lean en Previsualizar sin tapar clics.
@@ -248,5 +262,5 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - Guardar los mapas en un servidor: hoy se guardan en el navegador o como archivos JSON.
 - Desplazar el plano solo al arrastrar una mesa hasta el borde con zoom.
 - Decidir si una mesa con lugares ocupados se puede mover, acortar o eliminar (hoy sí, con aviso).
-- Mapa en blanco, fase B: butacas sueltas y formas (pista de baile, barra).
+- Más formas: escenario secundario, cabina de DJ, columna.
 - Zonas pintadas con su precio.
