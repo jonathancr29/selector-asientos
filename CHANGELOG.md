@@ -4,9 +4,30 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Duplicar, nombres y capas de bandas
+## Sin publicar — Mapa en blanco (fase A)
 
-Rama `claude/duplicar-y-nombres`.
+Rama `claude/mapa-en-blanco`.
+
+### Añadido
+
+- **«Mapa en blanco»** en el selector de tipo de sala (grupo *Nuevo*): un lienzo de 20 × 10 sin
+  escenario, filas ni mesas, que se abre en el editor y se guarda con nombre en «Mis mapas».
+- **Ancho del lienzo** ajustable (1 a 40 columnas) desde el panel. El lienzo no tiene pasillos: el
+  pasillo es el hueco entre piezas.
+- **Banda «Espacio»:** una banda vacía con su alto, para llenarla con piezas; «Agregar espacio» y
+  «+ espacio» dentro de las verticales.
+- **Guías de fila** en los espacios: letras de referencia (A, B, C…) que no son butacas.
+- **Escenario opcional** en cualquier sala: «Quitar escenario» / «Agregar escenario» (en el primer
+  hueco libre). Sin escenario, las filas miran hacia arriba y se numeran desde arriba.
+- **Mapas versión 3:** `lienzo`, `escenario: null` y bandas `espacio`; el escenario deja de ser banda
+  obligatoria. Las versiones 1 y 2 se siguen leyendo.
+- Pruebas del lienzo, espacios y guías, numeración sin escenario, agregar escenario, ancho del
+  lienzo y mapas versión 3 (86 en total).
+
+## 2026-09-16 — PR #9: duplicar, nombres y capas de bandas
+
+[PR #9](https://github.com/jonathancr29/selector-asientos/pull/9), fusionado en `main` con el
+commit `a5d686c`.
 
 ### Añadido
 
