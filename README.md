@@ -303,18 +303,25 @@ quita (el escenario nunca). Como siempre, si algo deja de caber, el cambio no se
   butacas, escenario, restablecer). Los iconos van en rejilla y su tooltip sale a la derecha.
 - **Lateral derecho (configuración), solo en el editor:** *Mapa* (nombre, guardar, exportar,
   importar), *Columnas*, *Zonas y precios* y *Bandas*.
-- **Sticky:** los dos laterales se quedan fijos al hacer scroll y tienen su propio scroll si no caben.
-  Cada grupo se pliega haciendo clic en su título.
+- **En escritorio (más de 900 px de ancho y 600 px de alto), una sola pantalla:** la página no se
+  desplaza. Los laterales, el encabezado y el pie quedan fijos, y el plano llena el hueco que queda,
+  así que la sala se ve completa. Lo único que se desplaza es el interior de un lateral cuando su
+  contenido no cabe. Cada grupo se pliega haciendo clic en su título.
+- **Los textos plegables se abren sobre el plano:** el del encabezado baja y el del pie sube, con su
+  propio fondo y sombra, sin mover ni cambiar el tamaño del plano. Se cierran con su flecha, con
+  **Esc** o al hacer clic en el plano.
 - **Línea de estado:** los mensajes («Mesa 3 movida…») y avisos van en una línea fija al pie del
   plano, así que se ven aunque el plano sea alto.
-- **Textos plegables:** «Qué es y cómo se usa» (descripción e instrucciones) en el encabezado y
-  «Notas del proyecto» en el pie se abren y cierran con su flecha. Al plegar las instrucciones, el
-  plano gana ese alto; las notas empiezan cerradas. El aforo se queda siempre a la vista.
+- **Textos plegables:** «Qué es y cómo se usa» (descripción e instrucciones) en el encabezado, y
+  «Butacas elegidas y notas» en el pie, que lleva el detalle de la selección y las notas del
+  proyecto. Empieza cerrado. El aforo y el resumen se quedan siempre a la vista.
 - **Previsualizar ajustado a la pantalla:** el plano ocupa el alto que queda bajo el encabezado, con la
   línea de estado a la vista, así que cualquier sala se ve completa sin scroll. Al cambiar el tamaño
   de la ventana se reajusta y conserva el zoom. En el editor el alto sale del ancho, como antes.
-- **Pantallas de menos de 900 px:** sin laterales; las herramientas pasan arriba del plano y la
-  configuración, debajo. El plano no se ajusta al alto.
+- **Pantallas de menos de 900 px de ancho o 600 px de alto:** vuelve el diseño con scroll de página.
+  Por debajo de 900 px, además, los laterales dejan de ser laterales: las herramientas pasan arriba
+  del plano y la configuración, debajo. El plano toma su alto del ancho y los plegables empujan el
+  contenido, en lugar de flotar.
 
 ## Modo editor
 

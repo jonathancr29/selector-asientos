@@ -4,9 +4,28 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Textos de referencia plegables
+## Sin publicar — Escritorio de una sola pantalla
 
-Rama `claude/textos-plegables`.
+Rama `claude/escritorio-fijo`.
+
+### Cambiado
+
+- **En escritorio (más de 900 px de ancho y 600 px de alto), la página no se desplaza:** laterales,
+  encabezado y pie fijos, y el plano llena el hueco entre ellos. Solo se desplaza el interior de un
+  lateral cuando su contenido no cabe.
+- **Los plegables se abren sobre el plano:** el del encabezado baja y el del pie sube, con fondo y
+  sombra, sin mover el plano ni cambiar su tamaño. Se cierran con su flecha, con Esc o al hacer clic
+  en el plano.
+- **El pie** lleva el resumen siempre a la vista y, dentro del plegable «Butacas elegidas y notas»,
+  el detalle de la selección y las notas del proyecto. El estado sigue en su línea, encima del pie.
+- **El alto del plano lo da el CSS:** `ajustarAltoDelPlano` ya no calcula restas y el encuadre se
+  adapta a la caja del `<svg>` en todos los casos.
+- Por debajo de 900 px de ancho o 600 px de alto se mantiene el diseño con scroll de página.
+
+## 2026-09-17 — PR #19: textos de referencia plegables
+
+[PR #19](https://github.com/jonathancr29/selector-asientos/pull/19), fusionado en `main` con el
+commit `4952450`.
 
 ### Añadido
 
