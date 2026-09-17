@@ -4,9 +4,32 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Escritorio de una sola pantalla
+## Sin publicar — Mesas redondas
 
-Rama `claude/escritorio-fijo`.
+Rama `claude/mesa-redonda`.
+
+### Añadido
+
+- **Mesa redonda:** botón nuevo en «Agregar», con 8 lugares. Se describe solo con sus lugares (2 a
+  16) y el diámetro del tablero sale de ahí: 1 celda hasta 8 lugares, 2 hasta 12 y 3 hasta 16.
+- Los lugares se reparten por ángulo en el anillo que rodea al tablero, mirando al centro; los de las
+  esquinas, en diagonal. Sus ids son la posición (`M7-1`, `M7-2`…), así que girar o mover no los
+  cambia.
+- **Alargar y Acortar** ponen y quitan lugares; **Girar** mueve el reparto alrededor del anillo.
+- El tablero se dibuja como un círculo, y la sombra del arrastre también.
+- Los mapas guardan y validan las mesas redondas (`tipo: 'redonda'` y `lugares`); los mapas
+  anteriores se siguen leyendo.
+- Pruebas de geometría, topes, huella y pasillos, plano y mapas (102 en total).
+
+### Corregido
+
+- **Las marcas de estado** (palomita, aspa, raya) solo giran en los lugares a 90° y 270°; en los
+  diagonales se quedan derechas.
+
+## 2026-09-17 — PR #20: escritorio de una sola pantalla
+
+[PR #20](https://github.com/jonathancr29/selector-asientos/pull/20), fusionado en `main` con el
+commit `0a61a97`.
 
 ### Cambiado
 

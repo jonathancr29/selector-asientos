@@ -361,6 +361,7 @@
     <symbol id="i-agregar-mesas" viewBox="0 0 24 24"><rect x="1" y="8" width="11" height="5" rx="1.2" fill-opacity=".25" stroke="currentColor" stroke-width="1.5"></rect><rect x="2" y="3" width="3.5" height="3" rx="0.8"></rect><rect x="7.5" y="3" width="3.5" height="3" rx="0.8"></rect><rect x="2" y="15" width="3.5" height="3" rx="0.8"></rect><rect x="7.5" y="15" width="3.5" height="3" rx="0.8"></rect><rect x="18.4" y="15" width="2.2" height="9" rx="1.1"></rect><rect x="15" y="18.4" width="9" height="2.2" rx="1.1"></rect></symbol>
     <symbol id="i-agregar-espacio" viewBox="0 0 24 24"><rect x="1.5" y="3" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3 2"></rect><rect x="18.4" y="15" width="2.2" height="9" rx="1.1"></rect><rect x="15" y="18.4" width="9" height="2.2" rx="1.1"></rect></symbol>
     <symbol id="i-agregar-division" viewBox="0 0 24 24"><rect x="1.5" y="3" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"></rect><rect x="7.3" y="3" width="1.5" height="13"></rect><rect x="18.4" y="15" width="2.2" height="9" rx="1.1"></rect><rect x="15" y="18.4" width="9" height="2.2" rx="1.1"></rect></symbol>
+    <symbol id="i-mesa-redonda" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.6" fill-opacity=".25" stroke="currentColor" stroke-width="1.6"></circle><rect x="10" y="1.5" width="4" height="3.2" rx="0.9"></rect><rect x="10" y="19.3" width="4" height="3.2" rx="0.9"></rect><rect x="1.5" y="10" width="3.2" height="4" rx="0.9"></rect><rect x="19.3" y="10" width="3.2" height="4" rx="0.9"></rect></symbol>
   </defs>
 </svg>
 <div class="app" id="app">
@@ -407,7 +408,8 @@
           <button type="button" class="icono" id="agregar-lados" aria-label="Lados: mesa de largo 2, dos lugares por lado" data-tooltip="Mesa de lados"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mesa-lados"></use></svg></button>
           <button type="button" class="icono" id="agregar-cruz" aria-label="Cruz: mesa de largo 1, un lugar por lado y cabeceras" data-tooltip="Mesa en cruz"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mesa-cruz"></use></svg></button>
           <button type="button" class="icono" id="agregar-barra" aria-label="Un lado: mesa de largo 4 con lugares en un solo lado" data-tooltip="Mesa de un lado"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mesa-un-lado"></use></svg></button>
-          <button type="button" class="icono" id="agregar-bloque" aria-label="Bloque de filas: 5 butacas por fila y 2 filas" data-tooltip="Bloque de filas"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-bloque"></use></svg></button>
+          <button type="button" class="icono" id="agregar-redonda" aria-label="Mesa redonda: 8 lugares alrededor" data-tooltip="Mesa redonda"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mesa-redonda"></use></svg></button>
+    <button type="button" class="icono" id="agregar-bloque" aria-label="Bloque de filas: 5 butacas por fila y 2 filas" data-tooltip="Bloque de filas"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-bloque"></use></svg></button>
           <button type="button" class="icono" id="agregar-butaca" aria-label="Butaca suelta: una butaca de la zona General" data-tooltip="Butaca suelta"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-butaca"></use></svg></button>
           <button type="button" class="icono" id="agregar-pista" aria-label="Pista de baile: 4 × 4 celdas" data-tooltip="Pista de baile"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-pista"></use></svg></button>
           <button type="button" class="icono" id="agregar-forma-barra" aria-label="Barra: 4 × 1 celdas" data-tooltip="Barra"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-barra"></use></svg></button>
@@ -1101,10 +1103,91 @@ function idsBloqueadosPorBandas(sala) {
 // ---------------------------------------------------------------------------
 const LARGO_MAXIMO = 8;
 const ESTILOS = {
-  lados: { largo: 2, cabeceras: false, unLado: false },
-  cruz:  { largo: 1, cabeceras: true,  unLado: false },
-  barra: { largo: 4, cabeceras: false, unLado: true },
+  lados:   { largo: 2, cabeceras: false, unLado: false },
+  cruz:    { largo: 1, cabeceras: true,  unLado: false },
+  barra:   { largo: 4, cabeceras: false, unLado: true },
+  redonda: { tipo: 'redonda', lugares: 8 },
 };
+
+// ---------------------------------------------------------------------------
+// Mesas redondas.
+//
+// Se describen con una sola medida: cuantos lugares tienen. El diametro del
+// tablero sale de ahi, porque los lugares van en el anillo de celdas que lo
+// rodea, que tiene 4 x (diametro + 1) celdas:
+//   2 a 8 lugares    tablero de 1 celda, huella 3 x 3
+//   9 a 12           tablero de 2,       huella 4 x 4
+//   13 a 16          tablero de 3,       huella 5 x 5
+// Los lugares se reparten por angulo desde arriba, en sentido horario, y cada
+// uno toma la celda del anillo mas cercana a su angulo; los de las esquinas
+// miran al centro en diagonal (45 grados). El id de un lugar es su posicion
+// (M7-1, M7-2...), asi que girar o mover la mesa no lo cambia.
+// ---------------------------------------------------------------------------
+const LUGARES_MINIMOS_REDONDA = 2;
+const LUGARES_MAXIMOS_REDONDA = 16;
+const esMesaRedonda = (pieza) => Boolean(pieza) && pieza.tipo === 'redonda';
+const esMesa = (pieza) => !pieza.tipo || esMesaRedonda(pieza);
+const diametroRedonda = (lugares) => (lugares <= 8 ? 1 : lugares <= 12 ? 2 : 3);
+
+// Las celdas del anillo, en sentido horario y empezando por la de arriba mas
+// cercana al centro.
+function anilloDeCeldas(lado) {
+  const celdas = [];
+  for (let dx = 0; dx < lado; dx++) celdas.push({ dx, dy: 0 });
+  for (let dy = 1; dy < lado; dy++) celdas.push({ dx: lado - 1, dy });
+  for (let dx = lado - 2; dx >= 0; dx--) celdas.push({ dx, dy: lado - 1 });
+  for (let dy = lado - 2; dy >= 1; dy--) celdas.push({ dx: 0, dy });
+  const centro = (lado - 1) / 2;
+  const angulo = ({ dx, dy }) => (Math.atan2(dx - centro, centro - dy) + 2 * Math.PI) % (2 * Math.PI);
+  const arriba = celdas.reduce((mejor, c, i) => (angulo(c) < angulo(celdas[mejor]) ? i : mejor), 0);
+  return [...celdas.slice(arriba), ...celdas.slice(0, arriba)];
+}
+
+// Cuanto girar el icono de una celda para que mire al centro, en pasos de 45
+// grados. El icono sin girar mira hacia abajo.
+function miraAlCentro(dx, dy, centro) {
+  // El icono sin girar mira hacia abajo: mira = angulo tal que R(mira)·(0,1) apunta al centro.
+  const grados = Math.round((Math.atan2(dx - centro, centro - dy) * 180) / Math.PI / 45) * 45;
+  return (grados + 360) % 360;
+}
+
+function geometriaMesaRedonda({ lugares, giro = 0 }) {
+  const cuantos = Math.min(Math.max(lugares, LUGARES_MINIMOS_REDONDA), LUGARES_MAXIMOS_REDONDA);
+  const diametro = diametroRedonda(cuantos);
+  const lado = diametro + 2;
+  const centro = (lado - 1) / 2;
+  const anillo = anilloDeCeldas(lado);
+  const angulo = ({ dx, dy }) => (Math.atan2(dx - centro, centro - dy) + 2 * Math.PI) % (2 * Math.PI);
+  // Cada lugar toma la celda libre del anillo mas cercana a su angulo ideal.
+  const libres = anillo.map((c) => ({ ...c, angulo: angulo(c) }));
+  const lugaresColocados = [];
+  for (let i = 0; i < cuantos; i++) {
+    const ideal = (2 * Math.PI * i) / cuantos;
+    const distancia = (a) => Math.min(Math.abs(a - ideal), 2 * Math.PI - Math.abs(a - ideal));
+    let mejor = 0;
+    libres.forEach((c, k) => { if (distancia(c.angulo) < distancia(libres[mejor].angulo)) mejor = k; });
+    const celda = libres.splice(mejor, 1)[0];
+    lugaresColocados.push({ lado: String(i + 1), dx: celda.dx, dy: celda.dy,
+                            mira: miraAlCentro(celda.dx, celda.dy, centro) });
+  }
+  let geo = { ancho: lado, alto: lado, tablero: null, lugares: lugaresColocados };
+  for (let g = 0; g < giro; g += 90) geo = girar90(geo);
+  // El tablero redondo: centrado en la huella, con el diametro en celdas.
+  return { ...geo, redonda: { dx: 1, dy: 1, diametro } };
+}
+
+// Quita o pone lugares a una mesa redonda; la esquina de la huella no se mueve.
+function cambiarLugaresRedonda(mesa, delta) {
+  const lugares = mesa.lugares + delta;
+  if (lugares < LUGARES_MINIMOS_REDONDA || lugares > LUGARES_MAXIMOS_REDONDA) return null;
+  return { ...mesa, lugares };
+}
+
+const configDeRedonda = ({ id, x, y, lugares, giro }) => ({ id, tipo: 'redonda', x, y, lugares, giro });
+// La configuracion guardable de cualquier mesa, redonda o rectangular.
+const configDeMesa = (mesa) => (esMesaRedonda(mesa) ? configDeRedonda(mesa)
+  : { id: mesa.id, x: mesa.x, y: mesa.y, largo: mesa.largo, cabeceras: mesa.cabeceras,
+      unLado: mesa.unLado, giro: mesa.giro });
 const mesas = [];     // {id, nombre, x, y, largo, cabeceras, unLado, giro, geo}
 
 // Geometria relativa a la esquina superior izquierda (dx, dy en celdas). Cada
@@ -1133,9 +1216,10 @@ function geometriaMesa({ largo, cabeceras, unLado = false, giro = 0 }) {
 
 // Un cuarto de vuelta en sentido horario: (dx, dy) -> (alto - 1 - dy, dx). El
 // orden horario se conserva, asi que la numeracion no cambia al girar.
-function girar90({ ancho, alto, tablero, lugares }) {
+function girar90({ ancho, alto, tablero, lugares, redonda }) {
   return {
     ancho: alto, alto: ancho,
+    ...(redonda ? { redonda } : {}),
     tablero: tablero && { dx: alto - tablero.dy - tablero.h, dy: tablero.dx, w: tablero.h, h: tablero.w },
     lugares: lugares.map((l) => ({ ...l, dx: alto - 1 - l.dy, dy: l.dx, mira: (l.mira + 90) % 360 })),
   };
@@ -1144,10 +1228,15 @@ function girar90({ ancho, alto, tablero, lugares }) {
 function agregarMesa(config, ocupadas = []) {
   const { id, x, y } = config;
   const nombre = 'Mesa ' + id.slice(1);
-  const geo = geometriaMesa(config);
+  const geo = esMesaRedonda(config) ? geometriaMesaRedonda(config) : geometriaMesa(config);
   mesas.push({ ...config, nombre, geo });
-  muebles.push({ tipo: 'mesa', mesa: id, x: x + geo.tablero.dx, y: y + geo.tablero.dy,
-                 w: geo.tablero.w, h: geo.tablero.h, texto: nombre, numero: id.slice(1) });
+  if (geo.redonda) {
+    muebles.push({ tipo: 'mesa-redonda', mesa: id, x: x + geo.redonda.dx, y: y + geo.redonda.dy,
+                   w: geo.redonda.diametro, h: geo.redonda.diametro, texto: nombre, numero: id.slice(1) });
+  } else {
+    muebles.push({ tipo: 'mesa', mesa: id, x: x + geo.tablero.dx, y: y + geo.tablero.dy,
+                   w: geo.tablero.w, h: geo.tablero.h, texto: nombre, numero: id.slice(1) });
+  }
   geo.lugares.forEach((l, i) => {
     butacas.push({
       id: id + '-' + l.lado, fila: id, numero: i + 1, x: x + l.dx, y: y + l.dy, mira: l.mira,
@@ -1189,7 +1278,8 @@ const huellaDe = (pieza) => (esEscenario(pieza) || esForma(pieza)
   ? { ancho: pieza.ancho, alto: pieza.alto, tablero: null, lugares: [] }
   : esButacaSuelta(pieza)
   ? { ancho: 1, alto: 1, tablero: null, lugares: [{ dx: 0, dy: 0, mira: (MIRA_ESCENARIO + (pieza.giro || 0)) % 360 }] }
-  : esBloqueFilas(pieza) ? geometriaBloqueFilas(pieza) : geometriaMesa(pieza));
+  : esBloqueFilas(pieza) ? geometriaBloqueFilas(pieza)
+  : esMesaRedonda(pieza) ? geometriaMesaRedonda(pieza) : geometriaMesa(pieza));
 
 // ---------------------------------------------------------------------------
 // Formas: pista de baile y barra.
@@ -1541,8 +1631,8 @@ function celdasOcupadas(excluir) {
 // ocupar columnas de pasillo: sus pasillos son el espacio que se deja entre bloques.
 function motivoNoCabe(sala, ocupadas, pieza) {
   const { ancho, alto } = huellaDe(pieza);
-  // Solo las mesas (las piezas sin 'tipo') respetan los pasillos; el resto puede cruzarlos.
-  const respetaPasillos = !pieza.tipo;
+  // Solo las mesas respetan los pasillos; el resto puede cruzarlos.
+  const respetaPasillos = esMesa(pieza);
   for (let dy = 0; dy < alto; dy++) {
     for (let dx = 0; dx < ancho; dx++) {
       const cx = pieza.x + dx, cy = pieza.y + dy;
@@ -1824,7 +1914,7 @@ function planoDesdeSala(tipo, sala) {
   }));
   return {
     bandas: limpiar(sala.bandas),
-    mesas: mesas.map(({ id, x, y, largo, cabeceras, unLado, giro }) => ({ id, x, y, largo, cabeceras, unLado, giro })),
+    mesas: mesas.map(configDeMesa),
     bloquesFilas: bloquesFilas.map(configDeBloque),
     formas: formas.map(configDeForma),
     butacasSueltas: butacasSueltas.map(configDeButaca),
@@ -1926,7 +2016,7 @@ function mapaDesdePlano(nombre, plano, guardado, idsExistentes = null) {
     // Sin ocupacion de ejemplo, ni bloqueos por plantilla (ya van en la lista),
     // ni filas de mesas automaticas (las mesas van explicitas).
     bandas: limpiarBandasParaMapa(plano.bandas),
-    mesas: plano.mesas.map(({ id, x, y, largo, cabeceras, unLado, giro }) => ({ id, x, y, largo, cabeceras, unLado, giro })),
+    mesas: plano.mesas.map(configDeMesa),
     bloquesFilas: (plano.bloquesFilas || []).map((b) => ({ ...b })),
     formas: (plano.formas || []).map((f) => ({ ...f })),
     butacasSueltas: (plano.butacasSueltas || []).map((b) => ({ ...b })),
@@ -2103,11 +2193,20 @@ function validarMapa(dato) {
     }
     idsMesa.add(m.id);
     if (!esEntero(m.x, 0, 999) || !esEntero(m.y, 0, 999)) errores.push(m.id + ': posición no válida');
+    if (![0, 90, 180, 270].includes(m.giro)) errores.push(m.id + ': giro no válido');
+    // Mesa redonda: solo lugares. Las rectangulares no llevan 'tipo' (mapas anteriores).
+    if (m.tipo === 'redonda') {
+      if (!esEntero(m.lugares, LUGARES_MINIMOS_REDONDA, LUGARES_MAXIMOS_REDONDA)) {
+        errores.push(m.id + ': los lugares de una mesa redonda deben ser de ' + LUGARES_MINIMOS_REDONDA +
+                     ' a ' + LUGARES_MAXIMOS_REDONDA);
+      }
+      return { id: m.id, tipo: 'redonda', x: m.x, y: m.y, lugares: m.lugares, giro: m.giro };
+    }
+    if (m.tipo !== undefined) errores.push(m.id + ': tipo de mesa desconocido');
     if (!esEntero(m.largo, 1, LARGO_MAXIMO)) errores.push(m.id + ': largo fuera de rango');
     if (typeof m.cabeceras !== 'boolean' || typeof m.unLado !== 'boolean') {
       errores.push(m.id + ': cabeceras y unLado deben ser true o false');
     }
-    if (![0, 90, 180, 270].includes(m.giro)) errores.push(m.id + ': giro no válido');
     return { id: m.id, x: m.x, y: m.y, largo: m.largo, cabeceras: m.cabeceras, unLado: m.unLado, giro: m.giro };
   });
 
@@ -2239,7 +2338,7 @@ function cambiarDistribucion(plano, sala, distribucion) {
   for (const m of nuevo.mesas) {
     const i = sala.bloques.findIndex((b) => b.includes(m.x));
     if (i < 0) continue;
-    const ancho = geometriaMesa(m).ancho;
+    const ancho = huellaDe(m).ancho;
     if (nueva.bloques.length === sala.bloques.length) {
       const destino = nueva.bloques[i];
       m.x = dentro(destino, destino[0] + (m.x - sala.bloques[i][0]), ancho);
@@ -2570,6 +2669,13 @@ function dibujarMuebles() {
       if (!unaCelda && m.h > m.w) rotulo.setAttribute('transform', `rotate(-90 ${cx} ${cy})`);
       rect.dataset.pieza = rotulo.dataset.pieza = m.mesa;
       capaMuebles.append(rect, rotulo);
+    } else if (m.tipo === 'mesa-redonda') {
+      const cx = (m.x + m.w / 2) * PASO, cy = (m.y + m.h / 2) * PASO;
+      const circulo = nodo('circle', { class: 'mueble', cx, cy, r: (m.w * PASO) / 2 - 1 });
+      // En una mesa de una celda «Mesa 4» no cabe: solo el numero.
+      const rotulo = texto('rotulo', cx, cy, m.w === 1 ? m.numero : m.texto);
+      circulo.dataset.pieza = rotulo.dataset.pieza = m.mesa;
+      capaMuebles.append(circulo, rotulo);
     } else if (m.tipo === 'forma') {
       const rect = nodo('rect', { class: 'forma-' + m.forma, x: m.x * PASO + 1, y: m.y * PASO + 1,
         width: m.w * PASO - 2, height: m.h * PASO - 2, rx: 3 });
@@ -2700,7 +2806,7 @@ function dibujarButacas() {
     // El hueco del icono, donde va la marca, es horizontal con el asiento a 0 o
     // 180 grados y vertical a 90 o 270. Solo en esos dos giros la marca gira con
     // el asiento: derecha no cabe en el hueco y se pisa con respaldo y asiento.
-    if (b.mira % 180) {
+    if (b.mira % 180 === 90) {
       marca.setAttribute('transform', `rotate(${b.mira} ${(b.x + 0.5) * PASO} ${(b.y + 0.5) * PASO})`);
     }
     g.appendChild(marca);
@@ -2714,6 +2820,8 @@ function dibujarButacas() {
 // huella. Es lo que se agarra con el raton y lo que recibe el foco con el teclado.
 const etiquetaPieza = (m) => (esEscenario(m)
   ? 'Escenario, ' + m.ancho + ' × ' + m.alto + ' celdas'
+  : esMesaRedonda(m)
+  ? m.nombre + ', redonda, ' + plural(m.lugares, 'lugar', 'lugares') + (m.giro ? ', girada ' + m.giro + '°' : '')
   : esForma(m)
   ? m.nombre + ', ' + FORMAS[m.forma].nombre.toLowerCase() + ' de ' + m.ancho + ' × ' + m.alto + ' celdas'
   : esButacaSuelta(m)
@@ -3602,14 +3710,13 @@ const planos = {};
 const piezaPorId = (id) => (id === 'escenario' ? (escenario.ausente ? null : escenario)
   : [...mesas, ...bloquesFilas, ...formas, ...butacasSueltas].find((p) => p.id === id) || null);
 const anunciar = (mensaje) => { document.getElementById('estado').textContent = mensaje; };
-const configDe = ({ id, x, y, largo, cabeceras, unLado, giro }) =>
-  ({ id, x, y, largo, cabeceras, unLado, giro });
 const configDePieza = (p) => (esEscenario(p) ? { id: 'escenario', tipo: 'escenario', ...configDeEscenario(p) }
   : esBloqueFilas(p) ? configDeBloque(p) : esForma(p) ? configDeForma(p)
-  : esButacaSuelta(p) ? configDeButaca(p) : configDe(p));
+  : esButacaSuelta(p) ? configDeButaca(p) : configDeMesa(p));
 // Concordancia: «Mesa 3 movida», «Bloque 2 movido».
 const genero = (p) => (esBloqueFilas(p) || esEscenario(p) ? 'o' : 'a');
 const resumenDePieza = (p) => (esEscenario(p) || esForma(p) ? p.ancho + ' × ' + p.alto + ' celdas'
+  : esMesaRedonda(p) ? 'redonda, ' + plural(p.lugares, 'lugar', 'lugares')
   : esButacaSuelta(p) ? 'zona ' + zonas[p.zona].nombre : esBloqueFilas(p)
   ? p.filas + ' × ' + p.ancho + ' butacas'
   : p.geo.lugares.length + ' lugares');
@@ -3619,10 +3726,14 @@ const resumenDePieza = (p) => (esEscenario(p) || esForma(p) ? p.ancho + ' × ' +
 const sombra = nodo('g', { class: 'sombra oculta', 'aria-hidden': 'true' });
 svg.appendChild(sombra);
 
-function construirSombra({ ancho, alto, tablero, lugares }) {
+function construirSombra({ ancho, alto, tablero, lugares, redonda }) {
   sombra.textContent = '';
   sombra.appendChild(nodo('rect', { class: 'contorno', x: 0.5, y: 0.5,
     width: ancho * PASO - 1, height: alto * PASO - 1, rx: 3 }));
+  if (redonda) {
+    sombra.appendChild(nodo('circle', { class: 'tablero', cx: (redonda.dx + redonda.diametro / 2) * PASO,
+      cy: (redonda.dy + redonda.diametro / 2) * PASO, r: (redonda.diametro * PASO) / 2 - 1 }));
+  }
   if (tablero) {   // los bloques de filas no tienen tablero
     sombra.appendChild(nodo('rect', { class: 'tablero', x: tablero.dx * PASO + 1, y: tablero.dy * PASO + 1,
       width: tablero.w * PASO - 2, height: tablero.h * PASO - 2, rx: 4 }));
@@ -3651,9 +3762,10 @@ const ACCIONES_DE = {
   escenario: new Set(['girar', 'alargar', 'acortar', 'masfilas', 'menosfilas']),
   forma: new Set(['girar', 'alargar', 'acortar', 'masfilas', 'menosfilas', 'duplicar', 'eliminar']),
   butaca: new Set(['girar', 'duplicar', 'eliminar']),
+  redonda: new Set(['girar', 'alargar', 'acortar', 'duplicar', 'eliminar']),
 };
 const tipoDePieza = (p) => (esEscenario(p) ? 'escenario' : esBloqueFilas(p) ? 'bloque'
-  : esForma(p) ? 'forma' : esButacaSuelta(p) ? 'butaca' : 'mesa');
+  : esForma(p) ? 'forma' : esButacaSuelta(p) ? 'butaca' : esMesaRedonda(p) ? 'redonda' : 'mesa');
 const aplica = (accion, p) => ACCIONES_DE[tipoDePieza(p)].has(accion);
 
 function actualizarControles() {
@@ -3661,19 +3773,20 @@ function actualizarControles() {
   document.getElementById('mesa-activa').textContent = m
     ? m.nombre + ' · ' + resumenDePieza(m)
     : 'Ninguna pieza seleccionada';
-  const bloque = esBloqueFilas(m), forma = esForma(m), suelta = esButacaSuelta(m);
+  const bloque = esBloqueFilas(m), forma = esForma(m), suelta = esButacaSuelta(m), redonda = esMesaRedonda(m);
   for (const boton of botonesDeMesa()) {
     const accion = boton.dataset.accion;
     const deEscenario = esEscenario(m);
-    // Largo: ancho del escenario, de una forma o de un bloque. Filas: alto del escenario o de una forma.
-    const largo = bloque || deEscenario || forma ? m.ancho : m && m.largo;
+    // Largo: ancho del escenario, de una forma o de un bloque; lugares en una mesa redonda.
+    const largo = bloque || deEscenario || forma ? m.ancho : redonda ? m.lugares : m && m.largo;
+    const minimo = redonda ? LUGARES_MINIMOS_REDONDA : 1;
     const maximo = deEscenario ? ESCENARIO_ANCHO_MAXIMO : forma ? FORMA_ANCHO_MAXIMO
-      : bloque ? ANCHO_BLOQUE_MAXIMO : LARGO_MAXIMO;
+      : bloque ? ANCHO_BLOQUE_MAXIMO : redonda ? LUGARES_MAXIMOS_REDONDA : LARGO_MAXIMO;
     const filas = deEscenario || forma ? m.alto : m && m.filas;
     const filasMaximas = deEscenario ? ESCENARIO_ALTO_MAXIMO : forma ? FORMA_ALTO_MAXIMO : FILAS_MAXIMAS;
     boton.disabled = !m || !aplica(accion, m) ||
       (accion === 'alargar' && largo >= maximo) ||
-      (accion === 'acortar' && largo <= 1) ||
+      (accion === 'acortar' && largo <= minimo) ||
       (accion === 'masfilas' && filas >= filasMaximas) ||
       (accion === 'menosfilas' && filas <= 1);
     if (accion === 'cabeceras') boton.setAttribute('aria-pressed', String(Boolean(m && m.cabeceras)));
@@ -3827,15 +3940,17 @@ const TRANSFORMACIONES = {
                hecho: (m) => (esEscenario(m) || esForma(m) ? 'girad' + genero(m) + ' 90°'
                  : m.giro ? 'girad' + genero(m) + ' ' + m.giro + '°' : 'de vuelta a su posición original') },
   alargar:   { calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, 1, 0) : esForma(c) ? cambiarTamanoForma(c, 1, 0)
+                 : esMesaRedonda(c) ? cambiarLugaresRedonda(c, 1)
                  : esBloqueFilas(c) ? cambiarAncho(c, 1) : cambiarLargo(c, 1)),
-               tope: 'el largo máximo',
+               tope: (m) => (esMesaRedonda(m) ? 'el máximo de lugares (' + LUGARES_MAXIMOS_REDONDA + ')' : 'el largo máximo'),
                fallo: (m) => 'No se pudo alargar ' + m.nombre,
-               hecho: (m) => 'alargad' + genero(m) },
+               hecho: (m) => (esMesaRedonda(m) ? 'con un lugar más' : 'alargad' + genero(m)) },
   acortar:   { calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, -1, 0) : esForma(c) ? cambiarTamanoForma(c, -1, 0)
+                 : esMesaRedonda(c) ? cambiarLugaresRedonda(c, -1)
                  : esBloqueFilas(c) ? cambiarAncho(c, -1) : cambiarLargo(c, -1)),
-               tope: 'el largo mínimo',
+               tope: (m) => (esMesaRedonda(m) ? 'el mínimo de lugares (' + LUGARES_MINIMOS_REDONDA + ')' : 'el largo mínimo'),
                fallo: (m) => 'No se pudo acortar ' + m.nombre,
-               hecho: (m) => 'acortad' + genero(m) },
+               hecho: (m) => (esMesaRedonda(m) ? 'con un lugar menos' : 'acortad' + genero(m)) },
   masfilas:  { calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, 0, 1)
                  : esForma(c) ? cambiarTamanoForma(c, 0, 1) : cambiarFilasBloque(c, 1)),
                tope: 'el máximo de filas',
@@ -3860,7 +3975,8 @@ function transformarMesa(id, accion) {
   const t = TRANSFORMACIONES[accion];
   const nueva = t.calcular(configDePieza(m));
   if (!nueva) {
-    anunciar(m.nombre + ' ya tiene ' + t.tope + '.');
+    // 'tope' puede depender de la pieza (una mesa redonda cuenta lugares, no largo).
+    anunciar(m.nombre + ' ya tiene ' + (typeof t.tope === 'function' ? t.tope(m) : t.tope) + '.');
     return;
   }
   const colocada = colocarCerca(salaActual, celdasOcupadas(id), nueva);
@@ -3887,7 +4003,8 @@ function agregarMesaNueva(estilo) {
   plano.siguiente++;
   plano.mesas.push(sitio);
   mesaActiva = id;
-  regenerar('Mesa ' + id.slice(1) + ' agregada en columna ' + sitio.x + ', fila ' + sitio.y + '.');
+  regenerar('Mesa ' + id.slice(1) + (estilo === 'redonda' ? ' (redonda, 8 lugares)' : '') +
+            ' agregada en columna ' + sitio.x + ', fila ' + sitio.y + '.');
   const m = piezaPorId(id);
   asegurarVisible({ x: m.x, y: m.y, w: m.geo.ancho, h: m.geo.alto });
 }
@@ -4119,7 +4236,7 @@ const PISTAS = {
   editor: 'Arrastra el escenario, una mesa, un bloque, una butaca o una forma para moverlo · con teclado, Tab ' +
           'hasta la pieza: flechas la mueven, R la gira, + y − cambian su largo (o ancho), ] y [ agregan o ' +
           'quitan filas (o alto, en el escenario y las formas), C pone o quita cabeceras, U alterna uno o dos ' +
-          'lados, Ctrl+D la duplica, Supr la elimina · Esc cancela un arrastre · clic en el fondo ' +
+          'lados (en una mesa redonda, + y − quitan y ponen lugares), Ctrl+D la duplica, Supr la elimina · Esc cancela un arrastre · clic en el fondo ' +
           'selecciona una banda (otro clic, la que la contiene) y Ctrl+D la duplica · doble clic en ' +
           'un subtítulo para renombrar su banda',
 };
@@ -4226,6 +4343,7 @@ document.getElementById('alternar-escenario').addEventListener('click', () => {
 document.getElementById('agregar-lados').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('lados')));
 document.getElementById('agregar-cruz').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('cruz')));
 document.getElementById('agregar-barra').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('barra')));
+document.getElementById('agregar-redonda').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('redonda')));
 document.getElementById('agregar-bloque').addEventListener('click', () => conTopeDeAforo(agregarBloqueNuevo));
 document.getElementById('agregar-butaca').addEventListener('click', () => conTopeDeAforo(agregarButacaNueva));
 document.getElementById('agregar-pista').addEventListener('click', () => agregarFormaNueva('pista'));

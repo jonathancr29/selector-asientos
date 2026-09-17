@@ -103,7 +103,12 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   `TIPOS_DE_SALA`; el selector la muestra solo.
 - **Toda columna sale de `rejillaDeBloques`.** Una butaca de fila va a `columnas[numero - 1]`, nunca a
   la columna `numero`.
-- **Una mesa nunca queda partida por un pasillo**, ni en el reparto automático ni en el editor.
+- **Una mesa nunca queda partida por un pasillo**, ni en el reparto automático ni en el editor:
+  `motivoNoCabe` lo decide con `esMesa` (sin `tipo`, o `tipo: 'redonda'`).
+- **Una mesa redonda solo guarda sus lugares** (2 a 16); el diámetro sale de `diametroRedonda` y los
+  lugares se reparten por ángulo en el anillo (`geometriaMesaRedonda`). Su huella es cuadrada, así que
+  todo lo demás (caber, arrastrar, duplicar, bandas) funciona sin casos especiales. `configDeMesa`
+  guarda la forma que toque.
 - **Las columnas son de toda la sala:** `plano.distribucion` (o la del mapa, o la de la plantilla).
   Nunca por banda: es lo que mantiene las filas alineadas. Al cambiarlas, `cambiarDistribucion`
   recoloca las mesas y `aplicarBandas` rechaza el cambio si alguna no cabe.

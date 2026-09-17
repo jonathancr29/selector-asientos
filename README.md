@@ -342,7 +342,7 @@ más. Una mesa se describe con cuatro datos además de su posición:
 | `unLado` | sí / no | Lugares en un solo lado largo, como una barra. |
 | `giro` | 0°, 90°, 180°, 270° | Cuartos de vuelta en sentido horario. |
 
-Los tres estilos de mesa nueva son el mismo modelo con otros valores:
+Los tres estilos de mesa rectangular son el mismo modelo con otros valores:
 
 | Estilo | Largo | Cabeceras | Un lado | Huella | Lugares |
 |---|---|---|---|---|---|
@@ -352,6 +352,38 @@ Los tres estilos de mesa nueva son el mismo modelo con otros valores:
 
 La huella es el rectángulo completo, así que las esquinas vacías de una cruz quedan **reservadas**:
 ninguna otra mesa puede ocuparlas.
+
+### Mesas redondas
+
+Una mesa redonda se describe con **una sola medida: cuántos lugares tiene**, de 2 a 16. El diámetro
+del tablero sale de ahí, porque los lugares van en el anillo de celdas que lo rodea:
+
+| Lugares | Tablero | Huella | Celdas del anillo |
+|---|---|---|---|
+| 2 a 8 | 1 celda | 3 × 3 | 8 |
+| 9 a 12 | 2 celdas | 4 × 4 | 12 |
+| 13 a 16 | 3 celdas | 5 × 5 | 16 |
+
+```
+ ▣ ▣ ▣        Mesa redonda de 8 lugares.
+ ▣ ● ▣        ● es el tablero; cada ▣ mira al centro,
+ ▣ ▣ ▣        y los de las esquinas van a 45°.
+```
+
+- **Reparto:** los lugares se colocan por ángulo desde arriba, en sentido horario, y cada uno toma la
+  celda libre del anillo más cercana a su ángulo. Con 6 lugares en un anillo de 8 celdas quedan
+  simétricos.
+- **Lugares:** **Alargar** y **Acortar** (+ y −) ponen y quitan un lugar, de 2 a 16. Al pasar de 8 a 9
+  o de 12 a 13, el tablero crece y la esquina de la huella se queda donde está.
+- **Girar (R):** mueve el reparto alrededor del anillo. Con 8 lugares en 8 celdas no cambia nada; con
+  6, sí.
+- **Huella cuadrada:** tablero más una celda por lado, así que cabe, choca, se arrastra y se duplica
+  igual que las demás mesas. Como toda mesa, no puede caer sobre un pasillo.
+- **Ids por posición:** `M7-1`, `M7-2`… empezando arriba y en sentido horario. Girar o mover la mesa
+  no los cambia, así que la selección y las bloqueadas se conservan.
+- **Marcas de estado:** en los lugares en diagonal se quedan derechas, que se leen mejor.
+- **Dato:** `{ id, tipo: 'redonda', x, y, lugares, giro }`. Las mesas rectangulares no llevan `tipo`,
+  así que los mapas anteriores se siguen leyendo.
 
 **Cada silla mira hacia la mesa.** El icono sin girar tiene el respaldo arriba; cada lugar lleva su
 giro (`mira`): 0° el lado norte, 180° el sur, 90° y 270° las cabeceras, más el giro de la mesa. Las
@@ -379,7 +411,8 @@ de la columna «Botón» es el de su tooltip. Cada acción tiene atajo de teclad
 | Lugares en uno o dos lados | Un solo lado | U |
 | Duplicar junto al original | Duplicar | Ctrl+D |
 | Eliminar | Eliminar | Supr |
-| Agregar una mesa nueva | Lados / Cruz / Un lado | — |
+| Agregar una mesa nueva | Lados / Cruz / Un lado / Mesa redonda | — |
+| Lugares de una mesa redonda | Alargar / Acortar | + / − |
 | Agregar un bloque de filas | Bloque de filas | — |
 | Butacas por fila de un bloque | Alargar / Acortar | + / − |
 | Filas de un bloque | + fila / − fila | ] / [ |
