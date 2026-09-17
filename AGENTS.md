@@ -179,13 +179,20 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
     Un icono de Material Symbols nuevo se añade a `NOTICE`.
   - `tabindex` móvil: una sola parada de tabulación por capa, gestionada en `focusin`.
   - **Disposición:** `<div class="app">` con `<aside class="lateral">` de herramientas, `<main>`
-    (encabezado, plano, `.barra-estado` sticky y pie) y `<aside id="lateral-configuracion">`, que
+    (encabezado, plano, `.barra-estado` y pie) y `<aside id="lateral-configuracion">`, que
     `cambiarModo` muestra solo en el editor junto con la clase `editando` de `#app` (tercera columna
     de la rejilla). Los controles se buscan por id: moverlos de grupo no rompe el script.
   - **`.subtitulo` es del SVG** (nombres de banda, letra de 4 px). El subtítulo de la página es
     `.bajada`; no reutilices la clase o la letra se queda diminuta (pasó).
+  - **Escritorio = una pantalla:** con más de 900 px de ancho y 600 px de alto, una media query pone
+    `overflow: hidden` al `body`, `height: 100dvh` a `.app` y convierte `.centro` en una rejilla de
+    cuatro filas (encabezado, plano, estado, pie). El alto del plano lo da el CSS, no el script:
+    `ajustarAltoDelPlano` solo limpia un alto en línea. Ahí los `.panel` de los plegables van
+    `position: absolute` sobre el plano y el `summary` no cambia de alto al abrirse, para que el plano
+    no se mueva. Por debajo de esos tamaños todo vuelve al flujo con scroll de página.
   - **Lo que cambia el hueco del plano llama a `reencuadrar`:** los `<details class="plegable">` del
-    encabezado y del pie lo hacen en su evento `toggle`.
+    encabezado y del pie lo hacen en su evento `toggle` (en flujo cambian el hueco; en escritorio no).
+  - **El encuadre se adapta a la caja del `<svg>`** siempre, no solo cuando el alto es fijo.
   - **El viewBox tiene la proporción del `<svg>`:** en Previsualizar, `ajustarAltoDelPlano` fija el alto
     del plano y `calcularEncuadre` ensancha o alarga el encuadre hasta esa proporción. Si no, el
     navegador dejaría franjas y `enUnidades` (clics, arrastre, zoom) apuntaría a otra celda. Tras

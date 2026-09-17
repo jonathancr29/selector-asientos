@@ -54,6 +54,7 @@
   .plegable > summary:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; border-radius: 4px; }
   .plegable[open] > summary { margin-bottom: 6px; }
   .plegable .nota:first-of-type { margin-top: 0; }
+  .plegable .panel > :first-child { margin-top: 0; }
   /* Linea de estado: fija al pie del plano mientras se hace scroll por el. */
   .barra-estado { position: sticky; bottom: 0; z-index: 5; min-height: 34px; margin-top: 8px; padding: 8px 10px;
     background: #23232b; border: 1px solid #2c2c36; border-radius: 8px; }
@@ -64,6 +65,30 @@
   .tooltip { position: fixed; z-index: 50; padding: 4px 8px; font-size: 12px; line-height: 1.3; white-space: nowrap;
     color: #f8fafc; background: #0f0f13; border: 1px solid #4b5563; border-radius: 4px; pointer-events: none; }
   .tooltip[hidden] { display: none; }
+  /* --- Escritorio: una sola pantalla, sin scroll de pagina ---
+     Los laterales, el encabezado y el pie quedan fijos; el plano llena el hueco que
+     queda. Los plegables se abren sobre el plano: el del encabezado hacia abajo y el
+     del pie hacia arriba, asi que el plano no cambia de tamaño. */
+  @media (min-width: 901px) and (min-height: 601px) {
+    body { overflow: hidden; }
+    .app { height: 100dvh; align-items: stretch; }
+    .lateral { position: static; height: 100%; max-height: none; }
+    .centro { display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; height: 100%; min-height: 0; }
+    .encabezado, .pie { position: relative; }
+    .lienzo { min-height: 0; overflow: hidden; }
+    /* Mas especifico que la regla de #plano de la seccion del plano, que va despues. */
+    .centro .lienzo #plano { height: 100%; }
+    .barra-estado { position: static; }
+    .centro .plegable > .panel {
+      position: absolute; left: 0; right: 0; z-index: 8; max-height: 60vh; overflow-y: auto;
+      padding: 10px 12px; background: #23232b; border: 1px solid #3a3a46; border-radius: 8px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, .5);
+    }
+    /* Abrir un plegable no debe cambiar el alto de su barra: el plano no se mueve. */
+    .centro .plegable[open] > summary { margin-bottom: 0; }
+    .encabezado .plegable > .panel { top: calc(100% + 2px); }
+    .pie .plegable > .panel { bottom: calc(100% + 2px); }
+  }
   @media (max-width: 1280px) {
     .app { grid-template-columns: 220px minmax(0, 1fr); }
     .app.editando { grid-template-columns: 220px minmax(0, 1fr) 330px; }
@@ -427,11 +452,13 @@
     <!-- Encabezado: solo textos de referencia e instrucciones. -->
     <header class="encabezado">
       <h1>Selector de asientos</h1>
-      <!-- Los textos de referencia se pliegan: al cerrarlos, el plano gana alto. -->
+      <!-- Los textos de referencia se pliegan. En escritorio, el panel baja sobre el plano. -->
       <details class="plegable" open>
         <summary>Qué es y cómo se usa</summary>
-        <p class="bajada">Plano de butacas en SVG, sin dependencias. Filas numeradas, mesas y zona general en el mismo plano.</p>
-        <p class="pista" id="pista">Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer</p>
+        <div class="panel">
+          <p class="bajada">Plano de butacas en SVG, sin dependencias. Filas numeradas, mesas y zona general en el mismo plano.</p>
+          <p class="pista" id="pista">Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer</p>
+        </div>
       </details>
       <p class="aforo" id="aforo"></p>
     </header>
@@ -476,20 +503,22 @@
         Seleccionadas: <strong id="cuenta">0</strong> · Total <strong id="total">$0.00</strong>
         <span id="vacio">— ninguna butaca seleccionada.</span>
       </p>
-      <ul id="detalle"></ul>
-
+      <!-- En escritorio, el panel sube sobre el plano. Lleva el detalle de la selección y las notas. -->
       <details class="plegable">
-        <summary>Notas del proyecto</summary>
-        <p class="nota">
-          El plano se genera desde <code>butacas</code>, una lista plana con una fila por butaca:
-          identificador, fila, número, coordenadas, zona, grupo y estado. Es lo que devolvería tu
-          servidor. El SVG se produce al mostrar; nunca se almacena un SVG.
-        </p>
-        <p class="nota">
-          El selector de tipo de sala está aquí para comparar recintos: mixtos con distintos pasillos,
-          solo filas o solo mesas. En una aplicación real el recinto es fijo: se elegiría y editaría una
-          vez al crear su plano, y quedaría guardado en él. No sería un control para quien compra.
-        </p>
+        <summary>Butacas elegidas y notas</summary>
+        <div class="panel">
+          <ul id="detalle"></ul>
+          <p class="nota">
+            El plano se genera desde <code>butacas</code>, una lista plana con una fila por butaca:
+            identificador, fila, número, coordenadas, zona, grupo y estado. Es lo que devolvería tu
+            servidor. El SVG se produce al mostrar; nunca se almacena un SVG.
+          </p>
+          <p class="nota">
+            El selector de tipo de sala está aquí para comparar recintos: mixtos con distintos pasillos,
+            solo filas o solo mesas. En una aplicación real el recinto es fijo: se elegiría y editaría una
+            vez al crear su plano, y quedaría guardado en él. No sería un control para quien compra.
+          </p>
+        </div>
       </details>
     </footer>
   </main>
@@ -3219,7 +3248,7 @@ function calcularEncuadre() {
   let w = Math.max(...cajas.map((c) => c.x + (c.w || 1))) * PASO + margen - x;
   let h = Math.max(...cajas.map((c) => c.y + (c.h || 1))) * PASO + margen - y;
   const caja = svg.getBoundingClientRect();
-  if (svg.style.height && caja.width > 0 && caja.height > 0) {
+  if (caja.width > 0 && caja.height > 0) {
     const proporcion = caja.width / caja.height;
     if (w / h < proporcion) {
       const ancho = h * proporcion;
@@ -3236,24 +3265,11 @@ function calcularEncuadre() {
   aplicarVista();
 }
 
-// En Previsualizar, el plano ocupa el alto que queda en la pantalla bajo el encabezado,
-// dejando la linea de estado a la vista: cualquier sala se ve completa sin scroll. En
-// el editor, y en pantallas angostas (donde las herramientas van arriba), el alto sale
-// del ancho, como siempre.
-const ALTO_MINIMO_DEL_PLANO = 320;
+// El alto del plano lo da el CSS: en escritorio, el hueco entre el encabezado y el pie
+// (la sala se ve completa sin scroll); en pantallas angostas o bajas, el ancho. Aqui solo
+// se limpia un alto puesto a mano por una version anterior.
 function ajustarAltoDelPlano() {
-  if (modo !== 'vista' || innerWidth <= 900) {
-    svg.style.height = '';
-    return;
-  }
-  const lienzo = svg.parentElement;
-  const arriba = lienzo.getBoundingClientRect().top + scrollY;
-  const barra = document.querySelector('.barra-estado');
-  const estiloBarra = getComputedStyle(barra);
-  const bordes = lienzo.offsetHeight - lienzo.clientHeight;
-  const abajo = barra.offsetHeight + parseFloat(estiloBarra.marginTop) + bordes +
-                parseFloat(getComputedStyle(document.getElementById('app')).paddingBottom);
-  svg.style.height = Math.max(ALTO_MINIMO_DEL_PLANO, Math.floor(innerHeight - arriba - abajo)) + 'px';
+  if (svg.style.height) svg.style.height = '';
 }
 
 // Vuelve a ajustar el alto y el encuadre. Con 'conservarZoom', mantiene el centro y la
@@ -3272,9 +3288,17 @@ function reencuadrar(conservarZoom = false) {
   }
 }
 
-for (const plegable of document.querySelectorAll('.centro .plegable')) {
+// Los plegables del encabezado y del pie. En escritorio flotan sobre el plano, asi que
+// se cierran con su flecha, con Esc o al tocar el plano; en pantallas angostas empujan
+// el contenido y hay que reencuadrar.
+const plegablesDelCentro = [...document.querySelectorAll('.centro .plegable')];
+const cerrarPlegables = () => {
+  for (const plegable of plegablesDelCentro) plegable.open = false;
+};
+for (const plegable of plegablesDelCentro) {
   plegable.addEventListener('toggle', () => reencuadrar(true));
 }
+svg.addEventListener('pointerdown', cerrarPlegables);
 
 let esperaDeTamano = null;
 addEventListener('resize', () => {
@@ -4056,7 +4080,9 @@ document.addEventListener('focusout', ocultarTooltip);
 document.addEventListener('pointerdown', ocultarTooltip);
 document.addEventListener('scroll', ocultarTooltip, true);
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') ocultarTooltip();
+  if (e.key !== 'Escape') return;
+  ocultarTooltip();
+  cerrarPlegables();
 });
 
 // Ctrl+D (Cmd+D en Mac) duplica lo seleccionado: la banda o, si no, la pieza activa.
