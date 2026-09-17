@@ -166,6 +166,9 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
     `aria-pressed` si es la activa.
   - Nada de `title` en botones: algunos lectores lo anuncian en su lugar. Los atajos van en
     `aria-keyshortcuts`.
+  - **Botones del panel:** los crea `boton(icono, etiqueta, op, banda, deshabilitado)`, que pone el
+    icono del sprite con `iconoDe`, y `aria-label` y `data-tooltip` con la etiqueta. Cada banda
+    reparte su fila en dos: nombre y detalle arriba, y `.banda-controles` con los botones debajo.
   - **Botones de icono:** clase `icono`, `aria-label` con el nombre y `data-tooltip` con el nombre y el
     atajo. Lo muestra el script en un único `.tooltip` con `position: fixed` (al pasar el ratón,
     buscando con `elementFromPoint` para que funcione en botones desactivados, o con `:focus-visible`),

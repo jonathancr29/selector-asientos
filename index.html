@@ -120,7 +120,11 @@
   .bandas[hidden] { display: none; }
   .bandas h2 { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: #e2e8f0; }
   .bandas h3 { margin: 12px 0 6px; font-size: 13px; font-weight: 700; color: #cbd5e1; }
-  .columnas-sala { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
+  /* Columnas: una fila por campo, con la etiqueta a la izquierda y el campo corto. */
+  .columnas-sala { display: block; }
+  .fila-campo { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .fila-campo label { flex: 0 0 118px; font-size: 12px; color: #94a3b8; }
+  .fila-campo input { flex: 0 0 110px; }
   .columnas-sala label { font-size: 12px; color: #94a3b8; }
   .columnas-sala[hidden], .bandas .pista[hidden] { display: none; }
   .columnas-sala input {
@@ -139,12 +143,20 @@
   .banda-vertical > .banda-nombre::before { content: '⇕ '; color: #64748b; }
   .banda { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 6px 0; border-top: 1px solid #2c2c36; }
   .banda:first-child { border-top: 0; }
-  .banda-nombre { min-width: 110px; font-size: 13px; color: #e2e8f0; }
-  .banda-detalle { min-width: 120px; font-size: 12px; color: #94a3b8; }
+  .banda-nombre { flex: 1 1 130px; min-width: 110px; font-size: 13px; color: #e2e8f0; }
+  .banda-nombre input { width: 100%; }
+  .banda-detalle { flex: 0 1 auto; min-width: 0; font-size: 12px; color: #94a3b8; }
+  /* Los controles de cada banda, en su propia linea. */
+  .banda-controles { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex-basis: 100%; }
   .banda button, .banda select {
     height: 28px; min-width: 30px; padding: 0 8px; font: inherit; font-size: 12px; color: #cbd5e1;
     background: #2a2a33; border: 1px solid #3a3a46; border-radius: 6px; cursor: pointer;
   }
+  .banda button.icono { width: 28px; min-width: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+  .banda button[aria-pressed="true"] { background: #1d4ed8; border-color: #3b82f6; color: #fff; }
+  /* Zonas: nombre, precio y papelera en una linea; los lugares, debajo. */
+  .zonas .banda { display: grid; grid-template-columns: 1fr 92px 28px; gap: 6px; align-items: center; }
+  .zonas .banda > .banda-detalle { grid-column: 1 / -1; }
   .banda button:hover { background: #33333e; }
   .banda button:disabled { opacity: .45; cursor: default; }
   .banda button:focus-visible, .banda select:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
@@ -179,8 +191,8 @@
     background: #17171c; border: 1px solid #3a3a46; border-radius: 6px;
   }
   .zonas input:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
-  .zonas .nombre-zona { width: 150px; }
-  .zonas .precio-zona { width: 110px; text-align: right; }
+  .zonas .nombre-zona { width: 100%; }
+  .zonas .precio-zona { width: 100%; text-align: right; }
   .mesa-activa { font-size: 12px; color: #cbd5e1; min-width: 150px; }
   #nombre-pieza { min-width: 150px; width: 150px; }
   .herramientas select:disabled, .herramientas input:disabled { opacity: .45; }
@@ -303,6 +315,22 @@
     <symbol id="i-menos-fila" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"></rect><rect x="3" y="8" width="18" height="1.6"></rect><rect x="7.5" y="17.7" width="9" height="2.2" rx="1.1"></rect></symbol>
     <symbol id="i-cabeceras" viewBox="0 0 24 24"><rect x="6" y="8.5" width="12" height="7" rx="1.5" fill-opacity=".25" stroke="currentColor" stroke-width="1.6"></rect><rect x="1.5" y="10" width="3.5" height="4" rx="1"></rect><rect x="19" y="10" width="3.5" height="4" rx="1"></rect><rect x="7.5" y="3.5" width="4" height="3.5" rx="1" fill-opacity=".35"></rect><rect x="12.5" y="3.5" width="4" height="3.5" rx="1" fill-opacity=".35"></rect><rect x="7.5" y="17" width="4" height="3.5" rx="1" fill-opacity=".35"></rect><rect x="12.5" y="17" width="4" height="3.5" rx="1" fill-opacity=".35"></rect></symbol>
     <symbol id="i-un-solo-lado" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="6" rx="1.5" fill-opacity=".25" stroke="currentColor" stroke-width="1.6"></rect><rect x="6" y="16.5" width="4" height="3.5" rx="1"></rect><rect x="14" y="16.5" width="4" height="3.5" rx="1"></rect><rect x="6" y="3.5" width="4" height="3.5" rx="1" fill-opacity=".35"></rect><rect x="14" y="3.5" width="4" height="3.5" rx="1" fill-opacity=".35"></rect></symbol>
+    <symbol id="i-guardar" viewBox="0 -960 960 960"><path d="M180-120q-24 0-42-18t-18-42v-600q0-24 18-42t42-18h478q12.44 0 23.72 5T701-822l121 121q8 8 13 19.28 5 11.28 5 23.72v478q0 24-18 42t-42 18H180Zm600-536L656-780H180v600h600v-476ZM553.5-275.26q30.5-30.27 30.5-73.5 0-43.24-30.26-73.74-30.27-30.5-73.5-30.5-43.24 0-73.74 30.26-30.5 30.27-30.5 73.5 0 43.24 30.26 73.74 30.27 30.5 73.5 30.5 43.24 0 73.74-30.26ZM263-584h298q12.75 0 21.38-8.63Q591-601.25 591-614v-83q0-12.75-8.62-21.38Q573.75-727 561-727H263q-12.75 0-21.37 8.62Q233-709.75 233-697v83q0 12.75 8.63 21.37Q250.25-584 263-584Zm-83-72v476-600 124Z"></path></symbol>
+    <symbol id="i-exportar" viewBox="0 -960 960 960"><path d="M469-327q-5-2-10-7L308-485q-9-9.27-8.5-21.64.5-12.36 9.11-21.36 9.39-9 21.89-9t21.5 9l98 99v-341q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v341l99-99q8.8-9 20.9-8.5 12.1.5 21.49 9.5 8.61 9 8.61 21.5t-9 21.5L501-334q-5 5-10.13 7-5.14 2-11 2-5.87 0-10.87-2ZM220-160q-24 0-42-18t-18-42v-113q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v113h520v-113q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v113q0 24-18 42t-42 18H220Z"></path></symbol>
+    <symbol id="i-importar" viewBox="0 -960 960 960"><path d="M220-160q-24 0-42-18t-18-42v-113q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v113h520v-113q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v113q0 24-18 42t-42 18H220Zm230-524-99 99q-8.8 9-20.9 8.5-12.1-.5-21.49-9.5-8.61-9-8.61-21.5t9-21.5l150-150q5-5 10.13-7 5.14-2 11-2 5.87 0 10.87 2 5 2 10 7l151 151q9 9 9 21t-8.61 21q-9.39 9-21.89 9t-21.5-9l-99-98v341q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63-8.5-8.62-8.5-21.37v-341Z"></path></symbol>
+    <symbol id="i-eliminar-mapa" viewBox="0 -960 960 960"><path d="M261-120q-24.75 0-42.37-17.63Q201-155.25 201-180v-570h-11q-12.75 0-21.37-8.68-8.63-8.67-8.63-21.5 0-12.82 8.63-21.32 8.62-8.5 21.37-8.5h158q0-13 8.63-21.5 8.62-8.5 21.37-8.5h204q12.75 0 21.38 8.62Q612-822.75 612-810h158q12.75 0 21.38 8.68 8.62 8.67 8.62 21.5 0 12.82-8.62 21.32-8.63 8.5-21.38 8.5h-11v570q0 24.75-17.62 42.37Q723.75-120 699-120H261Zm438-630H261v570h438v-570Zm-438 0v570-570Zm219 330 96 97q10 10 24 10.5t24-10q10-10.5 10-24T624-370l-96-98 96-98q10-10 10-23.5T624-613q-10-10-24-10t-24 10l-96 97-95-97q-10-10-24-10t-24 10q-10 10-10 24t10 24l96 97-96 97q-10 10-10 24t10 24q10 10 24 10t24-10l95-97Z"></path></symbol>
+    <symbol id="i-aplicar" viewBox="0 -960 960 960"><path d="m378-332 363-363q9-9 21.5-9t21.5 9q9 9 9 21.5t-9 21.5L399-267q-9 9-21 9t-21-9L175-449q-9-9-8.5-21.5T176-492q9-9 21.5-9t21.5 9l159 160Z"></path></symbol>
+    <symbol id="i-agregar-zona" viewBox="0 -960 960 960"><path d="M611-800q14.25 0 27 6.37 12.75 6.38 21 17.63l195 260q12 15.68 12 35.84Q866-460 854-444L660-184q-8.25 11.25-21 17.62-12.75 6.38-27 6.38H470q-12.75 0-21.37-8.68-8.63-8.67-8.63-21.5 0-12.82 8.63-21.32 8.62-8.5 21.37-8.5h141l195-260-195-260H140v230q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63Q80-497.25 80-510v-230q0-24.75 17.63-42.38Q115.25-800 140-800h471ZM208.5-128.63Q200-137.25 200-150v-90h-90q-12.75 0-21.37-8.68-8.63-8.67-8.63-21.5 0-12.82 8.63-21.32Q97.25-300 110-300h90v-90q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v90h90q12.75 0 21.38 8.68 8.62 8.67 8.62 21.5 0 12.82-8.62 21.32-8.63 8.5-21.38 8.5h-90v90q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63ZM473-480Z"></path></symbol>
+    <symbol id="i-arriba" viewBox="0 -960 960 960"><path d="M450-686 223-459q-9 9-21 9t-21-9q-9-9-9-21t9-21l278-278q5-5 10-7t11-2q6 0 11 2t10 7l278 278q9 9 9 21t-9 21q-9 9-21 9t-21-9L510-686v496q0 13-8.5 21.5T480-160q-13 0-21.5-8.5T450-190v-496Z"></path></symbol>
+    <symbol id="i-abajo" viewBox="0 -960 960 960"><path d="M450-274v-496q0-13 8.5-21.5T480-800q13 0 21.5 8.5T510-770v496l227-227q9-9 21-9t21 9q9 9 9 21t-9 21L501-181q-5 5-10 7t-11 2q-6 0-11-2t-10-7L181-459q-9-9-9-21t9-21q9-9 21-9t21 9l227 227Z"></path></symbol>
+    <symbol id="i-izquierda" viewBox="0 -960 960 960"><path d="m274-450 227 227q9 9 9 21t-9 21q-9 9-21 9t-21-9L181-459q-5-5-7-10t-2-11q0-6 2-11t7-10l278-278q9-9 21-9t21 9q9 9 9 21t-9 21L274-510h496q13 0 21.5 8.5T800-480q0 13-8.5 21.5T770-450H274Z"></path></symbol>
+    <symbol id="i-derecha" viewBox="0 -960 960 960"><path d="M686-450H190q-13 0-21.5-8.5T160-480q0-13 8.5-21.5T190-510h496L459-737q-9-9-9-21t9-21q9-9 21-9t21 9l278 278q5 5 7 10t2 11q0 6-2 11t-7 10L501-181q-9 9-21 9t-21-9q-9-9-9-21t9-21l227-227Z"></path></symbol>
+    <symbol id="i-agregar-vertical" viewBox="0 -960 960 960"><path d="M409-780H140v600h269v-600ZM140-120q-24.75 0-42.37-17.63Q80-155.25 80-180v-600q0-24.75 17.63-42.38Q115.25-840 140-840h600q24.75 0 42.38 17.62Q800-804.75 800-780v60q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63-8.5-8.62-8.5-21.37v-60H469v600h271v-60q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v60q0 24.75-17.62 42.37Q764.75-120 740-120H140Zm608.5-258.63Q740-387.25 740-400v-50h-50q-12.75 0-21.37-8.68-8.63-8.67-8.63-21.5 0-12.82 8.63-21.32 8.62-8.5 21.37-8.5h50v-50q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v50h50q12.75 0 21.38 8.68 8.62 8.67 8.62 21.5 0 12.82-8.62 21.32-8.63 8.5-21.38 8.5h-50v50q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63ZM469-480Zm-60 0h60-60Zm0 0Z"></path></symbol>
+    <symbol id="i-guias" viewBox="0 0 24 24"><text x="11" y="10" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor">A</text><text x="11" y="22" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor">B</text></symbol>
+    <symbol id="i-agregar-filas" viewBox="0 0 24 24"><use href="#butaca" x="0" y="0" width="7.5" height="7.5"></use><use href="#butaca" x="7" y="0" width="7.5" height="7.5"></use><use href="#butaca" x="0" y="7" width="7.5" height="7.5"></use><use href="#butaca" x="7" y="7" width="7.5" height="7.5"></use><rect x="18.4" y="15" width="2.2" height="9" rx="1.1"></rect><rect x="15" y="18.4" width="9" height="2.2" rx="1.1"></rect></symbol>
+    <symbol id="i-agregar-mesas" viewBox="0 0 24 24"><rect x="1" y="8" width="11" height="5" rx="1.2" fill-opacity=".25" stroke="currentColor" stroke-width="1.5"></rect><rect x="2" y="3" width="3.5" height="3" rx="0.8"></rect><rect x="7.5" y="3" width="3.5" height="3" rx="0.8"></rect><rect x="2" y="15" width="3.5" height="3" rx="0.8"></rect><rect x="7.5" y="15" width="3.5" height="3" rx="0.8"></rect><rect x="18.4" y="15" width="2.2" height="9" rx="1.1"></rect><rect x="15" y="18.4" width="9" height="2.2" rx="1.1"></rect></symbol>
+    <symbol id="i-agregar-espacio" viewBox="0 0 24 24"><rect x="1.5" y="3" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3 2"></rect><rect x="18.4" y="15" width="2.2" height="9" rx="1.1"></rect><rect x="15" y="18.4" width="9" height="2.2" rx="1.1"></rect></symbol>
+    <symbol id="i-agregar-division" viewBox="0 0 24 24"><rect x="1.5" y="3" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"></rect><rect x="7.3" y="3" width="1.5" height="13"></rect><rect x="18.4" y="15" width="2.2" height="9" rx="1.1"></rect><rect x="15" y="18.4" width="9" height="2.2" rx="1.1"></rect></symbol>
   </defs>
 </svg>
 <div class="app" id="app">
@@ -463,10 +491,12 @@
       <div class="herramientas" id="herramientas-mapa" role="group" aria-label="Guardar mapa" hidden>
         <label class="campo" for="nombre-mapa">Nombre del mapa</label>
         <input type="text" id="nombre-mapa" maxlength="80" autocomplete="off" placeholder="Ej.: Salón Jardín, boda">
-        <button type="button" id="guardar-mapa">Guardar</button>
-        <button type="button" id="eliminar-mapa" hidden>Eliminar mapa</button>
-        <button type="button" id="exportar-mapa">Exportar JSON</button>
-        <button type="button" id="importar-mapa">Importar JSON</button>
+        <div class="rejilla-iconos herramientas">
+          <button type="button" class="icono" id="guardar-mapa" aria-label="Guardar el mapa" data-tooltip="Guardar"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-guardar"></use></svg></button>
+          <button type="button" class="icono" id="exportar-mapa" aria-label="Exportar el mapa como JSON" data-tooltip="Exportar JSON"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-exportar"></use></svg></button>
+          <button type="button" class="icono" id="importar-mapa" aria-label="Importar un mapa desde un JSON" data-tooltip="Importar JSON"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-importar"></use></svg></button>
+          <button type="button" class="icono" id="eliminar-mapa" aria-label="Eliminar el mapa guardado" data-tooltip="Eliminar mapa" hidden><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-eliminar-mapa"></use></svg></button>
+        </div>
         <input type="file" id="archivo-mapa" accept=".json,application/json" hidden>
       </div>
     </details>
@@ -477,23 +507,29 @@
         <summary>Columnas</summary>
         <!-- En un lienzo (mapa en blanco) no hay pasillos: solo el ancho. -->
           <div class="columnas-sala" id="columnas-lienzo" hidden>
-            <label for="ancho-lienzo">Ancho del lienzo</label>
-            <input type="text" id="ancho-lienzo" inputmode="numeric" autocomplete="off"
-                   placeholder="20" aria-describedby="ayuda-lienzo">
-            <button type="button" id="aplicar-ancho-lienzo">Aplicar</button>
+            <div class="fila-campo">
+              <label for="ancho-lienzo">Ancho del lienzo</label>
+              <input type="text" id="ancho-lienzo" inputmode="numeric" autocomplete="off"
+                     placeholder="20" aria-describedby="ayuda-lienzo">
+              <button type="button" class="icono" id="aplicar-ancho-lienzo" aria-label="Aplicar el ancho del lienzo" data-tooltip="Aplicar"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-aplicar"></use></svg></button>
+            </div>
           </div>
           <p class="pista" id="ayuda-lienzo" hidden>
             Columnas del lienzo, de 1 a 40. No hay pasillos fijos: el pasillo es el hueco que dejas entre
             piezas. El alto es la suma de las bandas: cambia el alto de cada espacio con − y +.
           </p>
           <div class="columnas-sala" id="columnas-plantilla">
-            <label for="bloques-sala">Butacas por bloque</label>
-            <input type="text" id="bloques-sala" inputmode="numeric" autocomplete="off"
-                   placeholder="4, 6, 4" aria-describedby="ayuda-columnas">
-            <label for="pasillos-sala">Anchos de pasillo</label>
-            <input type="text" id="pasillos-sala" inputmode="numeric" autocomplete="off"
-                   placeholder="1, 1" aria-describedby="ayuda-columnas">
-            <button type="button" id="aplicar-columnas">Aplicar</button>
+            <div class="fila-campo">
+              <label for="bloques-sala">Butacas por bloque</label>
+              <input type="text" id="bloques-sala" inputmode="numeric" autocomplete="off"
+                     placeholder="4, 6, 4" aria-describedby="ayuda-columnas">
+            </div>
+            <div class="fila-campo">
+              <label for="pasillos-sala">Anchos de pasillo</label>
+              <input type="text" id="pasillos-sala" inputmode="numeric" autocomplete="off"
+                     placeholder="1, 1" aria-describedby="ayuda-columnas">
+              <button type="button" class="icono" id="aplicar-columnas" aria-label="Aplicar las columnas" data-tooltip="Aplicar"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-aplicar"></use></svg></button>
+            </div>
           </div>
           <p class="pista" id="ayuda-columnas">
             Cada número es un bloque de butacas; entre bloques va un pasillo. «4, 6, 4» con pasillos
@@ -504,7 +540,7 @@
         <summary>Zonas y precios</summary>
         <ol class="zonas" id="lista-zonas"></ol>
           <div class="herramientas">
-            <button type="button" id="agregar-zona">Agregar zona</button>
+            <button type="button" class="icono" id="agregar-zona" aria-label="Agregar una zona" data-tooltip="Agregar zona"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar-zona"></use></svg></button>
           </div>
           <p class="pista">
             Precio por lugar, en pesos. Las filas, bloques y butacas sueltas eligen su zona; los lugares de
@@ -514,11 +550,11 @@
       <details class="grupo" open>
         <summary>Bandas</summary>
         <ol id="lista-bandas"></ol>
-          <div class="herramientas">
-            <button type="button" id="agregar-banda-filas">Agregar banda de filas</button>
-            <button type="button" id="agregar-banda-mesas">Agregar zona de mesas</button>
-            <button type="button" id="agregar-espacio">Agregar espacio</button>
-            <button type="button" id="agregar-division">Agregar franja con bandas verticales</button>
+          <div class="rejilla-iconos herramientas">
+            <button type="button" class="icono" id="agregar-banda-filas" aria-label="Agregar una banda de filas al final" data-tooltip="Agregar banda de filas"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar-filas"></use></svg></button>
+            <button type="button" class="icono" id="agregar-banda-mesas" aria-label="Agregar una zona de mesas al final" data-tooltip="Agregar zona de mesas"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar-mesas"></use></svg></button>
+            <button type="button" class="icono" id="agregar-espacio" aria-label="Agregar un espacio al final" data-tooltip="Agregar espacio"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar-espacio"></use></svg></button>
+            <button type="button" class="icono" id="agregar-division" aria-label="Agregar una franja con bandas verticales al final" data-tooltip="Agregar franja con bandas verticales"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar-division"></use></svg></button>
           </div>
       </details>
     </section>
@@ -2695,11 +2731,21 @@ function llenarZonasDeFilas(select, actual) {
   }
 }
 
-function boton(texto, etiqueta, op, banda, deshabilitado = false) {
+// Un icono del sprite, para los botones que crea el script.
+function iconoDe(id) {
+  const svgIcono = nodo('svg', { class: 'ico', 'aria-hidden': 'true', focusable: 'false' });
+  svgIcono.appendChild(nodo('use', { href: '#i-' + id }));
+  return svgIcono;
+}
+
+// Boton de icono del panel: el nombre va en aria-label y en el tooltip.
+function boton(icono, etiqueta, op, banda, deshabilitado = false) {
   const b = document.createElement('button');
   b.type = 'button';
-  b.textContent = texto;
+  b.className = 'icono';
+  b.appendChild(iconoDe(icono));
   b.setAttribute('aria-label', etiqueta);
+  b.dataset.tooltip = etiqueta;
   b.dataset.op = op;
   b.dataset.banda = banda;
   b.disabled = deshabilitado;
@@ -2758,8 +2804,10 @@ function dibujarZonas() {
     const usos = id === 'mesas' ? 0 : usosDeZona(usadas, id);
     const eliminar = document.createElement('button');
     eliminar.type = 'button';
-    eliminar.textContent = 'Eliminar';
+    eliminar.className = 'icono';
+    eliminar.appendChild(iconoDe('eliminar'));
     eliminar.setAttribute('aria-label', 'Eliminar la zona ' + nombre);
+    eliminar.dataset.tooltip = 'Eliminar la zona ' + nombre;
     eliminar.dataset.op = 'eliminar-zona';
     eliminar.dataset.zona = id;
     eliminar.disabled = id === 'mesas' || usos > 0 || Object.keys(zonas).filter((z) => z !== 'mesas').length <= 1;
@@ -2767,7 +2815,7 @@ function dibujarZonas() {
       campo('nombre-zona', 'nombre-zona', nombre, 'Nombre de la zona ' + nombre, { maxLength: NOMBRE_MAXIMO }),
       campo('precio-zona', 'precio-zona', (precio / 100).toFixed(2), 'Precio por lugar de ' + nombre + ', en pesos',
             { inputMode: 'decimal' }),
-      detalle, eliminar);
+      eliminar, detalle);
     listaZonas.appendChild(li);
   }
   if (foco) {
@@ -2872,6 +2920,8 @@ function inicioDeFila(item, clase) {
 function filasDeBandas(bandas, enVertical) {
   return bandas.map((banda, i) => {
     const { li, detalle } = inicioDeFila(banda, 'banda');
+    const controles = document.createElement('div');
+    controles.className = 'banda-controles';
     const n = banda.nombre;
     if (banda.tipo === 'escenario') {
       detalle.textContent = escenario.ausente
@@ -2882,37 +2932,38 @@ function filasDeBandas(bandas, enVertical) {
     if (banda.tipo === 'filas') {
       detalle.textContent = plural(banda.filas, 'fila', 'filas') +
         (enVertical ? ' · ' + plural(banda.anchoOcupado, 'columna', 'columnas') : '');
-      li.append(
-        boton('−', 'Quitar una fila a ' + n, 'menos', banda.id, banda.filas <= 1),
-        boton('+', 'Agregar una fila a ' + n, 'mas', banda.id, banda.filas >= FILAS_MAXIMAS));
+      controles.append(
+        boton('menos-fila', 'Quitar una fila a ' + n, 'menos', banda.id, banda.filas <= 1),
+        boton('mas-fila', 'Agregar una fila a ' + n, 'mas', banda.id, banda.filas >= FILAS_MAXIMAS));
       const zona = document.createElement('select');
       zona.setAttribute('aria-label', 'Zona de ' + n);
       zona.dataset.op = 'zona';
       zona.dataset.banda = banda.id;
       llenarZonasDeFilas(zona, banda.zona);
-      li.appendChild(zona);
+      controles.appendChild(zona);
     } else if (tieneAlto(banda)) {
       detalle.textContent = plural(banda.alto, 'fila', 'filas') + ' de alto';
-      li.append(
-        boton('−', 'Quitar una fila de alto a ' + n, 'menos', banda.id, banda.alto <= 1),
-        boton('+', 'Agregar una fila de alto a ' + n, 'mas', banda.id, banda.alto >= ALTO_MAXIMO));
+      controles.append(
+        boton('menos-fila', 'Quitar una fila de alto a ' + n, 'menos', banda.id, banda.alto <= 1),
+        boton('mas-fila', 'Agregar una fila de alto a ' + n, 'mas', banda.id, banda.alto >= ALTO_MAXIMO));
       if (banda.tipo === 'espacio') {
-        const guias = boton('Guías', 'Guías de fila en ' + n, 'guias', banda.id);
+        const guias = boton('guias', 'Guías de fila en ' + n, 'guias', banda.id);
         guias.setAttribute('aria-pressed', String(Boolean(banda.guias)));
-        li.appendChild(guias);
+        controles.appendChild(guias);
       }
     } else {
       detalle.textContent = plural(banda.verticales.length, 'banda vertical', 'bandas verticales') +
         ' · ' + plural(banda.alto, 'fila', 'filas') + ' de alto';
-      li.appendChild(boton('+ vertical', 'Agregar una banda vertical a ' + n, 'agregar-vertical', banda.id,
-                           banda.verticales.length >= VERTICALES_MAXIMAS));
+      controles.appendChild(boton('agregar-vertical', 'Agregar una banda vertical a ' + n, 'agregar-vertical', banda.id,
+                                  banda.verticales.length >= VERTICALES_MAXIMAS));
     }
     const anterior = bandas[i - 1];
-    li.append(
-      boton('↑', 'Subir ' + n, 'subir', banda.id, !anterior || anterior.tipo === 'escenario'),
-      boton('↓', 'Bajar ' + n, 'bajar', banda.id, i === bandas.length - 1),
-      boton('Duplicar', 'Duplicar ' + n, 'duplicar', banda.id),
-      boton('Eliminar', 'Eliminar ' + n, 'eliminar', banda.id));
+    controles.append(
+      boton('arriba', 'Subir ' + n, 'subir', banda.id, !anterior || anterior.tipo === 'escenario'),
+      boton('abajo', 'Bajar ' + n, 'bajar', banda.id, i === bandas.length - 1),
+      boton('duplicar', 'Duplicar ' + n, 'duplicar', banda.id),
+      boton('eliminar', 'Eliminar ' + n, 'eliminar', banda.id));
+    li.appendChild(controles);
     if (esDivision(banda)) {
       const ol = document.createElement('ol');
       ol.setAttribute('aria-label', 'Bandas verticales de ' + n);
@@ -2928,16 +2979,19 @@ function filaDeVertical(v, k, verticales) {
   const ultima = k === verticales.length - 1;
   detalle.textContent = plural(v.anchoOcupado, 'columna', 'columnas') + (ultima ? ' (el resto)' : '');
   const n = v.nombre;
-  li.append(
-    boton('−', 'Quitar una columna de ancho a ' + n, 'angosta', v.id, ultima || v.anchoOcupado <= 1),
-    boton('+', 'Agregar una columna de ancho a ' + n, 'ancha', v.id, ultima),
-    boton('←', 'Mover ' + n + ' a la izquierda', 'izquierda', v.id, k === 0),
-    boton('→', 'Mover ' + n + ' a la derecha', 'derecha', v.id, ultima),
-    boton('+ filas', 'Agregar una banda de filas en ' + n, 'agregar-filas-en', v.id),
-    boton('+ mesas', 'Agregar una zona de mesas en ' + n, 'agregar-mesas-en', v.id),
-    boton('+ espacio', 'Agregar un espacio en ' + n, 'agregar-espacio-en', v.id),
-    boton('Duplicar', 'Duplicar ' + n, 'duplicar', v.id, verticales.length >= VERTICALES_MAXIMAS),
-    boton('Eliminar', 'Eliminar ' + n, 'eliminar', v.id, verticales.length === 1));
+  const controles = document.createElement('div');
+  controles.className = 'banda-controles';
+  controles.append(
+    boton('acortar', 'Quitar una columna de ancho a ' + n, 'angosta', v.id, ultima || v.anchoOcupado <= 1),
+    boton('alargar', 'Agregar una columna de ancho a ' + n, 'ancha', v.id, ultima),
+    boton('izquierda', 'Mover ' + n + ' a la izquierda', 'izquierda', v.id, k === 0),
+    boton('derecha', 'Mover ' + n + ' a la derecha', 'derecha', v.id, ultima),
+    boton('agregar-filas', 'Agregar una banda de filas en ' + n, 'agregar-filas-en', v.id),
+    boton('agregar-mesas', 'Agregar una zona de mesas en ' + n, 'agregar-mesas-en', v.id),
+    boton('agregar-espacio', 'Agregar un espacio en ' + n, 'agregar-espacio-en', v.id),
+    boton('duplicar', 'Duplicar ' + n, 'duplicar', v.id, verticales.length >= VERTICALES_MAXIMAS),
+    boton('eliminar', 'Eliminar ' + n, 'eliminar', v.id, verticales.length === 1));
+  li.appendChild(controles);
   const ol = document.createElement('ol');
   ol.setAttribute('aria-label', 'Bandas de ' + n);
   for (const hija of filasDeBandas(v.bandas, true)) ol.appendChild(hija);

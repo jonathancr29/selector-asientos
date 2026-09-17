@@ -152,6 +152,11 @@ mesas: la banda solo decide dónde van las automáticas y deja espacio.
 En el modo editor, el panel **Bandas de la sala** lista las bandas con sus controles:
 
 - **− / +:** quita o agrega una fila (bandas de filas) o una fila de alto (zonas de mesas).
+Los botones del panel también son iconos, con el mismo tooltip y `aria-label` que los de la barra:
+subir, bajar, duplicar, eliminar, quitar y agregar fila, ancho de una vertical, moverla, guías de
+fila, y agregar banda de filas, zona de mesas, espacio o franja. En *Mapa* son guardar, exportar,
+importar y eliminar; en *Columnas*, aplicar (✓); en *Zonas*, eliminar y agregar zona.
+
 - **Nombre:** un campo con el nombre propio de la banda. Vacío, toma el de por defecto.
 - **Zona:** cualquier zona de la sala salvo la de mesas, con su precio. El nombre por defecto sigue a
   la zona; uno propio se queda.
