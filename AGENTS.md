@@ -62,6 +62,8 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    **Bandas y columnas:** `planoDesdeSala`, `cambiarDistribucion`, `redimensionarBanda`, `moverBanda`, `eliminarBanda`, `agregarBanda`,
    `cambiarZonaBanda`, `agregarVertical`, `cambiarAnchoVertical`, `agregarBandaEnVertical`,
    `renombrarBanda`, `duplicarBanda` y `duplicarPieza`. Devuelven un plano nuevo o `{ motivo }`.
+   **Lienzo y escenario opcional:** `cambiarAnchoLienzo`, `alternarGuias`, `agregarGuias`,
+   `quitarEscenario`, `agregarEscenario` y `tieneAlto` (mesas y espacios guardan su alto).
    **Capas y subtítulos:** `capasDe` (orden de color), `bandaEnCelda` (selección por clic),
    `agregarSubtitulos` (muebles `subtitulo`), `copiarBloqueadas` y `sitioParaCopia`.
    **Árbol de bandas:** `disponerBandas` (coloca el árbol y devuelve bandas colocadas, regiones y error),
@@ -129,6 +131,14 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   que depende de «hacia dónde está el escenario» (mira de las filas de banda, qué bloques miran de
   frente, orden de las letras) se calcula desde `escenario` en `generarPlano` y `numerarFilas`.
   Nunca supongas que está arriba.
+- **El escenario puede no existir:** `plano.escenario === null` → `escenario.ausente`. Sin campo
+  (`undefined`) se usa el de por defecto; no confundas los dos. Con `ausente`, no ocupa celdas, no
+  se dibuja, `piezaPorId('escenario')` es null y `centroDelEscenario` devuelve `y: -Infinity` para
+  que todo mire y se numere desde arriba sin casos especiales. Filtra `escenario` de las listas de
+  piezas con `escenario.ausente`.
+- **Un lienzo no tiene pasillos:** `lienzo: true` con `distribucion` de un solo bloque. Su ancho se
+  cambia con `cambiarAnchoLienzo`, no con `cambiarDistribucion` (que recolocaría las piezas).
+- **Las guías de fila son decorado** (muebles `guia`): no son butacas, no ocupan celdas ni se numeran.
 - **Los ids son estables.** Bloques: bloque + fila + butaca locales (`F1-2-3`). Filas de banda: banda + fila + número dentro de la banda
   (`luneta-A1`), aunque la etiqueta visible siga la numeración por zona. Mesas: mesa + lado (`M2-N1`, `M2-S2`,
   `M2-C1`), nunca un número de orden. Mover, girar o cambiar de sala mixta no renombra lugares;
@@ -155,7 +165,9 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   descartan los campos desconocidos y se comprueba que las mesas quepan. No se confía en el archivo.
 - **Las bloqueadas son una lista de ids** (`plano.bloqueadas`). `bloqueadasAlFinal` de las plantillas
   solo se usa si no hay lista.
-- **Formato del mapa, versión 2:** guarda `distribucion`. `validarMapa` convierte la versión 1
+- **Formato del mapa, versión 3:** `lienzo`, `escenario: null` y bandas `espacio` (con `guias`); el
+  escenario ya no es banda obligatoria. Hasta la versión 2 se exige el escenario como primera banda
+  y no se admiten espacios. La versión 2 guarda `distribucion`; `validarMapa` convierte la versión 1
   (`pasillos` con nombre). Si cambias el formato otra vez, sube `VERSION_MAPA` y convierte los mapas
   viejos en lugar de
   rechazarlos.
@@ -220,6 +232,8 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
      «Restablecer sala», y que la selección se conserve.
    - **Bandas:** − / +, zona, subir y bajar, eliminar, agregar; que no se aplique un cambio que deja
      una mesa sin caber, y que el foco vuelva al mismo control.
+   - **Mapa en blanco:** elegirlo abre el editor; ancho del lienzo, agregar espacios y guías, agregar
+     y quitar escenario, guardar y recargar.
    - **Duplicar y nombres:** Duplicar y Ctrl+D en una mesa, un bloque, una banda, una vertical y una
      franja; clic en el fondo para seleccionar bandas (y subir de nivel); renombrar en el panel y con
      doble clic en un subtítulo; que los subtítulos se lean en Previsualizar sin tapar clics.
@@ -234,3 +248,5 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - Guardar los mapas en un servidor: hoy se guardan en el navegador o como archivos JSON.
 - Desplazar el plano solo al arrastrar una mesa hasta el borde con zoom.
 - Decidir si una mesa con lugares ocupados se puede mover, acortar o eliminar (hoy sí, con aviso).
+- Mapa en blanco, fase B: butacas sueltas y formas (pista de baile, barra).
+- Zonas pintadas con su precio.

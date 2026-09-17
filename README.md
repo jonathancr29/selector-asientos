@@ -382,6 +382,25 @@ reservas y las bloqueadas. La **etiqueta visible** se calcula:
 Como la etiqueta depende de la posición, mover un bloque puede cambiar las etiquetas de su zona (A6
 pasa a B3), pero nunca los ids.
 
+### Mapa en blanco
+
+La opción **«Mapa en blanco»** (grupo *Nuevo* del selector de tipo de sala) empieza un recinto desde
+cero, por ejemplo un salón de eventos. Al elegirla se abre directamente el modo editor.
+
+- **Lienzo de 20 × 10 celdas:** una sola banda **Espacio** de 10 filas, sin escenario, sin filas ni
+  mesas.
+- **Sin pasillos fijos:** todas las columnas se pueden usar; el pasillo es el hueco que dejas entre
+  bloques y mesas. En el panel, en lugar de bloques y pasillos, hay un campo **Ancho del lienzo** (1
+  a 40 columnas). Las piezas se quedan donde están; si alguna deja de caber, el cambio no se aplica.
+- **El alto** es la suma de las bandas: cada espacio tiene − / + de alto, y se agregan más con
+  **Agregar espacio** (o «+ espacio» dentro de una vertical). Las bandas de filas, zonas de mesas y
+  franjas con verticales siguen disponibles.
+- **Guías de fila:** el botón **Guías** de un espacio muestra letras de referencia (A, B, C…) en cada
+  fila, para ubicarse. No son butacas ni se venden.
+- **Escenario:** el botón **Agregar escenario** de la barra lo pone en el primer hueco libre: a todo
+  el ancho si cabe, si no de 8 o de 4 columnas. Después se mueve y cambia de tamaño como siempre.
+- **Guardar:** con un nombre, en «Mis mapas», como cualquier mapa (versión 3 del formato).
+
 ### El escenario
 
 El escenario es una pieza más: `{ x, y, ancho, alto }` en celdas. Por defecto ocupa la franja inicial
@@ -394,7 +413,10 @@ a todo el ancho de la sala (2 filas de alto), pero en el editor se agarra y se e
 | Ancho | Alargar / Acortar | + / − |
 | Alto | + fila / − fila | ] / [ |
 
-- **No se elimina** y no puede pisar filas, mesas ni bloques (ni ellos a él). Puede cruzar pasillos.
+- **Es opcional:** **Quitar escenario** / **Agregar escenario** en la barra del editor, en cualquier
+  sala. No puede pisar filas, mesas ni bloques (ni ellos a él). Puede cruzar pasillos.
+- **Sin escenario,** las filas miran hacia arriba, la fila A de cada zona es la de más arriba y los
+  bloques nuevos se crean sin girar. El aforo dice *sin escenario*.
 - **Las filas y la numeración se miden desde donde esté:** las bandas miran hacia él y, en cada zona,
   la fila más cercana es la A. Si se baja el escenario, la fila de abajo pasa a ser la A y los
   rótulos cambian con ella.
@@ -445,6 +467,10 @@ butacas bloqueadas y los contadores de ids. No guarda la ocupación ni la selecc
 }
 ```
 
+**Versión 3** (la actual) añade `lienzo` (mapa en blanco, sin pasillos), `escenario: null` (sin
+escenario) y bandas de tipo `espacio` (con `guias`); el escenario ya no tiene que ser la primera
+banda. Los mapas de la versión 2 se leen igual que antes.
+
 Los mapas de la versión 1 (que guardaban `"pasillos": "ambos"`) se siguen leyendo: se convierten a
 bloques y pasillos al cargarlos.
 
@@ -463,6 +489,10 @@ seguir usando **Exportar JSON**.
 
 - **Guardar los mapas** en un servidor, en lugar de en el navegador.
 - **Desplazar el plano** solo al arrastrar una mesa hasta el borde con zoom.
+- **Zonas pintadas con su precio:** marcar un área del plano con una zona y su precio, en lugar de
+  asignarlo pieza a pieza.
+- **Más herramientas para el mapa en blanco** (fase B, prevista): butacas sueltas y formas como pista
+  de baile o barra.
 
 ## Pruebas
 
@@ -472,7 +502,7 @@ node --test pruebas.mjs
 
 Cubren la rejilla, el reparto de mesas, el aforo de la tabla anterior, la conciliación de la
 selección al cambiar de sala, los tipos de sala y las bandas, y las reglas del editor: geometría de las mesas, hacia dónde
-mira cada silla, dónde caben, girar, alargar, cabeceras, un solo lado y sitio para mesas nuevas; también duplicar piezas y bandas, renombrar bandas, subtítulos y selección de bandas por clic. No hay copia del código: `pruebas.mjs` lee `index.html` y
+mira cada silla, dónde caben, girar, alargar, cabeceras, un solo lado y sitio para mesas nuevas; también el mapa en blanco (lienzo, espacios, guías, escenario opcional y mapas versión 3), duplicar piezas y bandas, renombrar bandas, subtítulos y selección de bandas por clic. No hay copia del código: `pruebas.mjs` lee `index.html` y
 evalúa la parte del script anterior a la marca *«Fin de la parte sin DOM»*, así que el proyecto
 sigue siendo un solo archivo. Requiere Node 18 o posterior.
 

@@ -64,6 +64,7 @@
   .bandas h3 { margin: 12px 0 6px; font-size: 13px; font-weight: 700; color: #cbd5e1; }
   .columnas-sala { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
   .columnas-sala label { font-size: 12px; color: #94a3b8; }
+  .columnas-sala[hidden], .bandas .pista[hidden] { display: none; }
   .columnas-sala input {
     height: 28px; width: 130px; padding: 0 8px; font: inherit; font-size: 13px; color: #e2e8f0;
     background: #17171c; border: 1px solid #3a3a46; border-radius: 6px;
@@ -182,6 +183,8 @@
 
   .mueble { fill: #26262f; stroke: #3a3a46; stroke-width: .6; }
   .rotulo { fill: #94a3b8; font-size: 4.2px; text-anchor: middle; dominant-baseline: middle; }
+  /* Guias de fila de un espacio: referencia, mas apagadas que un rotulo de butacas. */
+  .rotulo.guia { fill: #64748b; }
   .escenario { fill: #f8fafc; }
   .escenario-texto { fill: #1e1e24; font-size: 5px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; }
 
@@ -259,6 +262,7 @@
     <input type="text" id="nombre-pieza" maxlength="40" autocomplete="off" disabled
            placeholder="Ej.: Lateral izquierdo">
     <span class="separador" aria-hidden="true"></span>
+    <button type="button" id="alternar-escenario">Quitar escenario</button>
     <button type="button" id="restablecer">Restablecer sala</button>
   </div>
   <!-- Solo en modo editor: guardar el diseño con nombre, en el navegador o como JSON. -->
@@ -305,7 +309,18 @@
   <section class="bandas" id="panel-bandas" aria-labelledby="titulo-bandas" hidden>
     <h2 id="titulo-bandas">Diseño de la sala</h2>
     <h3>Columnas</h3>
-    <div class="columnas-sala">
+    <!-- En un lienzo (mapa en blanco) no hay pasillos: solo el ancho. -->
+    <div class="columnas-sala" id="columnas-lienzo" hidden>
+      <label for="ancho-lienzo">Ancho del lienzo</label>
+      <input type="text" id="ancho-lienzo" inputmode="numeric" autocomplete="off"
+             placeholder="20" aria-describedby="ayuda-lienzo">
+      <button type="button" id="aplicar-ancho-lienzo">Aplicar</button>
+    </div>
+    <p class="pista" id="ayuda-lienzo" hidden>
+      Columnas del lienzo, de 1 a 40. No hay pasillos fijos: el pasillo es el hueco que dejas entre
+      piezas. El alto es la suma de las bandas: cambia el alto de cada espacio con − y +.
+    </p>
+    <div class="columnas-sala" id="columnas-plantilla">
       <label for="bloques-sala">Butacas por bloque</label>
       <input type="text" id="bloques-sala" inputmode="numeric" autocomplete="off"
              placeholder="4, 6, 4" aria-describedby="ayuda-columnas">
@@ -323,6 +338,7 @@
     <div class="herramientas">
       <button type="button" id="agregar-banda-filas">Agregar banda de filas</button>
       <button type="button" id="agregar-banda-mesas">Agregar zona de mesas</button>
+      <button type="button" id="agregar-espacio">Agregar espacio</button>
       <button type="button" id="agregar-division">Agregar franja con bandas verticales</button>
     </div>
   </section>
@@ -498,6 +514,8 @@ const muebles = [];   // decorado: escenario y mesas. No se vende, solo se dibuj
 //   escenario   2 filas de rejilla, siempre la primera
 //   filas       'filas' filas de butacas; cada banda empieza su secuencia en A
 //   mesas       'alto' filas de rejilla libres, con 'filasDeMesas' automaticas
+//   espacio     'alto' filas de rejilla vacias, para llenar con piezas; con
+//               'guias', letras de referencia en cada fila (no son butacas)
 // Cada tipo de sala define sus pasillos y sus bandas. Las mesas pueden ir en
 // cualquier hueco libre de la sala, no solo en su banda.
 //
@@ -524,7 +542,18 @@ const mixta = (pasillos, nombre) => ({
   ],
 });
 
+// Un lienzo: sin pasillos (una sola columna de bloques; el pasillo es el hueco que
+// se deja entre piezas), sin escenario y con un solo espacio vacio. Su ancho se
+// cambia con cambiarAnchoLienzo.
+const ANCHO_LIENZO = 20;
+const ALTO_LIENZO = 10;
 const TIPOS_DE_SALA = {
+  'mapa-en-blanco': {
+    nombre: 'Mapa en blanco', grupo: 'Nuevo', lienzo: true,
+    distribucion: { bloques: [ANCHO_LIENZO], pasillos: [] },
+    bandas: [{ id: 'espacio', tipo: 'espacio', alto: ALTO_LIENZO }],
+    escenario: null, mesas: [], bloquesFilas: [], siguienteBanda: 1,
+  },
   'mixta-ambos':     mixta('ambos', 'Dos pasillos, al centro'),
   'mixta-izquierda': mixta('izquierda', 'Un pasillo, a la izquierda'),
   'mixta-derecha':   mixta('derecha', 'Un pasillo, a la derecha'),
@@ -615,7 +644,7 @@ function disponerBandas(bandas, anchoSala) {
     if (banda.nombre) return banda.nombre;
     if (banda.tipo === 'escenario') return 'Escenario';
     const base = banda.tipo === 'filas' ? zonas[banda.zona].nombre
-      : banda.tipo === 'mesas' ? 'Zona de mesas' : 'Franja dividida';
+      : banda.tipo === 'mesas' ? 'Zona de mesas' : banda.tipo === 'espacio' ? 'Espacio' : 'Franja dividida';
     vistos[base] = (vistos[base] || 0) + 1;
     return vistos[base] > 1 ? base + ' ' + vistos[base] : base;
   };
@@ -693,6 +722,9 @@ function reanclarPiezas(antes, nuevo, anchoAntes, anchoDespues, quitar = []) {
   return nuevo;
 }
 
+// Bandas cuyo alto es un dato propio (no sale de sus filas ni de lo de dentro).
+const tieneAlto = (banda) => banda.tipo === 'mesas' || banda.tipo === 'espacio';
+
 const altoDeBanda = (banda) =>
   (banda.tipo === 'escenario' ? 2 : banda.tipo === 'filas' ? banda.filas : banda.alto);
 
@@ -729,6 +761,27 @@ function agregarFilas(banda, columnas, anchoSala = Infinity) {
     const xRotulo = bordeIzquierdo ? columnas[0] - 1 : bordeDerecho ? columnas.at(-1) + 1 : null;
     if (xRotulo !== null) muebles.push({ tipo: 'rotulo', texto: fila, banda: id, filaLocal: i, x: xRotulo, y: y + i });
   }
+}
+
+// Letras de referencia en las filas de un espacio con 'guias': A, B, C... en el
+// mismo sitio que los rotulos de fila. Solo ayudan a ubicarse; no son butacas.
+function agregarGuias(banda, anchoSala) {
+  const desde = banda.x || 1, ancho = banda.anchoOcupado || anchoSala;
+  const x = desde === 1 ? 0 : desde + ancho - 1 >= anchoSala ? anchoSala + 1 : null;
+  if (x === null) return;
+  for (let i = 0; i < banda.alto; i++) {
+    muebles.push({ tipo: 'guia', texto: letraDeFila(i), banda: banda.id, x, y: banda.y + i });
+  }
+}
+
+// Pone o quita las guias de fila de un espacio.
+function alternarGuias(plano, id) {
+  const nuevo = copiarPlano(plano);
+  const banda = ubicar(nuevo.bandas, id).item;
+  if (banda.tipo !== 'espacio') return { motivo: 'las guías de fila son para los espacios' };
+  if (banda.guias) delete banda.guias;
+  else banda.guias = true;
+  return nuevo;
 }
 
 // Ids bloqueados por las bandas de una plantilla: 'bloqueadasAlFinal: { B: 2 }'
@@ -878,9 +931,13 @@ function agregarBloqueFilas(config) {
 // ---------------------------------------------------------------------------
 const ESCENARIO_ANCHO_MAXIMO = 60;
 const ESCENARIO_ALTO_MAXIMO = 10;
-const escenario = { id: 'escenario', tipo: 'escenario', nombre: 'Escenario', x: 1, y: 0, ancho: 1, alto: 2 };
+// Es opcional: un plano con 'escenario: null' no lo tiene ('ausente'). Sin escenario,
+// su centro queda infinitamente arriba: las filas miran hacia arriba, la fila A es
+// la de mas arriba de cada zona y los bloques nuevos no se giran.
+const escenario = { id: 'escenario', tipo: 'escenario', nombre: 'Escenario', x: 1, y: 0, ancho: 1, alto: 2, ausente: false };
 const esEscenario = (pieza) => Boolean(pieza) && pieza.tipo === 'escenario';
-const centroDelEscenario = () => ({ x: escenario.x + escenario.ancho / 2, y: escenario.y + escenario.alto / 2 });
+const centroDelEscenario = () => (escenario.ausente ? { x: 0, y: -Infinity }
+  : { x: escenario.x + escenario.ancho / 2, y: escenario.y + escenario.alto / 2 });
 
 // Hacia donde miran las butacas de una fila en la altura y: arriba si el escenario
 // esta por encima (o a su altura), abajo si esta por debajo.
@@ -950,6 +1007,7 @@ function numerarFilas() {
   }
   for (const [zona, lista] of porZona) {
     // Por distancia al escenario; a igual distancia, primero la de arriba.
+    // Sin escenario todas estan a distancia infinita (Infinity - Infinity es NaN): manda la altura.
     const distancia = (y) => Math.abs(y + 0.5 - centro);
     const alturas = [...new Set(lista.map((b) => b.y))].sort((a, c) => distancia(a) - distancia(c) || a - c);
     alturas.forEach((y, i) => {
@@ -1034,19 +1092,24 @@ function generarPlano(tipo, plano = null) {
   sala.errorDeBandas = disposicion.error;
   for (const banda of hojasDe(sala.bandas)) {
     if (banda.tipo === 'filas') agregarFilas(banda, columnasDeBanda(sala, banda), sala.ancho);
+    if (banda.tipo === 'espacio' && banda.guias) agregarGuias(banda, sala.ancho);
   }
+  sala.lienzo = Boolean((plano && plano.lienzo) || definicion.lienzo);
   agregarSubtitulos(sala.bandas);
   const y = sala.alto;
 
-  // El escenario: el del plano o el del mapa; si no hay, la franja de la banda
-  // «escenario» a todo el ancho de la sala.
+  // El escenario: el del plano o el del mapa; si no dicen nada, la franja de la
+  // banda «escenario» a todo el ancho de la sala. 'null' es que no hay escenario.
   const franja = sala.bandas.find((b) => b.tipo === 'escenario');
+  const configEscenario = plano && plano.escenario !== undefined ? plano.escenario : definicion.escenario;
   Object.assign(escenario, { x: 1, y: franja ? franja.y : 0, ancho: sala.ancho, alto: franja ? franja.alto : 2 },
-                (plano && plano.escenario) || definicion.escenario || {});
-  sala.escenarioPorDefecto = !((plano && plano.escenario) || definicion.escenario);
+                configEscenario || {}, { ausente: configEscenario === null });
+  sala.escenarioPorDefecto = configEscenario === undefined;
   // Se dibuja con algo de aire abajo: con 2 celdas de alto, 1,2 de rectangulo.
-  muebles.push({ tipo: 'escenario', x: escenario.x, y: escenario.y, w: escenario.ancho,
-                 h: Math.max(0.8, escenario.alto - 0.8) });
+  if (!escenario.ausente) {
+    muebles.push({ tipo: 'escenario', x: escenario.x, y: escenario.y, w: escenario.ancho,
+                   h: Math.max(0.8, escenario.alto - 0.8) });
+  }
   escenario.geo = huellaDe(escenario);
   // Las filas de las bandas miran hacia donde este el escenario.
   for (const b of butacas) if (b.banda) b.mira = miraHaciaEscenario(b.y);
@@ -1095,7 +1158,7 @@ function celdasOcupadas(excluir) {
       for (let dx = 0; dx < m.geo.ancho; dx++) ocupadas.set(celda(m.x + dx, m.y + dy), m.nombre);
     }
   }
-  if (excluir !== 'escenario') {
+  if (excluir !== 'escenario' && !escenario.ausente) {
     for (let dy = 0; dy < escenario.alto; dy++) {
       for (let dx = 0; dx < escenario.ancho; dx++) ocupadas.set(celda(escenario.x + dx, escenario.y + dy), 'el escenario');
     }
@@ -1221,7 +1284,7 @@ function buscarSitioLibre(sala, ocupadas, config) {
 // Tras cambiar bandas o columnas, la primera pieza (mesa o bloque) que ya no cabe
 // (se sale, choca con una fila u otra pieza), o null si todas caben.
 function primeraPiezaQueNoCabe(sala) {
-  for (const pieza of [escenario, ...mesas, ...bloquesFilas]) {
+  for (const pieza of [...(escenario.ausente ? [] : [escenario]), ...mesas, ...bloquesFilas]) {
     const motivo = motivoNoCabe(sala, celdasOcupadas(pieza.id), pieza);
     if (motivo) return { pieza, motivo };
   }
@@ -1237,7 +1300,7 @@ function primeraPiezaQueNoCabe(sala) {
 const copiarPlano = (plano) => ({
   ...plano, bandas: copiarBandas(plano.bandas), mesas: plano.mesas.map((m) => ({ ...m })),
   bloquesFilas: (plano.bloquesFilas || []).map((b) => ({ ...b })),
-  ...(plano.escenario ? { escenario: { ...plano.escenario } } : {}),
+  ...(plano.escenario ? { escenario: { ...plano.escenario } } : {}),   // null (sin escenario) llega con ...plano
 });
 const piezasDe = (plano) => [...plano.mesas, ...plano.bloquesFilas, ...(plano.escenario ? [plano.escenario] : [])];
 // Una banda o vertical de una sala ya dispuesta, por id (con nombre, x, y, alto...).
@@ -1312,6 +1375,7 @@ function agregarBanda(plano, tipo, anchoSala = ANCHO_SALA) {
 function nuevaBanda(tipo, nuevoId, anchoSala) {
   if (tipo === 'filas') return { id: nuevoId(), tipo: 'filas', zona: 'general', filas: 2 };
   if (tipo === 'mesas') return { id: nuevoId(), tipo: 'mesas', alto: 4 };
+  if (tipo === 'espacio') return { id: nuevoId(), tipo: 'espacio', alto: 4 };
   const id = nuevoId();
   return {
     id, tipo: 'division',
@@ -1371,7 +1435,7 @@ function planoDesdeSala(tipo, sala) {
   const limpiar = (lista) => lista.map(({ x, y, alto, anchoOcupado, profundidad, altoPila, nombre, nombrePropio,
                                           bloqueadasAlFinal, verticales, ...banda }) => ({
     ...banda,
-    ...(banda.tipo === 'mesas' ? { alto } : {}),
+    ...(tieneAlto(banda) ? { alto } : {}),
     ...(nombrePropio ? { nombre: nombrePropio } : {}),
     ...(verticales ? {
       verticales: verticales.map(({ x: _x, y: _y, alto: _a, anchoOcupado: _w, profundidad: _p, altoPila: _h,
@@ -1384,7 +1448,8 @@ function planoDesdeSala(tipo, sala) {
     bandas: limpiar(sala.bandas),
     mesas: mesas.map(({ id, x, y, largo, cabeceras, unLado, giro }) => ({ id, x, y, largo, cabeceras, unLado, giro })),
     bloquesFilas: bloquesFilas.map(configDeBloque),
-    escenario: configDeEscenario(escenario),
+    escenario: escenario.ausente ? null : configDeEscenario(escenario),
+    ...(sala.lienzo ? { lienzo: true } : {}),
     distribucion: distribucionDeSala(sala),
     bloqueadas: butacas.filter((b) => b.estado === 'bloqueada').map((b) => b.id),
     siguiente: Math.max(definicion.siguiente || 0, ...mesas.map((m) => Number(m.id.slice(1)) + 1), 1),
@@ -1394,6 +1459,44 @@ function planoDesdeSala(tipo, sala) {
 }
 
 const configDeEscenario = ({ x, y, ancho, alto }) => ({ x, y, ancho, alto });
+
+// Quita el escenario: las piezas ya no lo rodean ni se numeran desde el.
+function quitarEscenario(plano) {
+  const nuevo = copiarPlano(plano);
+  nuevo.escenario = null;
+  return nuevo;
+}
+
+// Pone un escenario de 2 filas de alto en el primer hueco libre: a todo el ancho si
+// cabe, si no de 8 o de 4 columnas. Usa las celdas de la sala generada desde 'plano'.
+function agregarEscenario(plano, sala) {
+  const ocupadas = celdasOcupadas(null);
+  for (const ancho of [...new Set([sala.ancho, Math.min(8, sala.ancho), Math.min(4, sala.ancho)])]) {
+    const sitio = buscarSitioLibre(sala, ocupadas, { id: 'escenario', tipo: 'escenario', x: 0, y: 0, ancho, alto: 2 });
+    if (sitio) {
+      const nuevo = copiarPlano(plano);
+      nuevo.escenario = configDeEscenario(sitio);
+      return nuevo;
+    }
+  }
+  return { motivo: 'no hay un hueco libre de 4 × 2 celdas para el escenario' };
+}
+
+// Cambia el ancho de un lienzo. Las piezas se quedan donde estan: solo cambia el
+// ancho de la ultima vertical de cada franja, que no se desplaza. Si alguna pieza
+// deja de caber, lo detecta aplicarBandas.
+function cambiarAnchoLienzo(plano, sala, ancho) {
+  if (!esEntero(ancho, 1, BUTACAS_POR_BLOQUE)) {
+    return { motivo: 'el ancho del lienzo debe ser de 1 a ' + BUTACAS_POR_BLOQUE + ' columnas' };
+  }
+  const nuevo = copiarPlano(plano);
+  nuevo.distribucion = { bloques: [ancho], pasillos: [] };
+  // Un escenario a todo el ancho sigue a todo el ancho.
+  if (nuevo.escenario && nuevo.escenario.x === 1 && nuevo.escenario.ancho === sala.ancho) {
+    nuevo.escenario.ancho = Math.min(ancho, ESCENARIO_ANCHO_MAXIMO);
+  }
+  return nuevo;
+}
 
 // La configuracion guardable de un bloque: sin geometria ni nombre por defecto.
 const configDeBloque = ({ id, x, y, ancho, filas, zona, giro, nombrePropio }) =>
@@ -1421,9 +1524,11 @@ function alternarBloqueada(plano, id) {
 //
 // Version 2: 'distribucion' ({ bloques, pasillos }). La version 1 guardaba
 // 'pasillos' con nombre ('ambos'...); al leerla se convierte a distribucion.
+// Version 3: 'lienzo' (un bloque, sin pasillos), 'escenario: null' (sin escenario),
+// bandas de tipo 'espacio' (con 'guias') y el escenario ya no es banda obligatoria.
 // ---------------------------------------------------------------------------
 const FORMATO_MAPA = 'selector-asientos/mapa';
-const VERSION_MAPA = 2;
+const VERSION_MAPA = 3;
 const PASILLOS_VALIDOS = ['ninguno', 'izquierda', 'derecha', 'ambos'];
 const GRUPO_MAPAS = 'Mis mapas';
 const claveDeMapa = (nombre) => 'mapa:' + nombre;
@@ -1439,7 +1544,8 @@ function mapaDesdePlano(nombre, plano, guardado, idsExistentes = null) {
     bandas: limpiarBandasParaMapa(plano.bandas),
     mesas: plano.mesas.map(({ id, x, y, largo, cabeceras, unLado, giro }) => ({ id, x, y, largo, cabeceras, unLado, giro })),
     bloquesFilas: (plano.bloquesFilas || []).map((b) => ({ ...b })),
-    ...(plano.escenario ? { escenario: { ...plano.escenario } } : {}),
+    ...(plano.escenario !== undefined ? { escenario: plano.escenario && { ...plano.escenario } } : {}),
+    ...(plano.lienzo ? { lienzo: true } : {}),
     bloqueadas: (plano.bloqueadas || []).filter((id) => !idsExistentes || idsExistentes.has(id)),
     siguiente: plano.siguiente,
     siguienteBanda: plano.siguienteBanda,
@@ -1454,7 +1560,7 @@ const limpiarBandasParaMapa = (lista) => lista.map(({ ocupadas, bloqueadasAlFina
 }));
 
 const definicionDeMapa = (mapa) => ({
-  nombre: mapa.nombre, grupo: GRUPO_MAPAS, distribucion: mapa.distribucion, bandas: mapa.bandas,
+  nombre: mapa.nombre, grupo: GRUPO_MAPAS, lienzo: Boolean(mapa.lienzo), distribucion: mapa.distribucion, bandas: mapa.bandas,
   mesas: mapa.mesas, bloquesFilas: mapa.bloquesFilas, escenario: mapa.escenario, bloqueadas: mapa.bloqueadas,
   siguiente: mapa.siguiente, siguienteBanda: mapa.siguienteBanda, siguienteBloque: mapa.siguienteBloque,
 });
@@ -1477,7 +1583,7 @@ function nombreDeArchivo(nombre) {
 function validarMapa(dato) {
   if (!dato || typeof dato !== 'object' || Array.isArray(dato)) return { errores: ['el archivo no contiene un mapa'] };
   if (dato.formato !== FORMATO_MAPA) return { errores: ['no es un mapa de este selector de asientos'] };
-  if (dato.version !== 1 && dato.version !== VERSION_MAPA) {
+  if (![1, 2, VERSION_MAPA].includes(dato.version)) {
     return { errores: ['versión de mapa no compatible (' + dato.version + ')'] };
   }
   const errores = [];
@@ -1495,9 +1601,15 @@ function validarMapa(dato) {
     else distribucion = { bloques: [...d.bloques], pasillos: [...d.pasillos] };
   }
 
+  const lienzo = dato.lienzo === true;
+  if (dato.lienzo !== undefined && typeof dato.lienzo !== 'boolean') errores.push('lienzo debe ser true o false');
+  if (lienzo && distribucion && distribucion.bloques.length !== 1) errores.push('un lienzo no tiene pasillos');
   const bandasDato = Array.isArray(dato.bandas) ? dato.bandas : [];
-  if (!bandasDato.length || !bandasDato[0] || bandasDato[0].tipo !== 'escenario') {
+  // Hasta la version 2, el escenario era siempre la primera banda.
+  if (dato.version < 3 && (!bandasDato.length || !bandasDato[0] || bandasDato[0].tipo !== 'escenario')) {
     errores.push('la primera banda debe ser el escenario');
+  } else if (!bandasDato.length) {
+    errores.push('el mapa necesita al menos una banda');
   }
   const idsBanda = new Set();
   const idValido = (id) => typeof id === 'string' && /^[a-z][a-z0-9]{0,30}$/i.test(id) && !idsBanda.has(id);
@@ -1516,9 +1628,10 @@ function validarMapa(dato) {
       if (!esEntero(b.filas, 1, FILAS_MAXIMAS)) errores.push(donde + ': número de filas fuera de rango');
       if (!['luneta', 'general'].includes(b.zona)) errores.push(donde + ': zona desconocida');
       Object.assign(limpia, { zona: b.zona, filas: b.filas });
-    } else if (b.tipo === 'mesas') {
+    } else if (b.tipo === 'mesas' || (b.tipo === 'espacio' && dato.version >= 3)) {
       if (!esEntero(b.alto, 1, ALTO_MAXIMO)) errores.push(donde + ': alto fuera de rango');
       limpia.alto = b.alto;
+      if (b.tipo === 'espacio' && b.guias === true) limpia.guias = true;
     } else if (b.tipo === 'division' && !enVertical) {
       const verticales = Array.isArray(b.verticales) ? b.verticales : [];
       if (verticales.length < 1 || verticales.length > VERTICALES_MAXIMAS) {
@@ -1540,8 +1653,8 @@ function validarMapa(dato) {
         const interiores = Array.isArray(v.bandas) ? v.bandas : [];
         if (!Array.isArray(v.bandas)) errores.push(dondeV + ': falta la lista de bandas');
         limpiaV.bandas = interiores.map((bi, n) => {
-          if (bi && !['filas', 'mesas'].includes(bi.tipo)) {
-            errores.push(dondeV + ', banda ' + (n + 1) + ': dentro de una vertical solo van filas o mesas');
+          if (bi && !['filas', 'mesas', 'espacio'].includes(bi.tipo)) {
+            errores.push(dondeV + ', banda ' + (n + 1) + ': dentro de una vertical solo van filas, mesas o espacios');
             return null;
           }
           return limpiarBanda(bi, dondeV + ', banda ' + (n + 1), true, n);
@@ -1596,9 +1709,12 @@ function validarMapa(dato) {
     return limpio;
   });
 
-  // Escenario: opcional (sin el, la franja de la banda «escenario» a todo el ancho).
+  // Escenario: opcional (sin el, la franja de la banda «escenario» a todo el ancho;
+  // con null, desde la version 3, no hay escenario).
   let escenarioLimpio;
-  if (dato.escenario !== undefined) {
+  if (dato.escenario === null && dato.version >= 3) {
+    escenarioLimpio = null;
+  } else if (dato.escenario !== undefined) {
     const e = dato.escenario;
     if (!e || !esEntero(e.x, 0, 999) || !esEntero(e.y, 0, 999) ||
         !esEntero(e.ancho, 1, ESCENARIO_ANCHO_MAXIMO) || !esEntero(e.alto, 1, ESCENARIO_ALTO_MAXIMO)) {
@@ -1619,8 +1735,9 @@ function validarMapa(dato) {
   const mapa = {
     formato: FORMATO_MAPA, version: VERSION_MAPA, nombre,
     guardado: typeof dato.guardado === 'string' ? dato.guardado.slice(0, 40) : null,
+    ...(lienzo ? { lienzo: true } : {}),
     distribucion, bandas, mesas: mesasLimpias, bloquesFilas: bloquesLimpios,
-    ...(escenarioLimpio ? { escenario: escenarioLimpio } : {}),
+    ...(escenarioLimpio !== undefined ? { escenario: escenarioLimpio } : {}),
     bloqueadas: [...new Set(bloqueadas)],
     siguiente: Math.max(esEntero(dato.siguiente, 1, 1e6) ? dato.siguiente : 1, maximo(idsMesa, /^M(\d+)$/) + 1),
     siguienteBanda: Math.max(esEntero(dato.siguienteBanda, 1, 1e6) ? dato.siguienteBanda : 1,
@@ -1918,6 +2035,8 @@ function dibujarMuebles() {
       capaMuebles.append(rect, rotulo);
     } else if (m.tipo === 'rotulo') {
       capaMuebles.appendChild(texto('rotulo', (m.x + 0.5) * PASO, (m.y + 0.5) * PASO, m.texto));
+    } else if (m.tipo === 'guia') {
+      capaMuebles.appendChild(texto('rotulo guia', (m.x + 0.5) * PASO, (m.y + 0.5) * PASO, m.texto));
     } else if (m.tipo === 'subtitulo') {
       (m.lugar === 'margen' ? capaMuebles : capaSubtitulos).appendChild(dibujarSubtitulo(m));
     }
@@ -2058,7 +2177,7 @@ const etiquetaPieza = (m) => (esEscenario(m)
 
 function dibujarPiezas() {
   if (modo !== 'editor' || herramienta === 'bloquear') return;
-  const piezas = [escenario, ...mesas, ...bloquesFilas];
+  const piezas = [...(escenario.ausente ? [] : [escenario]), ...mesas, ...bloquesFilas];
   // Si la pieza activa ya no existe (se elimino), el punto de tabulacion va a la primera.
   const hayActiva = piezas.some((m) => m.id === mesaActiva);
   piezas.forEach((m, indice) => {
@@ -2112,6 +2231,11 @@ function dibujarBandas() {
   const campoPasillos = document.getElementById('pasillos-sala');
   if (document.activeElement !== campoBloques) campoBloques.value = bloques.join(', ');
   if (document.activeElement !== campoPasillos) campoPasillos.value = pasillos.join(', ');
+  // Un lienzo solo muestra su ancho; una plantilla, bloques y pasillos.
+  for (const id of ['columnas-lienzo', 'ayuda-lienzo']) document.getElementById(id).hidden = !salaActual.lienzo;
+  for (const id of ['columnas-plantilla', 'ayuda-columnas']) document.getElementById(id).hidden = salaActual.lienzo;
+  const campoAncho = document.getElementById('ancho-lienzo');
+  if (document.activeElement !== campoAncho) campoAncho.value = String(salaActual.ancho);
   const activo = document.activeElement;
   const foco = listaBandas.contains(activo) ? { op: activo.dataset.op, banda: activo.dataset.banda } : null;
   listaBandas.textContent = '';
@@ -2167,7 +2291,9 @@ function filasDeBandas(bandas, enVertical) {
     const { li, detalle } = inicioDeFila(banda, 'banda');
     const n = banda.nombre;
     if (banda.tipo === 'escenario') {
-      detalle.textContent = 'Franja inicial · el escenario se mueve y cambia de tamaño en el plano';
+      detalle.textContent = escenario.ausente
+        ? 'Franja inicial · sin escenario: agrégalo con «Agregar escenario» en la barra del editor'
+        : 'Franja inicial · el escenario se mueve y cambia de tamaño en el plano';
       return li;
     }
     if (banda.tipo === 'filas') {
@@ -2185,11 +2311,16 @@ function filasDeBandas(bandas, enVertical) {
                                     false, banda.zona === clave));
       }
       li.appendChild(zona);
-    } else if (banda.tipo === 'mesas') {
+    } else if (tieneAlto(banda)) {
       detalle.textContent = plural(banda.alto, 'fila', 'filas') + ' de alto';
       li.append(
         boton('−', 'Quitar una fila de alto a ' + n, 'menos', banda.id, banda.alto <= 1),
         boton('+', 'Agregar una fila de alto a ' + n, 'mas', banda.id, banda.alto >= ALTO_MAXIMO));
+      if (banda.tipo === 'espacio') {
+        const guias = boton('Guías', 'Guías de fila en ' + n, 'guias', banda.id);
+        guias.setAttribute('aria-pressed', String(Boolean(banda.guias)));
+        li.appendChild(guias);
+      }
     } else {
       detalle.textContent = plural(banda.verticales.length, 'banda vertical', 'bandas verticales') +
         ' · ' + plural(banda.alto, 'fila', 'filas') + ' de alto';
@@ -2224,6 +2355,7 @@ function filaDeVertical(v, k, verticales) {
     boton('→', 'Mover ' + n + ' a la derecha', 'derecha', v.id, ultima),
     boton('+ filas', 'Agregar una banda de filas en ' + n, 'agregar-filas-en', v.id),
     boton('+ mesas', 'Agregar una zona de mesas en ' + n, 'agregar-mesas-en', v.id),
+    boton('+ espacio', 'Agregar un espacio en ' + n, 'agregar-espacio-en', v.id),
     boton('Duplicar', 'Duplicar ' + n, 'duplicar', v.id, verticales.length >= VERTICALES_MAXIMAS),
     boton('Eliminar', 'Eliminar ' + n, 'eliminar', v.id, verticales.length === 1));
   const ol = document.createElement('ol');
@@ -2327,10 +2459,13 @@ listaBandas.addEventListener('click', (e) => {
                   n + ': ' + plural(banda.anchoOcupado + delta, 'columna', 'columnas') + '.');
   } else if (op === 'agregar-vertical') {
     aplicarBandas(agregarVertical(plano, salaActual, id), 'Banda vertical agregada a ' + n + '.');
-  } else if (op === 'agregar-filas-en' || op === 'agregar-mesas-en') {
-    const tipo = op === 'agregar-filas-en' ? 'filas' : 'mesas';
+  } else if (op === 'agregar-filas-en' || op === 'agregar-mesas-en' || op === 'agregar-espacio-en') {
+    const tipo = op.split('-')[1];
     aplicarBandas(agregarBandaEnVertical(plano, salaActual, id, tipo),
-                  (tipo === 'filas' ? 'Banda de 2 filas' : 'Zona de mesas de 4 filas') + ' agregada en ' + n + '.');
+                  { filas: 'Banda de 2 filas agregada', mesas: 'Zona de mesas de 4 filas agregada',
+                    espacio: 'Espacio de 4 filas agregado' }[tipo] + ' en ' + n + '.');
+  } else if (op === 'guias') {
+    aplicarBandas(alternarGuias(plano, id), (banda.guias ? 'Sin guías de fila en ' : 'Guías de fila en ') + n + '.');
   } else if (op === 'duplicar') {
     duplicarBandaPorId(id);
   } else if (op === 'eliminar') {
@@ -2396,6 +2531,22 @@ document.getElementById('agregar-banda-filas').addEventListener('click', () => {
 document.getElementById('agregar-banda-mesas').addEventListener('click', () => {
   aplicarBandas(agregarBanda(planoEditable(), 'mesas'), 'Zona de mesas de 4 filas agregada al final.');
 });
+document.getElementById('agregar-espacio').addEventListener('click', () => {
+  aplicarBandas(agregarBanda(planoEditable(), 'espacio'), 'Espacio de 4 filas agregado al final.');
+});
+
+function aplicarAnchoLienzo() {
+  const texto = document.getElementById('ancho-lienzo').value.trim();
+  const ancho = /^\d+$/.test(texto) ? Number(texto) : NaN;
+  if (ancho === salaActual.ancho) return;
+  aplicarBandas(cambiarAnchoLienzo(planoEditable(), salaActual, ancho),
+                'Lienzo de ' + plural(ancho, 'columna', 'columnas') + '.');
+}
+document.getElementById('aplicar-ancho-lienzo').addEventListener('click', aplicarAnchoLienzo);
+document.getElementById('ancho-lienzo').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') aplicarAnchoLienzo();
+});
+
 document.getElementById('agregar-division').addEventListener('click', () => {
   aplicarBandas(agregarBanda(planoEditable(), 'division', salaActual.ancho),
                 'Franja con dos bandas verticales agregada al final: zona de mesas a la izquierda y filas a la derecha.');
@@ -2714,7 +2865,7 @@ let tipoActual, salaActual;
 const planos = {};
 
 // 'mesaActiva' guarda el id de la pieza activa: una mesa (M3) o un bloque de filas (F2).
-const piezaPorId = (id) => (id === 'escenario' ? escenario
+const piezaPorId = (id) => (id === 'escenario' ? (escenario.ausente ? null : escenario)
   : mesas.find((m) => m.id === id) || bloquesFilas.find((b) => b.id === id));
 const anunciar = (mensaje) => { document.getElementById('estado').textContent = mensaje; };
 const configDe = ({ id, x, y, largo, cabeceras, unLado, giro }) =>
@@ -2787,6 +2938,7 @@ function actualizarControles() {
     if (accion === 'cabeceras') boton.setAttribute('aria-pressed', String(Boolean(m && m.cabeceras)));
     if (accion === 'unlado') boton.setAttribute('aria-pressed', String(Boolean(m && m.unLado)));
   }
+  document.getElementById('alternar-escenario').textContent = escenario.ausente ? 'Agregar escenario' : 'Quitar escenario';
   // Zona y nombre: solo para bloques de filas. No se pisa lo que se esta escribiendo.
   const zona = document.getElementById('zona-pieza');
   const nombre = document.getElementById('nombre-pieza');
@@ -3195,6 +3347,25 @@ document.getElementById('restablecer').addEventListener('click', () => {
   regenerar('Sala restablecida: bandas y mesas como en su tipo.');
   calcularEncuadre();
 });
+// Sin escenario, las filas miran hacia arriba y se numeran desde la de mas arriba.
+document.getElementById('alternar-escenario').addEventListener('click', () => {
+  if (!escenario.ausente) {
+    planos[tipoActual] = quitarEscenario(planoEditable());
+    regenerar('Escenario quitado: las filas miran hacia arriba y la fila A es la de más arriba de cada zona.');
+    return;
+  }
+  const resultado = agregarEscenario(planoEditable(), salaActual);
+  if (resultado.motivo) {
+    anunciar('No se pudo agregar el escenario: ' + resultado.motivo + '.');
+    return;
+  }
+  planos[tipoActual] = resultado;
+  mesaActiva = 'escenario';
+  regenerar('');
+  anunciar('Escenario agregado en columna ' + escenario.x + ', fila ' + escenario.y + ', de ' +
+           escenario.ancho + ' × ' + escenario.alto + ' celdas. Arrástralo o cambia su tamaño.');
+  asegurarVisible({ x: escenario.x, y: escenario.y, w: escenario.ancho, h: escenario.alto });
+});
 document.getElementById('agregar-lados').addEventListener('click', () => agregarMesaNueva('lados'));
 document.getElementById('agregar-cruz').addEventListener('click', () => agregarMesaNueva('cruz'));
 document.getElementById('agregar-barra').addEventListener('click', () => agregarMesaNueva('barra'));
@@ -3252,6 +3423,7 @@ function actualizarAforo(sala) {
       : plural(filas, 'fila', 'filas') + ' en bandas',
     mesas.length ? plural(mesas.length, 'mesa', 'mesas') : 'sin mesas',
     ...(bloquesFilas.length ? [plural(bloquesFilas.length, 'bloque de filas', 'bloques de filas')] : []),
+    ...(escenario.ausente ? ['sin escenario'] : []),
     butacas.length + ' lugares en total',
   ].join(' · ');
 }
@@ -3440,7 +3612,14 @@ for (const [nombre, dato] of Object.entries(almacenInicial || {})) {
   else mapasDescartados.push(nombre);
 }
 construirSelector('mixta-ambos');
-selector.addEventListener('change', () => redibujar(selector.value));
+// Un mapa en blanco solo tiene sentido en el editor: se abre directamente ahi.
+selector.addEventListener('change', () => {
+  redibujar(selector.value);
+  if (selector.value !== 'mapa-en-blanco') return;
+  cambiarModo('editor');
+  anunciar('Mapa en blanco de ' + salaActual.ancho + ' × ' + salaActual.alto + ': agrega espacios, bloques de ' +
+           'filas, mesas o el escenario, y guárdalo con un nombre en «Mis mapas».');
+});
 redibujar(selector.value);
 if (mapasDescartados.length) {
   anunciar((mapasDescartados.length === 1 ? 'No se pudo cargar el mapa guardado «'

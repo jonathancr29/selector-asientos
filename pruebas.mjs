@@ -25,7 +25,8 @@ const cargar = () => new Function(html.slice(inicio, fin) +
   ' leerDistribucion, cambiarDistribucion, geometriaBloqueFilas, bloquesFilas, cambiarAncho,' +
   ' cambiarFilasBloque, letraDeFila, escenario, girarEscenario, cambiarTamanoEscenario,' +
   ' giroHaciaEscenario, disponerBandas, hojasDe, ubicar, agregarVertical, cambiarAnchoVertical,' +
-  ' agregarBandaEnVertical, duplicarPieza, duplicarBanda, renombrarBanda, capasDe, bandaEnCelda };')();
+  ' agregarBandaEnVertical, duplicarPieza, duplicarBanda, renombrarBanda, capasDe, bandaEnCelda,' +
+  ' alternarGuias, quitarEscenario, agregarEscenario, cambiarAnchoLienzo };')();
 
 const DISPOSICIONES = ['ninguno', 'izquierda', 'derecha', 'ambos'];
 const rango = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
@@ -380,7 +381,7 @@ test('buscarSitioLibre encuentra hueco en las salas con zona de mesas, y no en �
 
 test('las posiciones automaticas son validas en todos los tipos de sala', () => {
   const { generarPlano, mesas, celdasOcupadas, motivoNoCabe, TIPOS_DE_SALA } = cargar();
-  const esperadas = { 'solo-filas': 0, 'solo-mesas': 12 };
+  const esperadas = { 'solo-filas': 0, 'solo-mesas': 12, 'mapa-en-blanco': 0 };
   for (const pasillos of Object.keys(TIPOS_DE_SALA)) {
     const sala = generarPlano(pasillos);
     assert.equal(mesas.length, esperadas[pasillos] ?? 6, pasillos);
@@ -552,7 +553,7 @@ test('un mapa guarda el diseño y las bloqueadas, pero no la ocupacion', () => {
   const mapa = api.mapaDesdePlano('Salón Jardín', editado, '2026-09-16T18:30:00Z', ids);
 
   assert.equal(mapa.formato, api.FORMATO_MAPA);
-  assert.equal(mapa.version, 2);
+  assert.equal(mapa.version, 3);
   assert.deepEqual(mapa.distribucion, { bloques: [4, 4, 4], pasillos: [1, 1] });
   assert.equal(mapa.pasillos, undefined);
   const texto = JSON.stringify(mapa);
@@ -594,12 +595,15 @@ test('validarMapa rechaza archivos que no son mapas o traen datos no validos', (
   assert.deepEqual(api.validarMapa(null).errores, ['el archivo no contiene un mapa']);
   assert.deepEqual(api.validarMapa([1, 2]).errores, ['el archivo no contiene un mapa']);
   assert.deepEqual(con((m) => { m.formato = 'otra-cosa'; }), ['no es un mapa de este selector de asientos']);
-  assert.deepEqual(con((m) => { m.version = 3; }), ['versión de mapa no compatible (3)']);
+  assert.deepEqual(con((m) => { m.version = 4; }), ['versión de mapa no compatible (4)']);
   assert.ok(con((m) => { m.nombre = '   '; }).includes('el nombre debe tener entre 1 y 80 caracteres'));
   assert.ok(con((m) => { m.distribucion.pasillos = [1]; }).includes('columnas: con 3 bloques hacen falta 2 anchos de pasillo'));
   assert.ok(con((m) => { delete m.distribucion; }).includes('columnas: faltan los bloques o los pasillos'));
   assert.ok(con((m) => { m.version = 1; m.pasillos = 'centro'; }).includes('pasillos desconocidos'));
-  assert.ok(con((m) => { m.bandas.shift(); }).includes('la primera banda debe ser el escenario'));
+  // Hasta la version 2 el escenario era la primera banda; en la 3 basta con tener alguna.
+  assert.ok(con((m) => { m.version = 2; m.bandas.shift(); }).includes('la primera banda debe ser el escenario'));
+  assert.ok(con((m) => { m.bandas = []; }).includes('el mapa necesita al menos una banda'));
+  assert.ok(con((m) => { m.bandas[1].id = 'x'; m.bandas.push({ id: 'y', tipo: 'escenario' }); }).includes('banda 5: el escenario solo puede ir primero'));
   assert.ok(con((m) => { m.bandas[1].filas = 30; }).includes('banda 2: número de filas fuera de rango'));
   assert.ok(con((m) => { m.bandas[1].zona = 'vip'; }).includes('banda 2: zona desconocida'));
   assert.ok(con((m) => { m.bandas[2].id = 'luneta'; }).includes('banda 3: id no válido o repetido'));
@@ -645,7 +649,7 @@ test('nombreDeArchivo quita tildes y simbolos', () => {
 test('las butacas de fila miran al escenario, que siempre esta arriba', () => {
   const { generarPlano, butacas, TIPOS_DE_SALA } = cargar();
   // mira 180: respaldo abajo, mirando hacia arriba.
-  for (const tipo of Object.keys(TIPOS_DE_SALA)) {
+  for (const tipo of Object.keys(TIPOS_DE_SALA).filter((t) => t !== 'mapa-en-blanco')) {
     const sala = generarPlano(tipo);
     const escenario = sala.bandas[0];
     assert.equal(escenario.tipo, 'escenario', tipo);
@@ -765,7 +769,7 @@ test('un mapa guarda las columnas y un mapa de la version 1 se sigue leyendo', (
   delete viejo.distribucion;
   const { mapa: convertido, errores } = api.validarMapa(viejo);
   assert.equal(errores, undefined);
-  assert.equal(convertido.version, 2);
+  assert.equal(convertido.version, 3);
   assert.deepEqual(convertido.distribucion, { bloques: [4, 9], pasillos: [1] });
   assert.equal(convertido.pasillos, undefined);
 });
@@ -1215,7 +1219,7 @@ test('una franja dividida se guarda en el mapa y se valida al leer', () => {
   assert.ok(con((m) => { delete franja(m).verticales[0].ancho; })
     .includes('banda 5, vertical 1: ancho fuera de rango'));
   assert.ok(con((m) => { franja(m).verticales[1].bandas.push({ id: 'otra', tipo: 'division', verticales: [] }); })
-    .includes('banda 5, vertical 2, banda 2: dentro de una vertical solo van filas o mesas'));
+    .includes('banda 5, vertical 2, banda 2: dentro de una vertical solo van filas, mesas o espacios'));
   assert.ok(con((m) => { franja(m).verticales = []; })
     .includes('banda 5: debe tener de 1 a 6 bandas verticales'));
   assert.ok(con((m) => { franja(m).verticales[1].id = 'banda2'; })
@@ -1371,4 +1375,130 @@ test('capas y seleccion de bandas por celda: clic a clic se sube por el arbol', 
   assert.equal(api.bandaEnCelda(sala, 9, 23), 'banda4');           // espacio libre bajo las filas
   assert.equal(api.bandaEnCelda(sala, 3, 0), null);                // la franja del escenario
   assert.equal(api.bandaEnCelda(sala, 3, 3, 'mesas'), 'luneta');   // con otra seleccionada, la de la celda
+});
+
+// --- Mapa en blanco: lienzo, espacios y escenario opcional ---------------------
+
+const conLienzo = (api, preparar = (plano) => plano) => {
+  const { plano } = planoDe(api, 'mapa-en-blanco');
+  const nuevo = preparar(plano);
+  return { plano: nuevo, sala: api.generarPlano('mapa-en-blanco', nuevo) };
+};
+
+test('el mapa en blanco es un lienzo de 20 × 10 sin pasillos, sin escenario y vacio', () => {
+  const api = cargar();
+  const { plano, sala } = conLienzo(api);
+  assert.deepEqual([sala.ancho, sala.alto, sala.columnas.length, sala.lienzo], [20, 10, 20, true]);
+  assert.deepEqual([api.butacas.length, api.mesas.length, api.bloquesFilas.length, api.escenario.ausente], [0, 0, 0, true]);
+  assert.deepEqual(api.muebles.map((m) => m.tipo), ['subtitulo']);   // ni escenario ni rotulos
+  assert.deepEqual(resumenBandas(sala), ['Espacio@0+10']);
+  assert.deepEqual([plano.escenario, plano.lienzo, plano.bandas], [null, true, [{ id: 'espacio', tipo: 'espacio', alto: 10 }]]);
+  // Sin escenario nada ocupa celdas: una mesa cabe en la esquina.
+  assert.equal(api.celdasOcupadas(null).size, 0);
+  assert.equal(api.primeraPiezaQueNoCabe(sala), null);
+});
+
+test('los espacios: alto propio, nombre numerado, guias de fila y dentro de verticales', () => {
+  const api = cargar();
+  const { plano, sala } = conLienzo(api, (p) => api.agregarBanda(api.alternarGuias(p, 'espacio'), 'espacio', 20));
+  assert.deepEqual(resumenBandas(sala), ['Espacio@0+10', 'Espacio 2@10+4']);
+  // Guias A a J a la izquierda del primer espacio; no son butacas.
+  const guias = api.muebles.filter((m) => m.tipo === 'guia');
+  assert.deepEqual(guias.map((m) => m.texto).join(''), 'ABCDEFGHIJ');
+  assert.ok(guias.every((m) => m.x === 0 && m.banda === 'espacio'));
+  assert.equal(api.butacas.length, 0);
+  assert.deepEqual(api.alternarGuias(plano, 'espacio').bandas[0], { id: 'espacio', tipo: 'espacio', alto: 10 });
+  assert.deepEqual(api.redimensionarBanda(plano, sala, 'banda1', 2).bandas[1].alto, 6);
+  assert.deepEqual(api.alternarGuias(api.planoDesdeSala('mixta-ambos', api.generarPlano('mixta-ambos')), 'luneta'),
+    { motivo: 'las guías de fila son para los espacios' });
+  // En una vertical: el de la derecha lleva las guias a la derecha de la sala.
+  const franja = api.agregarBanda(plano, 'division', 20);
+  const conEspacio = api.agregarBandaEnVertical(franja, api.generarPlano('mapa-en-blanco', franja), 'banda5', 'espacio');
+  const guiada = api.alternarGuias(conEspacio, 'banda7');
+  const salaGuiada = api.generarPlano('mapa-en-blanco', guiada);
+  assert.deepEqual(api.ubicar(salaGuiada.bandas, 'banda7').item.nombre, 'Espacio 3');
+  assert.deepEqual(api.muebles.filter((m) => m.tipo === 'guia' && m.banda === 'banda7').map((m) => [m.texto, m.x, m.y]),
+    [['A', 21, 16], ['B', 21, 17], ['C', 21, 18], ['D', 21, 19]]);
+});
+
+test('sin escenario las filas miran arriba y la fila A es la de mas arriba de cada zona', () => {
+  const api = cargar();
+  conLienzo(api, (p) => ({ ...p, siguienteBloque: 3, bloquesFilas: [
+    bloque('F1', 3, 2, { ancho: 4, zona: 'general' }), bloque('F2', 10, 1, { ancho: 2, filas: 1, zona: 'general' })] }));
+  assert.deepEqual(['F2-1-1', 'F1-1-1', 'F1-2-4'].map((id) => etiqueta(api, id)), ['General A1', 'General B1', 'General C4']);
+  assert.ok(api.butacas.every((b) => b.mira === 180));
+  assert.equal(api.giroHaciaEscenario(5, 5), 0);
+  // Quitar el escenario de una plantilla: la luneta sigue siendo A desde arriba.
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const salaSin = api.generarPlano('mixta-ambos', api.quitarEscenario(plano));
+  assert.equal(api.escenario.ausente, true);
+  assert.deepEqual([etiqueta(api, 'luneta-A1'), etiqueta(api, 'general-B1')], ['Luneta A1', 'General B1']);
+  assert.ok(!api.muebles.some((m) => m.tipo === 'escenario'));
+  assert.equal(api.primeraPiezaQueNoCabe(salaSin), null);
+  assert.equal(api.planoDesdeSala('mixta-ambos', salaSin).escenario, null);
+});
+
+test('agregar escenario: a todo el ancho en el primer hueco libre, o mas angosto', () => {
+  const api = cargar();
+  const { plano, sala } = conLienzo(api, (p) => ({ ...p, siguienteBloque: 2,
+    bloquesFilas: [bloque('F1', 3, 0, { ancho: 4, zona: 'general' })] }));
+  const conEscenario = api.agregarEscenario(plano, sala);
+  assert.deepEqual(conEscenario.escenario, { x: 1, y: 2, ancho: 20, alto: 2 });
+  api.generarPlano('mapa-en-blanco', conEscenario);
+  assert.equal(api.escenario.ausente, false);
+  assert.equal(api.muebles.filter((m) => m.tipo === 'escenario').length, 1);
+  // El bloque queda por encima del escenario: mira hacia arriba, de espaldas, con secuencia propia.
+  assert.equal(etiqueta(api, 'F1-1-1'), 'Bloque 1 A1');
+  // Sin un hueco a todo el ancho, uno de 8 columnas.
+  const lleno = conLienzo(api, (p) => ({ ...p, bandas: [{ id: 'espacio', tipo: 'espacio', alto: 3 }], siguienteBloque: 2,
+    bloquesFilas: [bloque('F1', 1, 0, { ancho: 12, filas: 3, zona: 'general' })] }));
+  assert.deepEqual(api.agregarEscenario(lleno.plano, lleno.sala).escenario, { x: 13, y: 0, ancho: 8, alto: 2 });
+  const sinSitio = conLienzo(api, (p) => ({ ...p, bandas: [{ id: 'espacio', tipo: 'espacio', alto: 1 }] }));
+  assert.deepEqual(api.agregarEscenario(sinSitio.plano, sinSitio.sala),
+    { motivo: 'no hay un hueco libre de 4 × 2 celdas para el escenario' });
+});
+
+test('cambiar el ancho del lienzo: las piezas se quedan y el escenario a todo el ancho lo sigue', () => {
+  const api = cargar();
+  const { plano, sala } = conLienzo(api, (p) => ({ ...p, escenario: { x: 1, y: 0, ancho: 20, alto: 2 }, siguienteBloque: 2,
+    bloquesFilas: [bloque('F1', 10, 4, { ancho: 4, zona: 'general' })] }));
+  const ancho = api.cambiarAnchoLienzo(plano, sala, 30);
+  assert.deepEqual([ancho.distribucion, ancho.escenario, ancho.bloquesFilas[0].x], [{ bloques: [30], pasillos: [] }, { x: 1, y: 0, ancho: 30, alto: 2 }, 10]);
+  const salaAncha = api.generarPlano('mapa-en-blanco', ancho);
+  assert.deepEqual([salaAncha.ancho, salaAncha.columnas.length, api.primeraPiezaQueNoCabe(salaAncha)], [30, 30, null]);
+  // Mas angosto que el bloque: el bloque se sale y el cambio no debe aplicarse.
+  const angosto = api.generarPlano('mapa-en-blanco', api.cambiarAnchoLienzo(plano, sala, 12));
+  assert.deepEqual([api.primeraPiezaQueNoCabe(angosto).pieza.id, api.primeraPiezaQueNoCabe(angosto).motivo], ['F1', 'se sale de la sala']);
+  assert.deepEqual(api.cambiarAnchoLienzo(plano, sala, 41), { motivo: 'el ancho del lienzo debe ser de 1 a 40 columnas' });
+  assert.deepEqual(api.cambiarAnchoLienzo(plano, sala, 0), { motivo: 'el ancho del lienzo debe ser de 1 a 40 columnas' });
+});
+
+test('mapas version 3: lienzo, sin escenario y espacios con guias, y se validan al leer', () => {
+  const api = cargar();
+  const { plano } = conLienzo(api, (p) => api.agregarBanda(api.alternarGuias(p, 'espacio'), 'espacio', 20));
+  const mapa = JSON.parse(JSON.stringify(api.mapaDesdePlano('Salón de eventos', plano, null)));
+  assert.deepEqual([mapa.version, mapa.lienzo, mapa.escenario, mapa.bandas],
+    [3, true, null, [{ id: 'espacio', tipo: 'espacio', alto: 10, guias: true }, { id: 'banda1', tipo: 'espacio', alto: 4 }]]);
+  const { mapa: leido, errores } = api.validarMapa(mapa);
+  assert.equal(errores, undefined);
+  assert.deepEqual([leido.lienzo, leido.escenario, leido.bandas[0].guias], [true, null, true]);
+  const sala = api.generarPlano(api.registrarMapa(leido));
+  assert.deepEqual([sala.lienzo, sala.alto, api.escenario.ausente], [true, 14, true]);
+
+  const con = (cambio) => { const m = JSON.parse(JSON.stringify(mapa)); cambio(m); return api.validarMapa(m).errores || []; };
+  assert.ok(con((m) => { m.distribucion = { bloques: [10, 9], pasillos: [1] }; }).includes('un lienzo no tiene pasillos'));
+  assert.ok(con((m) => { m.lienzo = 'si'; }).includes('lienzo debe ser true o false'));
+  assert.ok(con((m) => { m.bandas[1].alto = 0; }).includes('banda 2: alto fuera de rango'));
+  // Los espacios y el escenario nulo son de la version 3.
+  assert.ok(con((m) => { m.version = 2; }).includes('la primera banda debe ser el escenario'));
+  assert.ok(con((m) => { m.version = 2; m.bandas.unshift({ id: 'escenario', tipo: 'escenario' }); })
+    .includes('banda 2: tipo de banda desconocido'));
+  // Un mapa de la version 2 sin campo escenario sigue usando el de por defecto.
+  const { plano: clasico } = planoDe(api, 'mixta-ambos');
+  const v2 = JSON.parse(JSON.stringify(api.mapaDesdePlano('Clásico', clasico, null)));
+  Object.assign(v2, { version: 2 });
+  delete v2.escenario;
+  const leidoV2 = api.validarMapa(v2).mapa;
+  api.generarPlano(api.registrarMapa(leidoV2));
+  assert.deepEqual([leidoV2.escenario, api.escenario.ausente, api.escenario.ancho], [undefined, false, 14]);
 });
