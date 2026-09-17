@@ -27,7 +27,8 @@ const cargar = () => new Function(html.slice(inicio, fin) +
   ' giroHaciaEscenario, disponerBandas, hojasDe, ubicar, agregarVertical, cambiarAnchoVertical,' +
   ' agregarBandaEnVertical, duplicarPieza, duplicarBanda, renombrarBanda, capasDe, bandaEnCelda,' +
   ' alternarGuias, quitarEscenario, agregarEscenario, cambiarAnchoLienzo,' +
-  ' formas, butacasSueltas, cambiarTamanoForma };')();
+  ' formas, butacasSueltas, cambiarTamanoForma,' +
+  ' FILAS_MAXIMAS, BUTACAS_MAXIMAS, motivoDeAforo };')();
 
 const DISPOSICIONES = ['ninguno', 'izquierda', 'derecha', 'ambos'];
 const rango = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
@@ -953,6 +954,8 @@ test('los bloques se guardan en el mapa, con nombre propio, y se validan al leer
 test('letraDeFila sigue con AA, AB... despues de la Z', () => {
   const { letraDeFila } = cargar();
   assert.deepEqual([0, 25, 26, 27, 51, 52].map(letraDeFila), ['A', 'Z', 'AA', 'AB', 'AZ', 'BA']);
+  // Despues de la ZZ (fila 702) sigue la AAA: antes daba «undefinedA».
+  assert.deepEqual([701, 702, 703, 2599].map(letraDeFila), ['ZZ', 'AAA', 'AAB', 'CUZ']);
 });
 
 // --- Escenario movible (fase 2) ----------------------------------------------
@@ -1610,4 +1613,42 @@ test('planoDesdeSala y los mapas guardan formas, butacas sueltas y sus contadore
   assert.deepEqual([viejo.mapa.formas, viejo.mapa.butacasSueltas, viejo.mapa.siguienteForma], [[], [], 1]);
   const bajo = api.validarMapa({ ...mapa, siguienteForma: 1 });
   assert.equal(bajo.mapa.siguienteForma, 5);
+});
+
+// --- Rendimiento y topes ----------------------------------------------------------
+
+// Un lienzo de 40 columnas sin pasillos con 'n' bandas de 26 filas de General:
+// n × 26 × 40 butacas.
+const mapaDeFilas = (api, n) => {
+  const { plano } = planoDe(api, 'mapa-en-blanco');
+  const mapa = JSON.parse(JSON.stringify(api.mapaDesdePlano('Grande', plano, null)));
+  mapa.distribucion = { bloques: [40], pasillos: [] };
+  mapa.bandas = Array.from({ length: n }, (_, i) => ({ id: 'b' + i, tipo: 'filas', zona: 'general', filas: api.FILAS_MAXIMAS }));
+  return mapa;
+};
+
+test('numerar 100.000 butacas no es cuadratico', () => {
+  const api = cargar();
+  const mapa = mapaDeFilas(api, 100);
+  const t = performance.now();
+  api.generarPlano({ ...mapa, bandas: mapa.bandas }, mapa);
+  const ms = performance.now() - t;
+  assert.equal(api.butacas.length, 104000);
+  // La numeracion por zona sigue bien: 2.600 filas (A... CVZ) de 40 butacas.
+  assert.deepEqual([etiqueta(api, 'b0-A1'), etiqueta(api, 'b99-Z40')], ['General A1', 'General CUZ40']);
+  // Con recorridos anidados tardaba unos 6 s; agrupado, menos de 100 ms. El margen es amplio
+  // para maquinas lentas, pero sigue muy por debajo del caso cuadratico.
+  assert.ok(ms < 1500, 'numerar 104.000 butacas tardo ' + Math.round(ms) + ' ms: ¿vuelve a ser cuadratico?');
+});
+
+test('un mapa no puede pasar de 20.000 butacas', () => {
+  const api = cargar();
+  assert.equal(api.BUTACAS_MAXIMAS, 20000);
+  const { mapa, errores } = api.validarMapa(mapaDeFilas(api, 19));   // 19.760
+  assert.equal(errores, undefined);
+  assert.equal(api.generarPlano(api.registrarMapa(mapa)).bandas.length, 19);
+  assert.deepEqual(api.validarMapa(mapaDeFilas(api, 21)).errores,     // 21.840
+    ['la sala tendría 21,840 butacas y el máximo es 20,000']);
+  assert.equal(api.motivoDeAforo(20000), null);
+  assert.equal(api.motivoDeAforo(20001), 'la sala tendría 20,001 butacas y el máximo es 20,000');
 });

@@ -471,6 +471,11 @@ El diseño se guarda **sin base de datos**, como JSON, de dos formas:
 Un mapa guarda el **diseño**, no la venta: nombre, columnas (bloques y pasillos), bandas, mesas con su forma y posición,
 butacas bloqueadas y los contadores de ids. No guarda la ocupación ni la selección.
 
+**Límites:** una sala tiene como máximo **20.000 butacas** (contando las de mesas, bloques y butacas
+sueltas). Más harían lento el dibujo del plano. El editor no aplica un cambio que pase de ahí (agregar
+o alargar bandas, piezas, columnas, duplicar) y lo explica; un mapa importado o guardado que lo supere
+no se carga. Un archivo de más de **1 MB** no se importa: un mapa real ocupa pocos KB.
+
 ```json
 {
   "formato": "selector-asientos/mapa",
@@ -515,6 +520,9 @@ seguir usando **Exportar JSON**.
 
 - **Guardar los mapas** en un servidor, en lugar de en el navegador.
 - **Desplazar el plano** solo al arrastrar una mesa hasta el borde con zoom.
+- **Comprobar que las piezas caben con menos recorridos:** hoy se recalculan las celdas ocupadas una
+  vez por pieza, lo que con muchísimas mesas y bloques en una sala grande sería cuadrático. Con el
+  aforo máximo actual no se nota.
 - **Zonas pintadas con su precio:** marcar un área del plano con una zona y su precio, en lugar de
   asignarlo pieza a pieza.
 - **Más formas:** escenario secundario, cabina de DJ, columna u otros obstáculos del recinto.

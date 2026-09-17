@@ -4,9 +4,30 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Butacas sueltas y formas (fase B)
+## Sin publicar — Rendimiento de la numeración y topes
 
-Rama `claude/butacas-y-formas`.
+Rama `claude/rendimiento-y-topes`. Sale de una revisión externa del commit `159ef63`.
+
+### Corregido
+
+- **Numerar las filas era cuadrático:** `numerarFilas` filtraba las butacas por cada altura y buscaba
+  la de cada rótulo recorriéndolas todas. Con 104.000 butacas tardaba 6,4 s y ahora unos 65 ms, con
+  la misma numeración (comparada en los 7 tipos de sala, con y sin escenario). Se notaba desde unas
+  15.000 butacas en cada acción del editor y al abrir la página con un mapa grande guardado.
+- **Filas después de la ZZ:** `letraDeFila` daba «undefined» a partir de la fila 703 de una zona;
+  ahora sigue con AAA, AAB…
+
+### Añadido
+
+- **Aforo máximo de 20.000 butacas:** el editor no aplica un cambio que lo supere y lo explica, y
+  `validarMapa` rechaza los mapas que lo pasan.
+- **Archivos de más de 1 MB** no se importan.
+- Pruebas: numerar 104.000 butacas por debajo de 1,5 s, tope de aforo y filas AAA (93 en total).
+
+## 2026-09-16 — PR #11: butacas sueltas y formas (fase B)
+
+[PR #11](https://github.com/jonathancr29/selector-asientos/pull/11), fusionado en `main` con el
+commit `159ef63`.
 
 ### Añadido
 
