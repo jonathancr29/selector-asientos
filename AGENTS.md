@@ -202,12 +202,15 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
     `.bajada`; no reutilices la clase o la letra se queda diminuta (pasó).
   - **Escritorio = una pantalla:** con más de 900 px de ancho y 600 px de alto, una media query pone
     `overflow: hidden` al `body`, `height: 100dvh` a `.app` y convierte `.centro` en una rejilla de
-    cuatro filas (encabezado, plano, estado, pie). El alto del plano lo da el CSS, no el script:
-    `ajustarAltoDelPlano` solo limpia un alto en línea. Ahí los `.panel` de los plegables van
-    `position: absolute` sobre el plano y el `summary` no cambia de alto al abrirse, para que el plano
-    no se mueva. Por debajo de esos tamaños todo vuelve al flujo con scroll de página.
-  - **Lo que cambia el hueco del plano llama a `reencuadrar`:** los `<details class="plegable">` del
-    encabezado y del pie lo hacen en su evento `toggle` (en flujo cambian el hueco; en escritorio no).
+    tres filas (encabezado, plano y la barra del pie, `footer.barra-estado`). El alto del plano lo da el
+    CSS, no el script: `ajustarAltoDelPlano` solo limpia un alto en línea. Ahí los `.panel` (hojas de
+    información en el encabezado, detalle en el pie) van `position: absolute` sobre el plano, así que el
+    plano no se mueve. Por debajo de esos tamaños todo vuelve al flujo con scroll de página.
+  - **Paneles del centro:** `abrirPanel(panel, boton, abrir)` los muestra u oculta, actualiza
+    `aria-expanded` y llama a `reencuadrar` (en flujo cambian el hueco; en escritorio no).
+    `cerrarPlegables` cierra los dos (Esc, clic en el plano). Las hojas son `<article class="hoja">`
+    dentro de `#hojas-info`; `mostrarHoja` enseña una y marca su punto con `aria-current`. `#pista`
+    vive en la hoja «Cómo se usa» y el script sigue cambiando su texto según el modo.
   - **El encuadre se adapta a la caja del `<svg>`** siempre, no solo cuando el alto es fijo.
   - **El viewBox tiene la proporción del `<svg>`:** en Previsualizar, `ajustarAltoDelPlano` fija el alto
     del plano y `calcularEncuadre` ensancha o alarga el encuadre hasta esa proporción. Si no, el

@@ -49,17 +49,38 @@
   .lateral .bandas { margin: 0; padding: 0; background: none; border: 0; }
   .encabezado { margin: 0 0 10px; }
   .encabezado .pista { margin: 0 0 6px; }
-  /* Textos de referencia plegables (encabezado y pie). */
-  .plegable > summary { padding: 2px 0; font-size: 12px; font-weight: 700; color: #cbd5e1; cursor: pointer; }
-  .plegable > summary:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; border-radius: 4px; }
-  .plegable[open] > summary { margin-bottom: 6px; }
-  .plegable .nota:first-of-type { margin-top: 0; }
-  .plegable .panel > :first-child { margin-top: 0; }
+  /* Titulo con el boton de informacion. */
+  .titulo { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; }
+  .titulo h1 { margin: 0; }
+  .titulo .icono, .resumen-pie .icono, .hojas-controles .icono {
+    width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; padding: 0;
+    color: #cbd5e1; background: #2a2a33; border: 1px solid #3a3a46; border-radius: 6px; cursor: pointer;
+  }
+  .titulo .icono[aria-expanded="true"], .resumen-pie .icono[aria-expanded="true"] { background: #1d4ed8; border-color: #3b82f6; color: #fff; }
+  .titulo .icono:focus-visible, .resumen-pie .icono:focus-visible, .hojas-controles .icono:focus-visible,
+  .punto:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+  .hojas-controles .icono:disabled { opacity: .45; cursor: default; }
+  /* Paneles del encabezado (hojas) y del pie (detalle). */
+  .panel { padding: 10px 12px; background: #23232b; border: 1px solid #3a3a46; border-radius: 8px; }
+  .panel[hidden] { display: none; }
+  .panel h2 { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: #e2e8f0; }
+  .hoja .nota:first-of-type { margin-top: 0; }
+  .hoja .bajada, .hoja .pista { margin: 0; font-size: 13px; line-height: 1.6; color: #cbd5e1; }
+  .hojas-controles { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .hojas-controles .cerrar { margin-left: auto; }
+  .puntos { display: inline-flex; gap: 6px; }
+  .punto { width: 10px; height: 10px; padding: 0; border-radius: 50%; border: 1px solid #94a3b8; background: transparent; cursor: pointer; }
+  .punto[aria-current="true"] { background: #3b82f6; border-color: #3b82f6; }
+  #panel-detalle #detalle { margin: 0; }
   /* Linea de estado: fija al pie del plano mientras se hace scroll por el. */
   .barra-estado { position: sticky; bottom: 0; z-index: 5; min-height: 34px; margin-top: 8px; padding: 8px 10px;
     background: #23232b; border: 1px solid #2c2c36; border-radius: 8px; }
+  .barra-estado { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 16px; }
   .barra-estado p, .barra-estado p:empty { margin: 0; }
-  .pie { margin-top: 8px; }
+  .barra-estado .mensajes { flex: 1 1 260px; min-width: 0; }
+  .resumen-pie { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+  .resumen-pie .resumen { margin: 0; font-size: 13px; line-height: 1.4; }
+  #panel-detalle { flex-basis: 100%; }
   /* Tooltip de los botones de icono: un solo elemento fijo, para que el scroll de los
      laterales no lo recorte. Lo coloca el script. */
   .tooltip { position: fixed; z-index: 50; padding: 4px 8px; font-size: 12px; line-height: 1.3; white-space: nowrap;
@@ -67,27 +88,22 @@
   .tooltip[hidden] { display: none; }
   /* --- Escritorio: una sola pantalla, sin scroll de pagina ---
      Los laterales, el encabezado y el pie quedan fijos; el plano llena el hueco que
-     queda. Los plegables se abren sobre el plano: el del encabezado hacia abajo y el
-     del pie hacia arriba, asi que el plano no cambia de tamaño. */
+     queda. Los paneles se abren sobre el plano: las hojas de informacion hacia abajo y
+     el detalle del pie hacia arriba, asi que el plano no cambia de tamaño. */
   @media (min-width: 901px) and (min-height: 601px) {
     body { overflow: hidden; }
     .app { height: 100dvh; align-items: stretch; }
     .lateral { position: static; height: 100%; max-height: none; }
-    .centro { display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; height: 100%; min-height: 0; }
-    .encabezado, .pie { position: relative; }
+    .centro { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; min-height: 0; }
+    .encabezado, .barra-estado { position: relative; }
     .lienzo { min-height: 0; overflow: hidden; }
     /* Mas especifico que la regla de #plano de la seccion del plano, que va despues. */
     .centro .lienzo #plano { height: 100%; }
-    .barra-estado { position: static; }
-    .centro .plegable > .panel {
-      position: absolute; left: 0; right: 0; z-index: 8; max-height: 60vh; overflow-y: auto;
-      padding: 10px 12px; background: #23232b; border: 1px solid #3a3a46; border-radius: 8px;
-      box-shadow: 0 12px 28px rgba(0, 0, 0, .5);
-    }
-    /* Abrir un plegable no debe cambiar el alto de su barra: el plano no se mueve. */
-    .centro .plegable[open] > summary { margin-bottom: 0; }
-    .encabezado .plegable > .panel { top: calc(100% + 2px); }
-    .pie .plegable > .panel { bottom: calc(100% + 2px); }
+    /* Los paneles flotan sobre el plano: el de informacion baja y el del detalle sube. */
+    .centro .panel { position: absolute; left: 0; right: 0; z-index: 8; max-height: 60vh; overflow-y: auto;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, .5); }
+    .encabezado > .panel { top: calc(100% + 2px); }
+    .barra-estado > .panel { bottom: calc(100% + 2px); }
   }
   @media (max-width: 1280px) {
     .app { grid-template-columns: 220px minmax(0, 1fr); }
@@ -369,6 +385,11 @@
     <symbol id="i-agregar-espacio" viewBox="0 0 24 24"><rect x="1.5" y="3" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3 2"></rect><rect x="18.4" y="15" width="2.2" height="9" rx="1.1"></rect><rect x="15" y="18.4" width="9" height="2.2" rx="1.1"></rect></symbol>
     <symbol id="i-agregar-division" viewBox="0 0 24 24"><rect x="1.5" y="3" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"></rect><rect x="7.3" y="3" width="1.5" height="13"></rect><rect x="18.4" y="15" width="2.2" height="9" rx="1.1"></rect><rect x="15" y="18.4" width="9" height="2.2" rx="1.1"></rect></symbol>
     <symbol id="i-mesa-redonda" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.6" fill-opacity=".25" stroke="currentColor" stroke-width="1.6"></circle><rect x="10" y="1.5" width="4" height="3.2" rx="0.9"></rect><rect x="10" y="19.3" width="4" height="3.2" rx="0.9"></rect><rect x="1.5" y="10" width="3.2" height="4" rx="0.9"></rect><rect x="19.3" y="10" width="3.2" height="4" rx="0.9"></rect></symbol>
+    <symbol id="i-info" viewBox="0 -960 960 960"><path d="M504.5-288.63q8.5-8.62 8.5-21.37v-180q0-12.75-8.68-21.38-8.67-8.62-21.5-8.62-12.82 0-21.32 8.62-8.5 8.63-8.5 21.38v180q0 12.75 8.68 21.37 8.67 8.63 21.5 8.63 12.82 0 21.32-8.63Zm-1-314.57q9.5-9.2 9.5-22.8 0-14.45-9.48-24.22-9.48-9.78-23.5-9.78t-23.52 9.78Q447-640.45 447-626q0 13.6 9.48 22.8 9.48 9.2 23.5 9.2t23.52-9.2ZM480.27-80q-82.74 0-155.5-31.5Q252-143 197.5-197.5t-86-127.34Q80-397.68 80-480.5t31.5-155.66Q143-709 197.5-763t127.34-85.5Q397.68-880 480.5-880t155.66 31.5Q709-817 763-763t85.5 127Q880-563 880-480.27q0 82.74-31.5 155.5Q817-252 763-197.68q-54 54.31-127 86Q563-80 480.27-80Zm.23-60Q622-140 721-239.5t99-241Q820-622 721.19-721T480-820q-141 0-240.5 98.81T140-480q0 141 99.5 240.5t241 99.5Zm-.5-340Z"></path></symbol>
+    <symbol id="i-desplegar" viewBox="0 -960 960 960"><path d="M480-554 304-378q-9 9-21 8.5t-21-9.5q-9-9-9-21.5t9-21.5l197-197q9-9 21-9t21 9l198 198q9 9 9 21t-9 21q-9 9-21.5 9t-21.5-9L480-554Z"></path></symbol>
+    <symbol id="i-anterior" viewBox="0 -960 960 960"><path d="m406-481 177 177q9 9 8.5 21t-9.5 21q-9 9-21.5 9t-21.5-9L341-460q-5-5-7-10t-2-11q0-6 2-11t7-10l199-199q9-9 21.5-9t21.5 9q9 9 9 21.5t-9 21.5L406-481Z"></path></symbol>
+    <symbol id="i-siguiente" viewBox="0 -960 960 960"><path d="M530-481 353-658q-9-9-8.5-21t9.5-21q9-9 21.5-9t21.5 9l198 198q5 5 7 10t2 11q0 6-2 11t-7 10L396-261q-9 9-21 8.5t-21-9.5q-9-9-9-21.5t9-21.5l176-176Z"></path></symbol>
+    <symbol id="i-cerrar" viewBox="0 -960 960 960"><path d="M480-438 270-228q-9 9-21 9t-21-9q-9-9-9-21t9-21l210-210-210-210q-9-9-9-21t9-21q9-9 21-9t21 9l210 210 210-210q9-9 21-9t21 9q9 9 9 21t-9 21L522-480l210 210q9 9 9 21t-9 21q-9 9-21 9t-21-9L480-438Z"></path></symbol>
   </defs>
 </svg>
 <div class="app" id="app">
@@ -376,17 +397,11 @@
   <!-- Lateral izquierdo: leyenda, vista y herramientas del editor. Sticky en pantallas
        anchas; en angostas pasa arriba del plano. Los grupos se pliegan (details). -->
   <aside class="lateral lateral-herramientas" aria-label="Herramientas">
-    <details class="grupo" open>
-      <summary>Leyenda</summary>
-      <ul class="leyenda">
-        <!-- Las muestras reutilizan los <symbol> del plano: la leyenda no puede
-             desalinearse del dibujo real. -->
-        <li><svg class="muestra" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/></svg>Disponible</li>
-        <li><svg class="muestra elegida" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/><use class="marca" href="#marca-elegida"/></svg>Seleccionado</li>
-        <li><svg class="muestra ocupada" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/><use class="marca" href="#marca-ocupada"/></svg>Ocupado</li>
-        <li><svg class="muestra bloqueada" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/><use class="marca" href="#marca-bloqueada"/></svg>Bloqueado</li>
-      </ul>
-    </details>
+    <!-- Las opciones salen de TIPOS_DE_SALA: el script las crea al cargar. -->
+    <div class="herramientas campo-ancho tipo-de-sala">
+      <label class="campo" for="tipo-sala" data-tooltip="Tipo de sala"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-sala"></use></svg><span class="solo-lector">Tipo de sala</span></label>
+      <select id="tipo-sala"></select>
+    </div>
     <details class="grupo" open>
       <summary>Vista</summary>
       <div class="herramientas modos" role="group" aria-label="Modo">
@@ -399,11 +414,6 @@
         <button type="button" class="icono" id="acercar" aria-label="Acercar" data-tooltip="Acercar"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-acercar"></use></svg></button>
         <button type="button" class="icono" id="alejar" aria-label="Alejar" data-tooltip="Alejar"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-alejar"></use></svg></button>
         <button type="button" class="icono" id="ajustar" aria-label="Ajustar" data-tooltip="Ajustar a la sala"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-ajustar"></use></svg></button>
-      </div>
-      <!-- Las opciones salen de TIPOS_DE_SALA: el script las crea al cargar. -->
-      <div class="herramientas campo-ancho">
-        <label class="campo" for="tipo-sala" data-tooltip="Tipo de sala"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-sala"></use></svg><span class="solo-lector">Tipo de sala</span></label>
-        <select id="tipo-sala"></select>
       </div>
     </details>
     <!-- Solo en modo editor. Los botones de pieza actuan sobre la pieza activa. -->
@@ -464,21 +474,63 @@
         </div>
       </details>
     </div>
+    <details class="grupo" open>
+      <summary>Leyenda</summary>
+      <ul class="leyenda">
+        <!-- Las muestras reutilizan los <symbol> del plano: la leyenda no puede
+             desalinearse del dibujo real. -->
+        <li><svg class="muestra" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/></svg>Disponible</li>
+        <li><svg class="muestra elegida" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/><use class="marca" href="#marca-elegida"/></svg>Seleccionado</li>
+        <li><svg class="muestra ocupada" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/><use class="marca" href="#marca-ocupada"/></svg>Ocupado</li>
+        <li><svg class="muestra bloqueada" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/><use class="marca" href="#marca-bloqueada"/></svg>Bloqueado</li>
+      </ul>
+    </details>
   </aside>
 
   <main class="centro">
     <!-- Encabezado: solo textos de referencia e instrucciones. -->
     <header class="encabezado">
-      <h1>Selector de asientos</h1>
-      <!-- Los textos de referencia se pliegan. En escritorio, el panel baja sobre el plano. -->
-      <details class="plegable" open>
-        <summary>Qué es y cómo se usa</summary>
-        <div class="panel">
-          <p class="bajada">Plano de butacas en SVG, sin dependencias. Filas numeradas, mesas y zona general en el mismo plano.</p>
-          <p class="pista" id="pista">Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer</p>
-        </div>
-      </details>
+      <div class="titulo">
+        <h1>Selector de asientos</h1>
+        <button type="button" class="icono" id="boton-info" aria-expanded="false" aria-controls="hojas-info"
+                aria-label="Información: qué es, cómo se usa y notas" data-tooltip="Información"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button>
+      </div>
       <p class="aforo" id="aforo"></p>
+      <!-- Hojas de informacion, de una en una. En escritorio el panel baja sobre el plano.
+           Se abren solo al pulsar el boton de informacion. -->
+      <section class="panel hojas" id="hojas-info" aria-roledescription="carrusel" aria-label="Información" hidden>
+        <article class="hoja" aria-roledescription="hoja" aria-label="1 de 3">
+          <h2>Qué es</h2>
+          <p class="bajada">Plano de butacas en SVG, sin dependencias. Filas numeradas, mesas y zona general en el mismo plano.</p>
+        </article>
+        <article class="hoja" aria-roledescription="hoja" aria-label="2 de 3" hidden>
+          <h2>Cómo se usa</h2>
+          <p class="pista" id="pista">Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer</p>
+        </article>
+        <article class="hoja" aria-roledescription="hoja" aria-label="3 de 3" hidden>
+          <h2>Notas</h2>
+          <p class="nota">
+            El plano se genera desde <code>butacas</code>, una lista plana con una fila por butaca:
+            identificador, fila, número, coordenadas, zona, grupo y estado. Es lo que devolvería tu
+            servidor. El SVG se produce al mostrar; nunca se almacena un SVG.
+          </p>
+          <p class="nota">
+            El selector de tipo de sala está aquí para comparar recintos: mixtos con distintos pasillos,
+            solo filas o solo mesas. En una aplicación real el recinto es fijo: se elegiría y editaría una
+            vez al crear su plano, y quedaría guardado en él. No sería un control para quien compra.
+          </p>
+        </article>
+        <div class="hojas-controles">
+          <button type="button" class="icono" id="hoja-anterior" aria-label="Hoja anterior" data-tooltip="Anterior · ←"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-anterior"></use></svg></button>
+          <span class="puntos" role="group" aria-label="Hojas">
+            <button type="button" class="punto" data-hoja="0" aria-label="Qué es" aria-current="true"></button>
+            <button type="button" class="punto" data-hoja="1" aria-label="Cómo se usa"></button>
+            <button type="button" class="punto" data-hoja="2" aria-label="Notas"></button>
+          </span>
+          <button type="button" class="icono" id="hoja-siguiente" aria-label="Hoja siguiente" data-tooltip="Siguiente · →"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-siguiente"></use></svg></button>
+          <button type="button" class="icono cerrar" id="cerrar-info" aria-label="Cerrar la información" data-tooltip="Cerrar · Esc"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-cerrar"></use></svg></button>
+        </div>
+      </section>
     </header>
 
     <div class="lienzo">
@@ -511,33 +563,26 @@
     </div>
 
     <!-- Linea de estado fija al pie del plano: los mensajes se ven aunque el plano sea alto. -->
-    <div class="barra-estado">
-      <p class="aviso" id="aviso" role="status"></p>
-      <p class="estado" id="estado" role="status"></p>
-    </div>
-
-    <footer class="pie">
-      <p class="resumen" aria-live="polite">
-        Seleccionadas: <strong id="cuenta">0</strong> · Total <strong id="total">$0.00</strong>
-        <span id="vacio">— ninguna butaca seleccionada.</span>
-      </p>
-      <!-- En escritorio, el panel sube sobre el plano. Lleva el detalle de la selección y las notas. -->
-      <details class="plegable">
-        <summary>Butacas elegidas y notas</summary>
-        <div class="panel">
-          <ul id="detalle"></ul>
-          <p class="nota">
-            El plano se genera desde <code>butacas</code>, una lista plana con una fila por butaca:
-            identificador, fila, número, coordenadas, zona, grupo y estado. Es lo que devolvería tu
-            servidor. El SVG se produce al mostrar; nunca se almacena un SVG.
-          </p>
-          <p class="nota">
-            El selector de tipo de sala está aquí para comparar recintos: mixtos con distintos pasillos,
-            solo filas o solo mesas. En una aplicación real el recinto es fijo: se elegiría y editaría una
-            vez al crear su plano, y quedaría guardado en él. No sería un control para quien compra.
-          </p>
-        </div>
-      </details>
+    <!-- Pie: una sola barra fija. El estado a la izquierda; el resumen de la selección a la
+         derecha, con un boton que despliega hacia arriba el detalle de las butacas elegidas. -->
+    <footer class="barra-estado">
+      <div class="mensajes">
+        <p class="aviso" id="aviso" role="status"></p>
+        <p class="estado" id="estado" role="status"></p>
+      </div>
+      <div class="resumen-pie">
+        <p class="resumen" aria-live="polite">
+          Seleccionadas: <strong id="cuenta">0</strong> · Total <strong id="total">$0.00</strong>
+          <span id="vacio">— ninguna butaca seleccionada.</span>
+        </p>
+        <button type="button" class="icono" id="boton-detalle" aria-expanded="false" aria-controls="panel-detalle"
+                aria-label="Detalle de las butacas elegidas" data-tooltip="Detalle"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-desplegar"></use></svg></button>
+      </div>
+      <section class="panel" id="panel-detalle" aria-label="Butacas elegidas" hidden>
+        <h2>Butacas elegidas</h2>
+        <ul id="detalle"></ul>
+        <p class="pista" id="detalle-vacio">Elige butacas en el plano para verlas aquí, por zona y por mesa.</p>
+      </section>
     </footer>
   </main>
 
@@ -3564,17 +3609,63 @@ function reencuadrar(conservarZoom = false) {
   }
 }
 
-// Los plegables del encabezado y del pie. En escritorio flotan sobre el plano, asi que
-// se cierran con su flecha, con Esc o al tocar el plano; en pantallas angostas empujan
-// el contenido y hay que reencuadrar.
-const plegablesDelCentro = [...document.querySelectorAll('.centro .plegable')];
-const cerrarPlegables = () => {
-  for (const plegable of plegablesDelCentro) plegable.open = false;
-};
-for (const plegable of plegablesDelCentro) {
-  plegable.addEventListener('toggle', () => reencuadrar(true));
+// ---------------------------------------------------------------------------
+// Paneles del encabezado (hojas de informacion) y del pie (detalle de la seleccion).
+// En escritorio flotan sobre el plano; en pantallas angostas empujan el contenido y hay
+// que reencuadrar. Se cierran con su boton, con Esc o al tocar el plano.
+// ---------------------------------------------------------------------------
+const hojasInfo = document.getElementById('hojas-info');
+const hojas = [...hojasInfo.querySelectorAll('.hoja')];
+const puntos = [...hojasInfo.querySelectorAll('.punto')];
+let hojaActual = 0;
+
+function abrirPanel(panel, boton, abrir) {
+  if (panel.hidden === !abrir) return;
+  panel.hidden = !abrir;
+  boton.setAttribute('aria-expanded', String(abrir));
+  reencuadrar(true);
 }
+
+function mostrarHoja(indice) {
+  hojaActual = Math.max(0, Math.min(hojas.length - 1, indice));
+  hojas.forEach((hoja, i) => { hoja.hidden = i !== hojaActual; });
+  puntos.forEach((punto, i) => {
+    if (i === hojaActual) punto.setAttribute('aria-current', 'true');
+    else punto.removeAttribute('aria-current');
+  });
+  document.getElementById('hoja-anterior').disabled = hojaActual === 0;
+  document.getElementById('hoja-siguiente').disabled = hojaActual === hojas.length - 1;
+}
+
+const cerrarPlegables = () => {
+  abrirPanel(hojasInfo, document.getElementById('boton-info'), false);
+  abrirPanel(document.getElementById('panel-detalle'), document.getElementById('boton-detalle'), false);
+};
 svg.addEventListener('pointerdown', cerrarPlegables);
+
+document.getElementById('boton-info').addEventListener('click', () => {
+  const abrir = hojasInfo.hidden;
+  abrirPanel(hojasInfo, document.getElementById('boton-info'), abrir);
+  if (abrir) mostrarHoja(hojaActual);
+});
+document.getElementById('hoja-anterior').addEventListener('click', () => mostrarHoja(hojaActual - 1));
+document.getElementById('hoja-siguiente').addEventListener('click', () => mostrarHoja(hojaActual + 1));
+for (const punto of puntos) punto.addEventListener('click', () => mostrarHoja(Number(punto.dataset.hoja)));
+document.getElementById('cerrar-info').addEventListener('click', () => {
+  abrirPanel(hojasInfo, document.getElementById('boton-info'), false);
+  document.getElementById('boton-info').focus();
+});
+// Las flechas del teclado pasan de hoja mientras el foco esta en el panel.
+hojasInfo.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    e.preventDefault();
+    mostrarHoja(hojaActual + (e.key === 'ArrowRight' ? 1 : -1));
+  }
+});
+document.getElementById('boton-detalle').addEventListener('click', () => {
+  const panel = document.getElementById('panel-detalle');
+  abrirPanel(panel, document.getElementById('boton-detalle'), panel.hidden);
+});
 
 let esperaDeTamano = null;
 addEventListener('resize', () => {
@@ -4394,6 +4485,8 @@ document.addEventListener('scroll', ocultarTooltip, true);
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   ocultarTooltip();
+  // Si el foco estaba en las hojas de informacion, vuelve a su boton al cerrarlas.
+  if (hojasInfo.contains(document.activeElement)) document.getElementById('boton-info').focus();
   cerrarPlegables();
 });
 
@@ -4615,6 +4708,7 @@ function actualizarResumen() {
   document.getElementById('cuenta').textContent = String(lista.length);
   document.getElementById('total').textContent = dinero(total);
   document.getElementById('vacio').hidden = lista.length > 0;
+  document.getElementById('detalle-vacio').hidden = lista.length > 0;
 
   const cubos = new Map();
   for (const b of lista) {
