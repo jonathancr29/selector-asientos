@@ -4,9 +4,26 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Mesas completas
+## Sin publicar — Asignar zona a cada asiento
 
-Rama `claude/mesa-completa`.
+Rama `claude/asignar-zona`.
+
+### Añadido
+
+- **Asignar zona:** herramienta en el grupo *Sala*, con un selector de zona. Un clic (o Enter) en una
+  butaca le asigna la zona elegida; otro la devuelve a la suya. Vale para filas, bloques, butacas
+  sueltas y lugares de mesa, así que cada asiento puede tener su precio.
+- La numeración no cambia: una butaca de Luneta pintada de VIP se vende como «VIP, fila A, butaca 3».
+  Un lugar de mesa dice su zona («Mesa 1, lugar 1, VIP»).
+- Las butacas ocupadas no cambian de zona; una zona asignada a algún asiento no se puede eliminar.
+- Los mapas guardan y validan `zonasDeAsiento`; duplicar piezas y bandas copia las asignaciones.
+- Pruebas de asignar y devolver zona, lugares de mesa y mesas completas, zonas en uso, duplicar y
+  mapas (111 en total).
+
+## 2026-09-18 — PR #23: mesas completas
+
+[PR #23](https://github.com/jonathancr29/selector-asientos/pull/23), fusionado en `main` con el
+commit `6b601c8`.
 
 ### Añadido
 

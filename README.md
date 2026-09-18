@@ -191,6 +191,21 @@ actuales: la etiqueta de las butacas (*«VIP, fila A, butaca 1»*), el nombre po
 los selectores y el resumen con su total. Las filas nuevas nacen en *General* o, si no existe, en la
 primera zona de filas. **Restablecer sala** vuelve a las tres de siempre.
 
+**Asignar zona a cada asiento.** El botón **Asignar zona** del grupo *Sala* (como *Bloquear butacas*)
+abre un selector con todas las zonas. Eliges una y haces clic en las butacas, o Enter sobre ellas, para
+asignársela; otro clic la devuelve a su zona de siempre.
+
+- Sirve para **cualquier asiento**: filas, bloques, butacas sueltas y lugares de mesa (también se
+  puede asignar la zona Mesas a una butaca de fila).
+- Las butacas que ya son de la zona elegida se ven marcadas con la palomita.
+- **La numeración no cambia:** la butaca A3 de Luneta pintada de VIP se vende como *«VIP, fila A,
+  butaca 3»*, a precio de VIP, y su vecina sigue siendo *«Luneta, fila A, butaca 4»*. Un lugar de mesa
+  dice su zona: *«Mesa 1, lugar 1, VIP»*.
+- **Mesas completas:** su precio suma cada lugar a su zona, así que un lugar VIP la encarece.
+- Las butacas ocupadas no cambian de zona. Una zona asignada a algún asiento cuenta como en uso y no se
+  puede eliminar.
+- Se guarda en el mapa como `zonasDeAsiento` (asiento → zona) y se copia al duplicar piezas o bandas.
+
 ### Nombres, capas y selección de bandas
 
 **Subtítulos.** El nombre de cada banda se dibuja en el plano, también en **Previsualizar**:
@@ -658,8 +673,7 @@ seguir usando **Exportar JSON**.
 - **Comprobar que las piezas caben con menos recorridos:** hoy se recalculan las celdas ocupadas una
   vez por pieza, lo que con muchísimas mesas y bloques en una sala grande sería cuadrático. Con el
   aforo máximo actual no se nota.
-- **Zonas pintadas con su precio:** marcar un área del plano con una zona y su precio, en lugar de
-  asignarlo pieza a pieza.
+- **Asignar zona por área:** pintar un rectángulo de butacas de una vez, en lugar de una a una.
 - **Más formas:** escenario secundario, cabina de DJ, columna u otros obstáculos del recinto.
 
 ## Pruebas
