@@ -4,9 +4,29 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Sillas de la mesa redonda por parejas
+## Sin publicar — Mesas completas
 
-Rama `claude/redonda-parejas`.
+Rama `claude/mesa-completa`.
+
+### Añadido
+
+- **«Vender como mesa completa»:** casilla por mesa en *Pieza seleccionada*, y botón **«Aplicar a
+  todas las mesas»**. Lo decide el organizador.
+- **En Previsualizar, una mesa completa se elige entera:** un clic en la mesa o en cualquiera de sus
+  lugares elige (o suelta) todos sus lugares libres, y el tablero se marca con ellos.
+- **Precio:** la suma de sus lugares libres, cada uno al precio de su zona. Los lugares bloqueados no
+  se venden ni se cobran.
+- Una mesa completa con algún lugar ocupado sale ocupada entera.
+- Al marcar completa una mesa con parte de sus lugares elegidos, se eligen todos y se avisa.
+- El resumen dice «mesa completa», y cada lugar lo anuncia en su etiqueta.
+- Los mapas guardan y validan `completa` en las mesas; los anteriores se leen como venta por lugares.
+- Pruebas de marcar mesas, elección conjunta, bloqueados, ocupados, selección parcial y mapas (107 en
+  total).
+
+## 2026-09-18 — PR #22: sillas de la mesa redonda por parejas
+
+[PR #22](https://github.com/jonathancr29/selector-asientos/pull/22), fusionado en `main` con el
+commit `74375a1`.
 
 ### Cambiado
 

@@ -287,6 +287,13 @@
   .oculta { display: none; }
 
   .mueble { fill: #26262f; stroke: #3a3a46; stroke-width: .6; }
+  /* Mesa completa elegida: el tablero se marca junto con sus lugares. */
+  .mueble.elegida { fill: rgba(59, 130, 246, .22); stroke: #3b82f6; stroke-width: 1.2; }
+  .mueble.completa { cursor: pointer; }
+  .casilla { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #cbd5e1; margin: 0 0 8px; }
+  .casilla input { width: 16px; height: 16px; accent-color: #3b82f6; }
+  .casilla input:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+  .lateral .ancho-completo { width: 100%; margin-bottom: 8px; }
   /* Formas: la pista con cuadros suaves, la barra como un mostrador macizo. */
   .forma-pista { fill: url(#cuadros-pista); stroke: #8b7fc4; stroke-width: .6; }
   .forma-barra { fill: #4a3b2c; stroke: #a0805c; stroke-width: .8; }
@@ -438,6 +445,9 @@
           <label class="campo" for="nombre-pieza" data-tooltip="Nombre"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-nombre"></use></svg><span class="solo-lector">Nombre</span></label>
           <input type="text" id="nombre-pieza" maxlength="40" autocomplete="off" disabled placeholder="Ej.: Lateral izquierdo">
         </div>
+        <!-- Solo para mesas: si se vende entera (un solo precio, la suma de sus lugares). -->
+        <label class="casilla"><input type="checkbox" id="mesa-completa" disabled> Vender como mesa completa</label>
+        <button type="button" class="ancho-completo" id="completa-todas" disabled>Aplicar a todas las mesas</button>
       </details>
       <details class="grupo" open>
         <summary>Sala</summary>
@@ -1180,9 +1190,14 @@ function cambiarLugaresRedonda(mesa, pasos) {
 
 const configDeRedonda = ({ id, x, y, lugares, giro }) => ({ id, tipo: 'redonda', x, y, lugares, giro });
 // La configuracion guardable de cualquier mesa, redonda o rectangular.
-const configDeMesa = (mesa) => (esMesaRedonda(mesa) ? configDeRedonda(mesa)
-  : { id: mesa.id, x: mesa.x, y: mesa.y, largo: mesa.largo, cabeceras: mesa.cabeceras,
-      unLado: mesa.unLado, giro: mesa.giro });
+// 'completa' solo se guarda si esta marcada: los mapas anteriores se leen como venta
+// por lugares.
+const configDeMesa = (mesa) => ({
+  ...(esMesaRedonda(mesa) ? configDeRedonda(mesa)
+    : { id: mesa.id, x: mesa.x, y: mesa.y, largo: mesa.largo, cabeceras: mesa.cabeceras,
+        unLado: mesa.unLado, giro: mesa.giro }),
+  ...(mesa.completa ? { completa: true } : {}),
+});
 const mesas = [];     // {id, nombre, x, y, largo, cabeceras, unLado, giro, geo}
 
 // Geometria relativa a la esquina superior izquierda (dx, dy en celdas). Cada
@@ -1235,7 +1250,7 @@ function agregarMesa(config, ocupadas = []) {
   geo.lugares.forEach((l, i) => {
     butacas.push({
       id: id + '-' + l.lado, fila: id, numero: i + 1, x: x + l.dx, y: y + l.dy, mira: l.mira,
-      zona: 'mesas', grupo: { id, nombre },
+      zona: 'mesas', grupo: { id, nombre, completa: Boolean(config.completa) },
       estado: ocupadas.includes(l.lado) ? 'ocupada' : 'libre',
     });
   });
@@ -1575,6 +1590,12 @@ function generarPlano(tipo, plano = null) {
   const bloqueadas = new Set((plano && plano.bloqueadas) || definicion.bloqueadas ||
                              idsBloqueadosPorBandas(sala));
   for (const b of butacas) if (bloqueadas.has(b.id)) b.estado = 'bloqueada';
+  for (const mesa of mesas.filter((m) => m.completa)) {
+    const lugares = butacas.filter((b) => b.grupo && b.grupo.id === mesa.id);
+    if (lugares.some((b) => b.estado === 'ocupada')) {
+      for (const b of lugares) if (b.estado === 'libre') b.estado = 'ocupada';
+    }
+  }
   numerarFilas();
 
   // Filas de la rejilla donde puede haber piezas: toda la sala. El escenario
@@ -2189,20 +2210,22 @@ function validarMapa(dato) {
     idsMesa.add(m.id);
     if (!esEntero(m.x, 0, 999) || !esEntero(m.y, 0, 999)) errores.push(m.id + ': posición no válida');
     if (![0, 90, 180, 270].includes(m.giro)) errores.push(m.id + ': giro no válido');
+    if (m.completa !== undefined && typeof m.completa !== 'boolean') errores.push(m.id + ': completa debe ser true o false');
+    const completa = m.completa === true ? { completa: true } : {};
     // Mesa redonda: solo lugares. Las rectangulares no llevan 'tipo' (mapas anteriores).
     if (m.tipo === 'redonda') {
       if (!esEntero(m.lugares, LUGARES_MINIMOS_REDONDA, LUGARES_MAXIMOS_REDONDA) || m.lugares % 2) {
         errores.push(m.id + ': los lugares de una mesa redonda deben ser un número par de ' +
                      LUGARES_MINIMOS_REDONDA + ' a ' + LUGARES_MAXIMOS_REDONDA);
       }
-      return { id: m.id, tipo: 'redonda', x: m.x, y: m.y, lugares: m.lugares, giro: m.giro };
+      return { id: m.id, tipo: 'redonda', x: m.x, y: m.y, lugares: m.lugares, giro: m.giro, ...completa };
     }
     if (m.tipo !== undefined) errores.push(m.id + ': tipo de mesa desconocido');
     if (!esEntero(m.largo, 1, LARGO_MAXIMO)) errores.push(m.id + ': largo fuera de rango');
     if (typeof m.cabeceras !== 'boolean' || typeof m.unLado !== 'boolean') {
       errores.push(m.id + ': cabeceras y unLado deben ser true o false');
     }
-    return { id: m.id, x: m.x, y: m.y, largo: m.largo, cabeceras: m.cabeceras, unLado: m.unLado, giro: m.giro };
+    return { id: m.id, x: m.x, y: m.y, largo: m.largo, cabeceras: m.cabeceras, unLado: m.unLado, giro: m.giro, ...completa };
   });
 
   // Bloques de filas: opcionales (los mapas anteriores no los tienen).
@@ -2563,6 +2586,74 @@ function leerPrecio(texto) {
   return centavos <= PRECIO_MAXIMO ? centavos : null;
 }
 
+// ---------------------------------------------------------------------------
+// Mesas completas.
+//
+// El organizador decide mesa por mesa si se vende completa (un solo control, que
+// elige todos sus lugares a la vez) o lugar por lugar. El precio de una mesa completa
+// es la suma de sus lugares libres, cada uno al de su zona; los bloqueados no se venden.
+// ---------------------------------------------------------------------------
+// Marca o desmarca una mesa como completa. Devuelve el plano nuevo o { motivo }.
+function marcarMesaCompleta(plano, id, completa) {
+  const nuevo = copiarPlano(plano);
+  const mesa = nuevo.mesas.find((m) => m.id === id);
+  if (!mesa) return { motivo: 'esa mesa ya no existe' };
+  if (completa) mesa.completa = true;
+  else delete mesa.completa;
+  return nuevo;
+}
+
+// Lo mismo para todas las mesas del plano.
+function marcarTodasLasMesas(plano, completa) {
+  const nuevo = copiarPlano(plano);
+  for (const mesa of nuevo.mesas) {
+    if (completa) mesa.completa = true;
+    else delete mesa.completa;
+  }
+  return nuevo;
+}
+
+// Los lugares de una mesa, en orden.
+const lugaresDeMesa = (id, lista) => lista.filter((b) => b.grupo && b.grupo.id === id);
+
+// Elige o suelta una butaca. En una mesa completa, elige o suelta todos sus lugares
+// libres a la vez. Devuelve si quedo elegida (o null si no se puede elegir).
+function alternarEleccion(ids, butaca, lista) {
+  if (!butaca || butaca.estado !== 'libre') return null;
+  if (!butaca.grupo || !butaca.grupo.completa) {
+    if (ids.delete(butaca.id)) return false;
+    ids.add(butaca.id);
+    return true;
+  }
+  const libres = lugaresDeMesa(butaca.grupo.id, lista).filter((b) => b.estado === 'libre');
+  const elegida = libres.some((b) => ids.has(b.id));
+  for (const b of libres) {
+    if (elegida) ids.delete(b.id);
+    else ids.add(b.id);
+  }
+  return !elegida;
+}
+
+// Tras regenerar, una mesa completa con solo parte de sus lugares elegidos (porque se
+// marco completa despues, o se agrego un lugar) pasa a tenerlos todos. Devuelve los
+// nombres de las mesas que se completaron, para avisar.
+function completarMesasElegidas(ids, lista) {
+  const completadas = [];
+  const mesasCompletas = new Map();
+  for (const b of lista) {
+    if (b.grupo && b.grupo.completa) mesasCompletas.set(b.grupo.id, b.grupo.nombre);
+  }
+  for (const [id, nombre] of mesasCompletas) {
+    const libres = lugaresDeMesa(id, lista).filter((b) => b.estado === 'libre');
+    const elegidos = libres.filter((b) => ids.has(b.id)).length;
+    if (elegidos && elegidos < libres.length) {
+      for (const b of libres) ids.add(b.id);
+      completadas.push(nombre);
+    }
+  }
+  return completadas;
+}
+
 // Las capas de la sala: franjas, verticales y bandas (sin el escenario), en orden
 // de arbol. Cada capa tiene su color de seleccion por su posicion en esta lista.
 function capasDe(bandas) {
@@ -2629,7 +2720,8 @@ const capaRotuloSeleccion = document.getElementById('rotulo-seleccion');
 const formatoDinero = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 const dinero = (centavos) => formatoDinero.format(centavos / 100);
 const porId = new Map();   // id -> butaca, para no recorrer la lista en cada interaccion
-const etiquetaDe = (b) => (b.grupo ? b.grupo.nombre + ', lugar ' + b.numero
+const etiquetaDe = (b) => (b.grupo && b.grupo.completa ? b.grupo.nombre + ', mesa completa, lugar ' + b.numero
+  : b.grupo ? b.grupo.nombre + ', lugar ' + b.numero
                                    : b.seccion + ', fila ' + b.fila + ', butaca ' + b.numero);
 
 function nodo(nombre, atributos) {
@@ -2642,6 +2734,16 @@ function texto(clase, x, y, contenido) {
   const t = nodo('text', { class: clase, x, y });
   t.textContent = contenido;
   return t;
+}
+
+// Un tablero de mesa completa: se puede tocar (en Previsualizar) y se marca elegido
+// cuando sus lugares lo estan.
+function marcarTableroDeMesa(tablero, id) {
+  const mesa = mesas.find((m) => m.id === id);
+  if (!mesa || !mesa.completa) return;
+  tablero.classList.add('completa');
+  const libres = butacas.filter((b) => b.grupo && b.grupo.id === id && b.estado === 'libre');
+  if (libres.length && libres.every((b) => elegidas.has(b.id))) tablero.classList.add('elegida');
 }
 
 function dibujarMuebles() {
@@ -2663,6 +2765,7 @@ function dibujarMuebles() {
       const rotulo = texto('rotulo', cx, cy, unaCelda ? m.numero : m.texto);
       if (!unaCelda && m.h > m.w) rotulo.setAttribute('transform', `rotate(-90 ${cx} ${cy})`);
       rect.dataset.pieza = rotulo.dataset.pieza = m.mesa;
+      marcarTableroDeMesa(rect, m.mesa);
       capaMuebles.append(rect, rotulo);
     } else if (m.tipo === 'mesa-redonda') {
       const cx = (m.x + m.w / 2) * PASO, cy = (m.y + m.h / 2) * PASO;
@@ -2670,6 +2773,7 @@ function dibujarMuebles() {
       // En una mesa de una celda «Mesa 4» no cabe: solo el numero.
       const rotulo = texto('rotulo', cx, cy, m.w === 1 ? m.numero : m.texto);
       circulo.dataset.pieza = rotulo.dataset.pieza = m.mesa;
+      marcarTableroDeMesa(circulo, m.mesa);
       capaMuebles.append(circulo, rotulo);
     } else if (m.tipo === 'forma') {
       const rect = nodo('rect', { class: 'forma-' + m.forma, x: m.x * PASO + 1, y: m.y * PASO + 1,
@@ -3481,6 +3585,7 @@ svg.addEventListener('pointerdown', (e) => {
       // <svg> todos los eventos de puntero siguientes, asi que al soltar el boton
       // e.target ya es el <svg> y closest('.butaca') devuelve null.
       butaca: e.target.closest('.butaca'),
+      tablero: modo === 'vista' ? e.target.closest('.mueble.completa') : null,
       celda: modo === 'editor' ? celdaBajo(e) : null,
     };
   } else {
@@ -3532,6 +3637,7 @@ function soltarPuntero(e, cancelado) {
     // la que la contiene); con la herramienta de bloqueo, el clic en una butaca la
     // bloquea o desbloquea.
     if (modo === 'editor' && herramienta !== 'bloquear') seleccionarBandaEnPlano(arrastre.celda);
+    else if (arrastre.tablero && !arrastre.butaca) alternarMesaPorTablero(arrastre.tablero.dataset.pieza);
     else alternar(arrastre.butaca);
   }
   arrastre = null;
@@ -3582,13 +3688,27 @@ function alternar(elemento) {
     return;
   }
   const b = elemento && porNodo(elemento);
-  if (!b || b.estado !== 'libre') return;
-  const elegida = !elegidas.delete(b.id);
-  if (elegida) elegidas.add(b.id);
-  // El DOM refleja el dato; nunca se lee de vuelta.
-  b.nodo.classList.toggle('elegida', elegida);
-  b.nodo.setAttribute('aria-checked', String(elegida));
+  const elegida = alternarEleccion(elegidas, b, butacas);
+  if (elegida === null) return;
+  // El DOM refleja el dato; nunca se lee de vuelta. En una mesa completa cambian todos
+  // sus lugares y el tablero.
+  const afectadas = b.grupo && b.grupo.completa ? lugaresDeMesa(b.grupo.id, butacas).filter((x) => x.estado === 'libre') : [b];
+  for (const x of afectadas) {
+    x.nodo.classList.toggle('elegida', elegida);
+    x.nodo.setAttribute('aria-checked', String(elegida));
+  }
+  if (b.grupo && b.grupo.completa) marcarTableroElegido(b.grupo.id, elegida);
   actualizarResumen();
+}
+
+function marcarTableroElegido(id, elegida) {
+  for (const n of capaMuebles.querySelectorAll('.mueble[data-pieza="' + id + '"]')) n.classList.toggle('elegida', elegida);
+}
+
+// Clic en el tablero de una mesa completa: la elige como si fuera uno de sus lugares.
+function alternarMesaPorTablero(id) {
+  const primera = butacas.find((b) => b.grupo && b.grupo.id === id && b.grupo.completa && b.estado === 'libre');
+  if (primera) alternar(primera.nodo);
 }
 
 function moverFoco(desde, dx, dy) {
@@ -3792,6 +3912,12 @@ function actualizarControles() {
   botonEscenario.setAttribute('aria-label', textoEscenario);
   botonEscenario.dataset.tooltip = textoEscenario;
   botonEscenario.querySelector('use').setAttribute('href', escenario.ausente ? '#i-escenario-agregar' : '#i-escenario-quitar');
+  // Mesa completa: solo para mesas.
+  const casilla = document.getElementById('mesa-completa');
+  const deMesa = Boolean(m) && esMesa(m) && !esEscenario(m);
+  casilla.disabled = !deMesa;
+  casilla.checked = deMesa && Boolean(m.completa);
+  document.getElementById('completa-todas').disabled = !deMesa;
   // Zona: bloques y butacas sueltas. Nombre: bloques y formas. No se pisa lo que se esta escribiendo.
   const zona = document.getElementById('zona-pieza');
   const nombre = document.getElementById('nombre-pieza');
@@ -3889,6 +4015,7 @@ function regenerar(mensaje, antes = fotoDeButacas()) {
   salaActual = generarPlano(tipoActual, planos[tipoActual]);
   const existe = new Set(butacas.map((b) => b.id));
   const { ausentes, noLibres } = conciliarSeleccion(elegidas, butacas);
+  const completadas = completarMesasElegidas(elegidas, butacas);
   const ocupadasQuitadas = antes.filter((b) => b.estado === 'ocupada' && !existe.has(b.id))
                                 .map((b) => b.id);
   if (!piezaPorId(mesaActiva)) mesaActiva = null;
@@ -3903,6 +4030,7 @@ function regenerar(mensaje, antes = fotoDeButacas()) {
     frase(noLibres, 'ya no está libre', 'ya no están libres'),
     ocupadasQuitadas.length
       ? 'Atención: se quitaron lugares ocupados: ' + ocupadasQuitadas.join(', ') + '.' : '',
+    completadas.length ? 'Se venden completas, así que se eligieron todos sus lugares: ' + completadas.join(', ') + '.' : '',
   ].filter(Boolean).join(' ');
 }
 
@@ -4338,6 +4466,19 @@ document.getElementById('alternar-escenario').addEventListener('click', () => {
 document.getElementById('agregar-lados').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('lados')));
 document.getElementById('agregar-cruz').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('cruz')));
 document.getElementById('agregar-barra').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('barra')));
+document.getElementById('mesa-completa').addEventListener('change', (e) => {
+  const m = piezaPorId(mesaActiva);
+  if (!m) return;
+  planos[tipoActual] = marcarMesaCompleta(planoEditable(), m.id, e.target.checked);
+  regenerar(e.target.checked
+    ? m.nombre + ' se vende completa: sus lugares se eligen juntos y se cobra la suma de todos.'
+    : m.nombre + ' se vende por lugares.');
+});
+document.getElementById('completa-todas').addEventListener('click', () => {
+  const completa = document.getElementById('mesa-completa').checked;
+  planos[tipoActual] = marcarTodasLasMesas(planoEditable(), completa);
+  regenerar(completa ? 'Todas las mesas se venden completas.' : 'Todas las mesas se venden por lugares.');
+});
 document.getElementById('agregar-redonda').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('redonda')));
 document.getElementById('agregar-bloque').addEventListener('click', () => conTopeDeAforo(agregarBloqueNuevo));
 document.getElementById('agregar-butaca').addEventListener('click', () => conTopeDeAforo(agregarButacaNueva));
@@ -4368,7 +4509,8 @@ function actualizarResumen() {
   detalle.textContent = '';
   for (const [clave, items] of cubos) {
     const li = document.createElement('li');
-    const cuantos = items.length === 1 ? '1 lugar' : items.length + ' lugares';
+    const cuantos = (items[0].grupo && items[0].grupo.completa ? 'mesa completa, ' : '') +
+                    (items.length === 1 ? '1 lugar' : items.length + ' lugares');
     const cuales = items.map((b) => (b.grupo ? b.numero : b.fila + b.numero)).join(', ');
     const importe = items.reduce((s, b) => s + zonas[b.zona].precio, 0);
     li.textContent = clave + ' · ' + cuantos + ' (' + cuales + ') · ' + dinero(importe);
@@ -4414,6 +4556,7 @@ function redibujar(tipo) {
   salaActual = generarPlano(tipo, planos[tipo]);
   // Antes de dibujar: asi el DOM nace ya con la seleccion que sobrevive.
   const { ausentes, noLibres } = conciliarSeleccion(elegidas, butacas);
+  completarMesasElegidas(elegidas, butacas);
   dibujarTodo();
   anunciar('');
 

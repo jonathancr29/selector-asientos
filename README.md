@@ -353,6 +353,22 @@ Los tres estilos de mesa rectangular son el mismo modelo con otros valores:
 La huella es el rectángulo completo, así que las esquinas vacías de una cruz quedan **reservadas**:
 ninguna otra mesa puede ocuparlas.
 
+### Mesas completas o por lugares
+
+El organizador decide, **mesa por mesa**, cómo se vende. Con una mesa seleccionada en el editor,
+*Pieza seleccionada* tiene la casilla **«Vender como mesa completa»** y el botón **«Aplicar a todas
+las mesas»**, que copia el valor de la casilla a todas las mesas del plano.
+
+- **Mesa completa:** en Previsualizar, un clic en la mesa (el tablero) o en cualquiera de sus lugares
+  **elige la mesa y todos sus lugares libres** a la vez; otro clic los suelta. El tablero se marca
+  con sus lugares, y el resumen la muestra como *«Mesa 3 · mesa completa, 4 lugares · $2,000.00»*.
+- **Precio:** la suma de sus lugares libres, cada uno al precio de su zona (la de Mesas, salvo que se le
+  asigne otra). Un lugar **bloqueado** no se vende ni se cobra: la mesa se vende con los demás.
+- **Una mesa completa con algún lugar ocupado se vendió entera:** todos sus lugares salen ocupados.
+- **Por lugares** (casilla sin marcar, lo de siempre): cada lugar se elige por separado.
+- Si se marca completa una mesa que tenía solo algunos lugares elegidos, se eligen todos y se avisa.
+- Se guarda en el mapa como `completa: true` en la mesa; sin el campo, se vende por lugares.
+
 ### Mesas redondas
 
 Una mesa redonda se describe con **una sola medida: cuántos lugares tiene**, siempre un número **par**
