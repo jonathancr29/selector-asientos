@@ -199,7 +199,7 @@
   .subtitulo-borde text { fill: #cbd5e1; font-size: 3.2px; dominant-baseline: middle; }
   #plano.editando .subtitulo, #plano.editando .subtitulo-borde { cursor: pointer; }
   /* Van sobre las butacas para leerse; fuera del editor de piezas no capturan clics. */
-  #plano:not(.editando) .subtitulo-borde, #plano.bloqueando .subtitulo-borde { pointer-events: none; }
+  #plano:not(.editando) .subtitulo-borde, #plano.bloqueando .subtitulo-borde, #plano.pintando .subtitulo-borde { pointer-events: none; }
   /* La banda seleccionada lleva el color de su capa (--capa). No depende solo del
      color: contorno continuo y grueso, y su nombre pasa a una etiqueta rellena en su
      borde inferior, sobre todo lo demas (piezas incluidas). */
@@ -263,7 +263,7 @@
      Las butacas no responden: el clic atraviesa hasta la pieza o el fondo. */
   #plano.editando .butaca { pointer-events: none; }
   /* Con la herramienta de bloqueo, las butacas vuelven a responder. */
-  #plano.editando.bloqueando .butaca { pointer-events: auto; }
+  #plano.editando.bloqueando .butaca, #plano.editando.pintando .butaca { pointer-events: auto; }
   .herramientas input[type="text"] {
     height: 30px; min-width: 210px; padding: 0 9px; font: inherit; font-size: 13px; color: #e2e8f0;
     background: #17171c; border: 1px solid #3a3a46; border-radius: 6px;
@@ -452,9 +452,15 @@
       <details class="grupo" open>
         <summary>Sala</summary>
         <div class="herramientas rejilla-iconos">
+          <button type="button" class="icono" id="herramienta-zona" aria-pressed="false" aria-label="Asignar zona a butacas" data-tooltip="Asignar zona"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-zona"></use></svg></button>
           <button type="button" class="icono" id="herramienta-bloquear" aria-pressed="false" aria-label="Bloquear butacas" data-tooltip="Bloquear butacas"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-bloquear"></use></svg></button>
           <button type="button" class="icono" id="alternar-escenario" aria-label="Quitar escenario" data-tooltip="Quitar escenario"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-escenario-quitar"></use></svg></button>
           <button type="button" class="icono" id="restablecer" aria-label="Restablecer sala" data-tooltip="Restablecer sala"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-restablecer"></use></svg></button>
+        </div>
+        <!-- Solo con «Asignar zona»: la zona con la que se pinta cada butaca al tocarla. -->
+        <div class="herramientas campo-ancho" id="pincel-zona" hidden>
+          <label class="campo" for="zona-pincel" data-tooltip="Zona a asignar"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-zona"></use></svg><span class="solo-lector">Zona a asignar</span></label>
+          <select id="zona-pincel"></select>
         </div>
       </details>
     </div>
@@ -1597,6 +1603,16 @@ function generarPlano(tipo, plano = null) {
     }
   }
   numerarFilas();
+  // Zona asignada a mano a un asiento: cambia su precio y el nombre de su seccion,
+  // pero no su fila ni su numero, que ya se calcularon con la zona de siempre.
+  const zonasDeAsiento = (plano && plano.zonasDeAsiento) || definicion.zonasDeAsiento || {};
+  for (const b of butacas) {
+    b.zonaOriginal = b.zona;
+    const zona = zonasDeAsiento[b.id];
+    if (!zona || !zonas[zona] || zona === b.zona) continue;
+    b.zona = zona;
+    if (!b.grupo) b.seccion = zonas[zona].nombre;
+  }
 
   // Filas de la rejilla donde puede haber piezas: toda la sala. El escenario
   // ocupa sus celdas, asi que nada se le pone encima.
@@ -1782,6 +1798,7 @@ function primeraPiezaQueNoCabe(sala) {
 const copiarPlano = (plano) => ({
   ...plano, bandas: copiarBandas(plano.bandas),
   ...(plano.zonas ? { zonas: copiarZonas(plano.zonas) } : {}),
+  ...(plano.zonasDeAsiento ? { zonasDeAsiento: { ...plano.zonasDeAsiento } } : {}),
   ...Object.fromEntries(LISTAS_DE_PIEZAS.map(({ lista }) => [lista, (plano[lista] || []).map((p) => ({ ...p }))])),
   ...(plano.escenario ? { escenario: { ...plano.escenario } } : {}),   // null (sin escenario) llega con ...plano
 });
@@ -1938,6 +1955,7 @@ function planoDesdeSala(tipo, sala) {
     ...(sala.lienzo ? { lienzo: true } : {}),
     distribucion: distribucionDeSala(sala),
     bloqueadas: butacas.filter((b) => b.estado === 'bloqueada').map((b) => b.id),
+    zonasDeAsiento: Object.fromEntries(butacas.filter((b) => b.zona !== b.zonaOriginal).map((b) => [b.id, b.zona])),
     siguiente: Math.max(definicion.siguiente || 0, ...mesas.map((m) => Number(m.id.slice(1)) + 1), 1),
     siguienteBanda: Math.max(definicion.siguienteBanda || 1, 1),
     siguienteBloque: Math.max(definicion.siguienteBloque || 1, ...bloquesFilas.map((b) => Number(b.id.slice(1)) + 1), 1),
@@ -2039,6 +2057,8 @@ function mapaDesdePlano(nombre, plano, guardado, idsExistentes = null) {
     ...(plano.escenario !== undefined ? { escenario: plano.escenario && { ...plano.escenario } } : {}),
     ...(plano.lienzo ? { lienzo: true } : {}),
     bloqueadas: (plano.bloqueadas || []).filter((id) => !idsExistentes || idsExistentes.has(id)),
+    zonasDeAsiento: Object.fromEntries(Object.entries(plano.zonasDeAsiento || {})
+      .filter(([id]) => !idsExistentes || idsExistentes.has(id))),
     siguiente: plano.siguiente,
     siguienteBanda: plano.siguienteBanda,
     siguienteBloque: plano.siguienteBloque || 1,
@@ -2058,7 +2078,7 @@ const limpiarBandasParaMapa = (lista) => lista.map(({ ocupadas, bloqueadasAlFina
 const definicionDeMapa = (mapa) => ({
   nombre: mapa.nombre, grupo: GRUPO_MAPAS, lienzo: Boolean(mapa.lienzo), distribucion: mapa.distribucion, bandas: mapa.bandas,
   mesas: mapa.mesas, bloquesFilas: mapa.bloquesFilas, formas: mapa.formas, butacasSueltas: mapa.butacasSueltas,
-  escenario: mapa.escenario, bloqueadas: mapa.bloqueadas,
+  escenario: mapa.escenario, bloqueadas: mapa.bloqueadas, zonasDeAsiento: mapa.zonasDeAsiento,
   siguiente: mapa.siguiente, siguienteBanda: mapa.siguienteBanda, siguienteBloque: mapa.siguienteBloque,
   siguienteForma: mapa.siguienteForma, siguienteButaca: mapa.siguienteButaca,
   zonas: mapa.zonas, siguienteZona: mapa.siguienteZona,
@@ -2303,6 +2323,22 @@ function validarMapa(dato) {
   if (!Array.isArray(bloqueadas) || !bloqueadas.every((id) => typeof id === 'string' && id.length <= 60)) {
     errores.push('la lista de butacas bloqueadas no es válida');
   }
+  // Zonas asignadas a asientos: opcional. Cada una debe ser una zona del mapa.
+  const zonasDeAsiento = {};
+  if (dato.zonasDeAsiento !== undefined) {
+    const dz = dato.zonasDeAsiento;
+    if (!dz || typeof dz !== 'object' || Array.isArray(dz)) {
+      errores.push('las zonas de los asientos no son válidas');
+    } else {
+      for (const [id, zona] of Object.entries(dz)) {
+        if (id.length > 60 || typeof zona !== 'string' || !idsZona.has(zona)) {
+          errores.push('asiento ' + id.slice(0, 60) + ': zona desconocida');
+        } else {
+          zonasDeAsiento[id] = zona;
+        }
+      }
+    }
+  }
   if (errores.length) return { errores };
 
   // Los contadores nunca por debajo de lo que ya existe: un id no se reutiliza.
@@ -2315,6 +2351,7 @@ function validarMapa(dato) {
     formas: formasLimpias, butacasSueltas: butacasLimpias,
     ...(escenarioLimpio !== undefined ? { escenario: escenarioLimpio } : {}),
     bloqueadas: [...new Set(bloqueadas)],
+    zonasDeAsiento,
     siguiente: Math.max(esEntero(dato.siguiente, 1, 1e6) ? dato.siguiente : 1, maximo(idsMesa, /^M(\d+)$/) + 1),
     siguienteBanda: Math.max(esEntero(dato.siguienteBanda, 1, 1e6) ? dato.siguienteBanda : 1,
                              maximo(idsBanda, /^banda(\d+)$/) + 1),
@@ -2416,6 +2453,26 @@ function copiarBloqueadas(bloqueadas = [], ids) {
   return [...bloqueadas, ...copias];
 }
 
+// Lo mismo para las zonas asignadas a asientos: la copia lleva la zona del original.
+function copiarZonasDeAsiento(zonasDeAsiento = {}, ids) {
+  const copia = { ...zonasDeAsiento };
+  for (const [id, zona] of Object.entries(zonasDeAsiento)) {
+    const [nuevo] = copiarBloqueadas([id], ids).slice(1);
+    if (nuevo) copia[nuevo] = zona;
+  }
+  return copia;
+}
+
+// Asigna una zona a un asiento. Si es su zona de siempre ('original'), se quita la
+// asignacion. Devuelve el plano nuevo.
+function asignarZonaAsiento(plano, id, zona, original) {
+  const nuevo = copiarPlano(plano);
+  nuevo.zonasDeAsiento = { ...(nuevo.zonasDeAsiento || {}) };
+  if (zona === original) delete nuevo.zonasDeAsiento[id];
+  else nuevo.zonasDeAsiento[id] = zona;
+  return nuevo;
+}
+
 // La copia de una mesa, bloque, forma o butaca suelta, con id nuevo, junto a la
 // original: a su derecha, si no debajo, y si no en el sitio libre mas cercano. Usa
 // las celdas de la sala generada desde 'plano'. Devuelve el plano nuevo (el id de
@@ -2433,6 +2490,7 @@ function duplicarPieza(plano, sala, id) {
   if (!sitio) return { motivo: 'no hay sitio libre para la copia' };
   lista.push(sitio);
   nuevo.bloqueadas = copiarBloqueadas(nuevo.bloqueadas, new Map([[id, copia.id]]));
+  nuevo.zonasDeAsiento = copiarZonasDeAsiento(nuevo.zonasDeAsiento, new Map([[id, copia.id]]));
   return nuevo;
 }
 
@@ -2516,6 +2574,7 @@ function duplicarBanda(plano, sala, id) {
     }
   }
   resultado.bloqueadas = copiarBloqueadas(resultado.bloqueadas, ids);
+  resultado.zonasDeAsiento = copiarZonasDeAsiento(resultado.zonasDeAsiento, ids);
   return resultado;
 }
 
@@ -2526,7 +2585,8 @@ function duplicarBanda(plano, sala, id) {
 function usosDeZona(plano, id) {
   const bandas = hojasDe(plano.bandas).filter((b) => b.tipo === 'filas' && b.zona === id).length;
   const piezas = [...(plano.bloquesFilas || []), ...(plano.butacasSueltas || [])].filter((p) => p.zona === id).length;
-  return bandas + piezas;
+  const asientos = Object.values(plano.zonasDeAsiento || {}).filter((z) => z === id).length;
+  return bandas + piezas + asientos;
 }
 
 // Agrega una zona «Zona N» con precio 0 al final de la lista.
@@ -2720,8 +2780,9 @@ const capaRotuloSeleccion = document.getElementById('rotulo-seleccion');
 const formatoDinero = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 const dinero = (centavos) => formatoDinero.format(centavos / 100);
 const porId = new Map();   // id -> butaca, para no recorrer la lista en cada interaccion
-const etiquetaDe = (b) => (b.grupo && b.grupo.completa ? b.grupo.nombre + ', mesa completa, lugar ' + b.numero
-  : b.grupo ? b.grupo.nombre + ', lugar ' + b.numero
+const zonaDeLugar = (b) => (b.zona !== 'mesas' && zonas[b.zona] ? ', ' + zonas[b.zona].nombre : '');
+const etiquetaDe = (b) => (b.grupo && b.grupo.completa ? b.grupo.nombre + ', mesa completa, lugar ' + b.numero + zonaDeLugar(b)
+  : b.grupo ? b.grupo.nombre + ', lugar ' + b.numero + zonaDeLugar(b)
                                    : b.seccion + ', fila ' + b.fila + ', butaca ' + b.numero);
 
 function nodo(nombre, atributos) {
@@ -2872,21 +2933,27 @@ function glifoButaca(x, y, mira = 0) {
 function dibujarButacas() {
   porId.clear();
   const bloqueando = modo === 'editor' && herramienta === 'bloquear';
+  const pintando = modo === 'editor' && herramienta === 'zona';
+  const pincel = document.getElementById('zona-pincel').value;
   butacas.forEach((b, indice) => {
     const seleccionable = b.estado === 'libre';
     const elegida = elegidas.has(b.id);
     // Al bloquear, cada butaca es un checkbox de «bloqueada»; las ocupadas no se tocan.
-    const marcada = bloqueando ? b.estado === 'bloqueada' : elegida;
-    const inactiva = bloqueando ? b.estado === 'ocupada' : !seleccionable;
+    // Con el pincel, cada butaca es un checkbox de «de la zona elegida», marcada con la
+    // palomita si ya es de esa zona. Las ocupadas no cambian de zona.
+    const dePincel = pintando && b.zona === pincel;
+    const marcada = bloqueando ? b.estado === 'bloqueada' : pintando ? dePincel : elegida;
+    const inactiva = bloqueando || pintando ? b.estado === 'ocupada' : !seleccionable;
     const g = nodo('g', {
-      class: 'butaca' + (seleccionable ? '' : ' ' + b.estado) + (elegida ? ' elegida' : ''),
+      class: 'butaca' + (seleccionable ? '' : ' ' + b.estado) + (elegida || dePincel ? ' elegida' : ''),
       role: 'checkbox',
       'aria-checked': String(marcada),
       'aria-label': etiquetaDe(b) + (bloqueando
         ? (b.estado === 'ocupada' ? ', ocupada' : ', bloquear')
+        : pintando ? ', zona ' + zonas[b.zona].nombre + (b.estado === 'ocupada' ? ', ocupada' : '')
         : (seleccionable ? '' : ', ' + b.estado)),
       // tabindex movil: un solo punto de tabulacion. Colocando mesas, ninguno: se tabula por mesas.
-      tabindex: (modo === 'vista' || bloqueando) && indice === 0 ? '0' : '-1',
+      tabindex: (modo === 'vista' || bloqueando || pintando) && indice === 0 ? '0' : '-1',
     });
     if (inactiva) g.setAttribute('aria-disabled', 'true');
     g.dataset.id = b.id;
@@ -2933,7 +3000,7 @@ const etiquetaPieza = (m) => (esEscenario(m)
     (m.unLado ? ', un solo lado' : '')) + ', columna ' + m.x + ', fila ' + m.y;
 
 function dibujarPiezas() {
-  if (modo !== 'editor' || herramienta === 'bloquear') return;
+  if (modo !== 'editor' || conButacas()) return;
   const piezas = [...(escenario.ausente ? [] : [escenario]), ...mesas, ...bloquesFilas, ...formas, ...butacasSueltas];
   // Si la pieza activa ya no existe (se elimino), el punto de tabulacion va a la primera.
   const hayActiva = piezas.some((m) => m.id === mesaActiva);
@@ -2952,6 +3019,7 @@ function dibujarPiezas() {
 }
 
 function dibujarTodo() {
+  if (herramienta === 'zona') llenarPincel();
   capaMuebles.textContent = '';
   capaButacas.textContent = '';
   capaSubtitulos.textContent = '';
@@ -3032,7 +3100,8 @@ function dibujarZonas() {
   const activo = document.activeElement;
   const foco = listaZonas.contains(activo) ? { op: activo.dataset.op, zona: activo.dataset.zona } : null;
   listaZonas.textContent = '';
-  const usadas = { bandas: salaActual.bandas, bloquesFilas, butacasSueltas };
+  const usadas = { bandas: salaActual.bandas, bloquesFilas, butacasSueltas,
+    zonasDeAsiento: Object.fromEntries(butacas.filter((b) => b.zona !== b.zonaOriginal).map((b) => [b.id, b.zona])) };
   for (const [id, { nombre, precio }] of Object.entries(zonas)) {
     const li = document.createElement('li');
     li.className = 'banda';
@@ -3636,7 +3705,7 @@ function soltarPuntero(e, cancelado) {
     // En el editor, un clic en el fondo selecciona la banda de debajo (y otro clic,
     // la que la contiene); con la herramienta de bloqueo, el clic en una butaca la
     // bloquea o desbloquea.
-    if (modo === 'editor' && herramienta !== 'bloquear') seleccionarBandaEnPlano(arrastre.celda);
+    if (modo === 'editor' && !conButacas()) seleccionarBandaEnPlano(arrastre.celda);
     else if (arrastre.tablero && !arrastre.butaca) alternarMesaPorTablero(arrastre.tablero.dataset.pieza);
     else alternar(arrastre.butaca);
   }
@@ -3657,7 +3726,7 @@ function seleccionarBandaEnPlano(c) {
 
 // Doble clic en un subtitulo: selecciona su banda y lleva a su nombre en el panel.
 svg.addEventListener('dblclick', (e) => {
-  if (modo !== 'editor' || herramienta === 'bloquear') return;
+  if (modo !== 'editor' || conButacas()) return;
   const subtitulo = e.target.closest('[data-subtitulo]');
   if (!subtitulo) return;
   const id = subtitulo.dataset.subtitulo;
@@ -3685,6 +3754,7 @@ const porNodo = (elemento) => porId.get(elemento.dataset.id);
 function alternar(elemento) {
   if (modo === 'editor') {        // en el editor no se elige: se coloca o se bloquea
     if (herramienta === 'bloquear' && elemento) alternarBloqueo(elemento);
+    if (herramienta === 'zona' && elemento) pintarZona(elemento);
     return;
   }
   const b = elemento && porNodo(elemento);
@@ -3811,7 +3881,9 @@ const FLECHAS = {
 let modo = 'vista';        // 'vista' (previsualizar, como quien compra) o 'editor'
 let arrastreMesa = null;
 let mesaActiva = null;     // id de la mesa sobre la que actuan los botones y atajos
-let herramienta = 'mesas'; // en el editor: 'mesas' (colocar) o 'bloquear' (butacas)
+let herramienta = 'mesas'; // en el editor: 'mesas' (colocar), 'bloquear' o 'zona' (butacas)
+// Las herramientas que trabajan sobre butacas: las butacas responden y se recorren.
+const conButacas = () => herramienta === 'bloquear' || herramienta === 'zona';
 let bandaActiva = null;    // id de la banda, vertical o franja seleccionada (excluye a mesaActiva)
 let tipoActual, salaActual;
 // Plano guardado por tipo de sala: { 'mixta-ambos': { bandas, mesas, siguiente,
@@ -4353,6 +4425,8 @@ const ATAJOS = {
 };
 
 const PISTAS = {
+  zona: 'Elige una zona y haz clic en una butaca, o Enter sobre ella, para asignársela · otro clic la ' +
+        'devuelve a su zona · las marcadas con la palomita ya son de la zona elegida · se guarda con el mapa',
   bloquear: 'Haz clic en una butaca, o Enter sobre ella, para bloquearla o desbloquearla · ' +
             'flechas para recorrer · las bloqueadas se guardan con el mapa',
   vista: 'Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer',
@@ -4379,8 +4453,10 @@ function cambiarModo(nuevo) {
   document.getElementById('herramientas-mapa').hidden = !editando;
   document.getElementById('pista').textContent = PISTAS[modo];
   herramienta = 'mesas';
-  svg.classList.remove('bloqueando');
+  svg.classList.remove('bloqueando', 'pintando');
   document.getElementById('herramienta-bloquear').setAttribute('aria-pressed', 'false');
+  document.getElementById('herramienta-zona').setAttribute('aria-pressed', 'false');
+  document.getElementById('pincel-zona').hidden = true;
   actualizarAccesoButacas();
   mesaActiva = null;
   bandaActiva = null;
@@ -4396,7 +4472,7 @@ function cambiarModo(nuevo) {
 // Colocando mesas, las butacas son decorado y el lector de pantalla recorre mesas.
 // Bloqueando, o en la previsualizacion, las butacas son lo que se recorre.
 function actualizarAccesoButacas() {
-  if (modo === 'editor' && herramienta !== 'bloquear') capaButacas.setAttribute('aria-hidden', 'true');
+  if (modo === 'editor' && !conButacas()) capaButacas.setAttribute('aria-hidden', 'true');
   else capaButacas.removeAttribute('aria-hidden');
 }
 
@@ -4404,9 +4480,14 @@ function cambiarHerramienta(nueva) {
   if (arrastreMesa) terminarArrastreMesa(false);
   herramienta = nueva;
   const bloqueando = herramienta === 'bloquear';
+  const pintando = herramienta === 'zona';
   svg.classList.toggle('bloqueando', bloqueando);
+  svg.classList.toggle('pintando', pintando);
   document.getElementById('herramienta-bloquear').setAttribute('aria-pressed', String(bloqueando));
-  document.getElementById('pista').textContent = PISTAS[bloqueando ? 'bloquear' : modo];
+  document.getElementById('herramienta-zona').setAttribute('aria-pressed', String(pintando));
+  document.getElementById('pincel-zona').hidden = !pintando;
+  if (pintando) llenarPincel();
+  document.getElementById('pista').textContent = PISTAS[bloqueando ? 'bloquear' : pintando ? 'zona' : modo];
   actualizarAccesoButacas();
   mesaActiva = null;
   bandaActiva = null;
@@ -4414,6 +4495,8 @@ function cambiarHerramienta(nueva) {
   actualizarControles();
   anunciar(bloqueando
     ? 'Bloquear butacas: haz clic en una butaca para bloquearla o desbloquearla.'
+    : pintando
+    ? 'Asignar zona: elige la zona y haz clic en las butacas. Las marcadas con la palomita ya son de esa zona.'
     : 'Colocar mesas.');
 }
 
@@ -4434,6 +4517,40 @@ function alternarBloqueo(elemento) {
 
 document.getElementById('herramienta-bloquear').addEventListener('click', () =>
   cambiarHerramienta(herramienta === 'bloquear' ? 'mesas' : 'bloquear'));
+document.getElementById('herramienta-zona').addEventListener('click', () =>
+  cambiarHerramienta(herramienta === 'zona' ? 'mesas' : 'zona'));
+
+// Las opciones del pincel: todas las zonas de la sala, con su precio. Conserva la
+// elegida si sigue existiendo; si no, General o la primera.
+function llenarPincel() {
+  const select = document.getElementById('zona-pincel');
+  const antes = select.value;
+  select.textContent = '';
+  for (const [id, { nombre, precio }] of Object.entries(zonas)) select.appendChild(new Option(nombre + ' · ' + dinero(precio), id));
+  select.value = zonas[antes] ? antes : zonas.general ? 'general' : Object.keys(zonas)[0];
+}
+document.getElementById('zona-pincel').addEventListener('change', () => {
+  dibujarTodo();
+  anunciar('Pincel: ' + zonas[document.getElementById('zona-pincel').value].nombre + '.');
+});
+
+// Toca una butaca con el pincel: pasa a la zona elegida, o vuelve a la suya si ya lo era.
+function pintarZona(elemento) {
+  const b = porNodo(elemento);
+  if (!b) return;
+  if (b.estado === 'ocupada') {
+    anunciar(etiquetaDe(b) + ' está ocupada: no cambia de zona.');
+    return;
+  }
+  const pincel = document.getElementById('zona-pincel').value;
+  const zona = b.zona === pincel ? b.zonaOriginal : pincel;
+  planos[tipoActual] = asignarZonaAsiento(planoEditable(), b.id, zona, b.zonaOriginal);
+  regenerar('');
+  const nueva = porId.get(b.id);
+  anunciar(etiquetaDe(nueva) + ': zona ' + zonas[nueva.zona].nombre + ', ' + dinero(zonas[nueva.zona].precio) +
+           (nueva.zona === nueva.zonaOriginal ? ' (la de siempre).' : '.'));
+  if (nueva) nueva.nodo.focus({ preventScroll: true });
+}
 
 document.getElementById('modo-vista').addEventListener('click', () => cambiarModo('vista'));
 document.getElementById('modo-editor').addEventListener('click', () => cambiarModo('editor'));

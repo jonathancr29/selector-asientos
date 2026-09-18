@@ -31,7 +31,8 @@ const cargar = () => new Function(html.slice(inicio, fin) +
   ' FILAS_MAXIMAS, BUTACAS_MAXIMAS, motivoDeAforo,' +
   ' zonas, editarZona, agregarZona, eliminarZona, leerPrecio,' +
   ' geometriaMesaRedonda, cambiarLugaresRedonda, huellaDe,' +
-  ' marcarMesaCompleta, marcarTodasLasMesas, alternarEleccion, completarMesasElegidas };')();
+  ' marcarMesaCompleta, marcarTodasLasMesas, alternarEleccion, completarMesasElegidas,' +
+  ' asignarZonaAsiento };')();
 
 const DISPOSICIONES = ['ninguno', 'izquierda', 'derecha', 'ambos'];
 const rango = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
@@ -1948,4 +1949,75 @@ test('los mapas guardan y validan las mesas completas', () => {
   assert.deepEqual(leido.mesas.filter((m) => m.completa).map((m) => m.id), ['M3', 'M7']);
   const con = (cambio) => { const m = JSON.parse(JSON.stringify(mapa)); cambio(m); return api.validarMapa(m).errores || []; };
   assert.ok(con((m) => { m.mesas[0].completa = 'si'; }).includes('M1: completa debe ser true o false'));
+});
+
+// --- Zona por asiento ---------------------------------------------------------------
+
+const conVip = (api) => {
+  const { plano } = planoDe(api, 'mixta-ambos');
+  return api.editarZona(api.agregarZona(plano), 'zona1', { nombre: 'VIP', precio: 90000 });
+};
+
+test('asignar una zona a un asiento cambia su precio y su seccion, no su fila ni su numero', () => {
+  const api = cargar();
+  const vip = conVip(api);
+  const pintado = api.asignarZonaAsiento(vip, 'luneta-A3', 'zona1', 'luneta');
+  assert.deepEqual(pintado.zonasDeAsiento, { 'luneta-A3': 'zona1' });
+  assert.deepEqual(vip.zonasDeAsiento, {});   // no toca el plano de entrada
+  api.generarPlano('mixta-ambos', pintado);
+  const a3 = api.butacas.find((b) => b.id === 'luneta-A3');
+  assert.deepEqual([a3.zona, a3.zonaOriginal, a3.seccion, a3.fila, a3.numero], ['zona1', 'luneta', 'VIP', 'A', 3]);
+  // Sus vecinas no cambian: la A4 sigue siendo la A4 de Luneta.
+  assert.equal(etiqueta(api, 'luneta-A4'), 'Luneta A4');
+  // Volver a su zona de siempre quita la asignacion.
+  assert.deepEqual(api.asignarZonaAsiento(pintado, 'luneta-A3', 'luneta', 'luneta').zonasDeAsiento, {});
+});
+
+test('un lugar de mesa tambien puede tener otra zona, y una mesa completa suma su precio', () => {
+  const api = cargar();
+  const vip = api.marcarMesaCompleta(api.asignarZonaAsiento(conVip(api), 'M1-N1', 'zona1', 'mesas'), 'M1', true);
+  api.generarPlano('mixta-ambos', vip);
+  const lugares = api.butacas.filter((b) => b.grupo && b.grupo.id === 'M1');
+  assert.deepEqual(lugares.map((b) => b.zona), ['zona1', 'mesas', 'mesas', 'mesas']);
+  assert.equal(lugares.reduce((s, b) => s + api.zonas[b.zona].precio, 0), 90000 + 3 * 50000);
+  // Una zona asignada que ya no existe se ignora.
+  api.generarPlano('mixta-ambos', { ...vip, zonasDeAsiento: { 'M1-N2': 'fantasma' } });
+  assert.equal(api.butacas.find((b) => b.id === 'M1-N2').zona, 'mesas');
+});
+
+test('una zona asignada a asientos esta en uso y no se elimina', () => {
+  const api = cargar();
+  const pintado = api.asignarZonaAsiento(conVip(api), 'luneta-A3', 'zona1', 'luneta');
+  assert.match(api.eliminarZona(pintado, 'zona1').motivo, /VIP está en uso \(1 banda o pieza\)/);
+  const limpio = api.asignarZonaAsiento(pintado, 'luneta-A3', 'luneta', 'luneta');
+  assert.equal(api.eliminarZona(limpio, 'zona1').zonas.some((z) => z.id === 'zona1'), false);
+});
+
+test('duplicar copia las zonas de los asientos, y el mapa las guarda y valida', () => {
+  const api = cargar();
+  const pintado = api.asignarZonaAsiento(conVip(api), 'M1-N1', 'zona1', 'mesas');
+  const sala = api.generarPlano('mixta-ambos', pintado);
+  // La copia de M1 es M7: su lugar N1 tambien es VIP.
+  assert.deepEqual(api.duplicarPieza(pintado, sala, 'M1').zonasDeAsiento, { 'M1-N1': 'zona1', 'M7-N1': 'zona1' });
+  // Duplicar una banda tambien: la copia de la Luneta es banda1, y su A3 es VIP.
+  const conFila = api.asignarZonaAsiento(pintado, 'luneta-A3', 'zona1', 'luneta');
+  const salaFila = api.generarPlano('mixta-ambos', conFila);
+  assert.equal(api.duplicarBanda(conFila, salaFila, 'luneta').zonasDeAsiento['banda1-A3'], 'zona1');
+  api.generarPlano('mixta-ambos', pintado);
+  const extraido = api.planoDesdeSala('mixta-ambos', sala);
+  assert.deepEqual(extraido.zonasDeAsiento, { 'M1-N1': 'zona1' });
+  const mapa = JSON.parse(JSON.stringify(api.mapaDesdePlano('Con VIP', extraido, null)));
+  const { mapa: leido, errores } = api.validarMapa(mapa);
+  assert.equal(errores, undefined);
+  assert.deepEqual(leido.zonasDeAsiento, { 'M1-N1': 'zona1' });
+  api.generarPlano(api.registrarMapa(leido));
+  assert.equal(api.butacas.find((b) => b.id === 'M1-N1').zona, 'zona1');
+  const con = (cambio) => { const m = JSON.parse(JSON.stringify(mapa)); cambio(m); return api.validarMapa(m).errores || []; };
+  assert.ok(con((m) => { m.zonasDeAsiento['M1-N2'] = 'vip'; }).includes('asiento M1-N2: zona desconocida'));
+  assert.ok(con((m) => { m.zonasDeAsiento = ['x']; }).includes('las zonas de los asientos no son válidas'));
+  // Sin el campo (mapas anteriores), ningun asiento cambia de zona.
+  assert.deepEqual(api.validarMapa({ ...mapa, zonasDeAsiento: undefined }).mapa.zonasDeAsiento, {});
+  // Las asignaciones de asientos que ya no existen se limpian al guardar.
+  const idsExistentes = new Set(['M1-N2']);
+  assert.deepEqual(api.mapaDesdePlano('Con VIP', extraido, null, idsExistentes).zonasDeAsiento, {});
 });

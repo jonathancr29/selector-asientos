@@ -105,6 +105,11 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   la columna `numero`.
 - **Una mesa nunca queda partida por un pasillo**, ni en el reparto automático ni en el editor:
   `motivoNoCabe` lo decide con `esMesa` (sin `tipo`, o `tipo: 'redonda'`).
+- **Zona por asiento (`plano.zonasDeAsiento`):** se aplica en `generarPlano` **después** de
+  `numerarFilas`, así que cambia `zona` y `seccion` pero no `fila` ni `numero`. Cada butaca guarda
+  `zonaOriginal`; `planoDesdeSala` extrae las que difieren. Asignar la zona original quita la entrada
+  (`asignarZonaAsiento`). Cuenta en `usosDeZona` y se copia al duplicar (`copiarZonasDeAsiento`).
+  La herramienta es `herramienta === 'zona'`; `conButacas()` agrupa las que trabajan sobre butacas.
 - **Mesa completa (`completa: true`)**: sus lugares llevan `grupo.completa`. Elegir pasa siempre por
   `alternarEleccion` (todos sus lugares libres a la vez), y `completarMesasElegidas` corrige las
   selecciones parciales al regenerar. El precio no se guarda: es la suma de los lugares libres, cada
@@ -324,5 +329,4 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - Decidir si una mesa con lugares ocupados se puede mover, acortar o eliminar (hoy sí, con aviso).
 - Más formas: escenario secundario, cabina de DJ, columna.
 - Comprobar que las piezas caben sin recalcular las celdas por cada pieza (cuadrático con muchas piezas).
-- Zonas pintadas con su precio.
-- Elegir la zona de cada mesa (hoy todos los lugares de mesa son de la zona de mesas).
+- Asignar zona por área (un rectángulo de butacas de una vez).
