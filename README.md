@@ -301,42 +301,45 @@ quita (el escenario nunca). Como siempre, si algo deja de caber, el cambio no se
 
 ```
 ┌──────────────┬─────────────────────────────┬──────────────────┐
-│ Herramientas │ Encabezado: título, bajada, │ Configuración    │
-│ (sticky)     │ instrucciones y aforo       │ (sticky, solo    │
+│ Herramientas │ Selector de asientos  ⓘ     │ Configuración    │
+│ (sticky)     │ Sala de 14 columnas · …     │ (sticky, solo    │
 │              ├─────────────────────────────┤  en el editor)   │
-│ Leyenda      │                             │                  │
+│ Tipo de sala │                             │                  │
 │ Vista        │           PLANO             │ Mapa             │
 │ Agregar      │                             │ Columnas         │
-│ Pieza        ├─────────────────────────────┤ Zonas y precios  │
-│ Sala         │ Línea de estado (fija)      │ Bandas           │
-│              │ Pie: resumen y notas        │                  │
+│ Pieza        │                             │ Zonas y precios  │
+│ Sala         ├─────────────────────────────┤ Bandas           │
+│ Leyenda      │ Estado      Seleccionadas… ▲│                  │
 └──────────────┴─────────────────────────────┴──────────────────┘
 ```
 
-- **Lateral izquierdo (herramientas):** leyenda; vista (Previsualizar / Editar plano, zoom y tipo de
-  sala); y en el editor, *Agregar*, *Pieza seleccionada* (acciones, zona y nombre) y *Sala* (bloquear
-  butacas, escenario, restablecer). Los iconos van en rejilla y su tooltip sale a la derecha.
+- **Lateral izquierdo (herramientas), de arriba abajo:** el tipo de sala; *Vista* (Previsualizar /
+  Editar plano y zoom); en el editor, *Agregar*, *Pieza seleccionada* (acciones, zona, nombre y mesa
+  completa) y *Sala* (asignar zona, bloquear butacas, escenario, restablecer); y la *Leyenda*, al
+  final. Los iconos van en rejilla y su tooltip sale a la derecha.
 - **Lateral derecho (configuración), solo en el editor:** *Mapa* (nombre, guardar, exportar,
   importar), *Columnas*, *Zonas y precios* y *Bandas*.
 - **En escritorio (más de 900 px de ancho y 600 px de alto), una sola pantalla:** la página no se
   desplaza. Los laterales, el encabezado y el pie quedan fijos, y el plano llena el hueco que queda,
   así que la sala se ve completa. Lo único que se desplaza es el interior de un lateral cuando su
   contenido no cabe. Cada grupo se pliega haciendo clic en su título.
-- **Los textos plegables se abren sobre el plano:** el del encabezado baja y el del pie sube, con su
-  propio fondo y sombra, sin mover ni cambiar el tamaño del plano. Se cierran con su flecha, con
-  **Esc** o al hacer clic en el plano.
-- **Línea de estado:** los mensajes («Mesa 3 movida…») y avisos van en una línea fija al pie del
-  plano, así que se ven aunque el plano sea alto.
-- **Textos plegables:** «Qué es y cómo se usa» (descripción e instrucciones) en el encabezado, y
-  «Butacas elegidas y notas» en el pie, que lleva el detalle de la selección y las notas del
-  proyecto. Empieza cerrado. El aforo y el resumen se quedan siempre a la vista.
+- **Encabezado:** el título con un botón de **información (ⓘ)** y, debajo, el aforo.
+- **Hojas de información:** el botón ⓘ abre, **sobre el plano**, tres hojas que se recorren de una
+  en una, como diapositivas: **Qué es**, **Cómo se usa** (las instrucciones, que cambian con el modo
+  y la herramienta) y **Notas**. Se pasa de hoja con **‹ ›**, con los puntos o con las flechas del
+  teclado. Se cierran con el mismo botón, la ✕, **Esc** o un clic en el plano. Solo se abren al
+  pulsar ⓘ.
+- **Pie: una barra fija.** A la izquierda, los mensajes («Mesa 3 movida…») y avisos; a la derecha, el
+  resumen («Seleccionadas: 2 · Total $700.00») y un botón **▲** que despliega **hacia arriba, sobre el
+  plano,** el detalle de las butacas elegidas por zona y por mesa.
+- Los paneles de información y de detalle no mueven ni cambian el tamaño del plano.
 - **Previsualizar ajustado a la pantalla:** el plano ocupa el alto que queda bajo el encabezado, con la
   línea de estado a la vista, así que cualquier sala se ve completa sin scroll. Al cambiar el tamaño
   de la ventana se reajusta y conserva el zoom. En el editor el alto sale del ancho, como antes.
 - **Pantallas de menos de 900 px de ancho o 600 px de alto:** vuelve el diseño con scroll de página.
   Por debajo de 900 px, además, los laterales dejan de ser laterales: las herramientas pasan arriba
-  del plano y la configuración, debajo. El plano toma su alto del ancho y los plegables empujan el
-  contenido, en lugar de flotar.
+  del plano y la configuración, debajo. El plano toma su alto del ancho y los paneles de información
+  y de detalle empujan el contenido, en lugar de flotar.
 
 ## Modo editor
 

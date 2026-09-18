@@ -4,9 +4,26 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Asignar zona a cada asiento
+## Sin publicar — Hojas de información y pie en una barra
 
-Rama `claude/asignar-zona`.
+Rama `claude/info-y-pie`.
+
+### Cambiado
+
+- **Encabezado:** el título con un botón de información (ⓘ) y el aforo; ya no lleva plegables.
+- **Hojas de información** que se abren con ⓘ sobre el plano y se recorren como diapositivas:
+  «Qué es», «Cómo se usa» y «Notas». Flechas ‹ ›, puntos y flechas del teclado; se cierran con ⓘ, ✕,
+  Esc o un clic en el plano. Solo se abren al pulsar.
+- **Pie en una sola barra fija:** mensajes y avisos a la izquierda; resumen y un botón ▲ que despliega
+  hacia arriba el detalle de las butacas elegidas.
+- **Lateral izquierdo:** el tipo de sala arriba, después *Vista* y las herramientas del editor, y la
+  *Leyenda* al final.
+- Iconos nuevos de Material Symbols (info, flecha arriba, anterior, siguiente y cerrar) en `NOTICE`.
+
+## 2026-09-18 — PR #24: asignar zona a cada asiento
+
+[PR #24](https://github.com/jonathancr29/selector-asientos/pull/24), fusionado en `main` con el
+commit `db1037a`.
 
 ### Añadido
 
