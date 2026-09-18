@@ -30,7 +30,8 @@ const cargar = () => new Function(html.slice(inicio, fin) +
   ' formas, butacasSueltas, cambiarTamanoForma,' +
   ' FILAS_MAXIMAS, BUTACAS_MAXIMAS, motivoDeAforo,' +
   ' zonas, editarZona, agregarZona, eliminarZona, leerPrecio,' +
-  ' geometriaMesaRedonda, cambiarLugaresRedonda, huellaDe };')();
+  ' geometriaMesaRedonda, cambiarLugaresRedonda, huellaDe,' +
+  ' marcarMesaCompleta, marcarTodasLasMesas, alternarEleccion, completarMesasElegidas };')();
 
 const DISPOSICIONES = ['ninguno', 'izquierda', 'derecha', 'ambos'];
 const rango = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
@@ -1869,4 +1870,82 @@ test('las mesas redondas se guardan en el plano y en el mapa, y se validan al le
   // Duplicar una redonda copia sus lugares.
   const copia = api.duplicarPieza(conRedonda, sala, 'M7');
   assert.deepEqual(copia.mesas.at(-1), redonda('M8', 6, 14, 8, 90));
+});
+
+// --- Mesas completas --------------------------------------------------------------
+
+test('marcar una mesa, o todas, para venderlas completas', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const una = api.marcarMesaCompleta(plano, 'M3', true);
+  assert.deepEqual(una.mesas.filter((m) => m.completa).map((m) => m.id), ['M3']);
+  assert.equal(plano.mesas.some((m) => m.completa), false);   // no toca el plano de entrada
+  assert.equal(api.marcarMesaCompleta(una, 'M3', false).mesas.some((m) => 'completa' in m), false);
+  assert.deepEqual(api.marcarMesaCompleta(plano, 'M99', true), { motivo: 'esa mesa ya no existe' });
+  const todas = api.marcarTodasLasMesas(plano, true);
+  assert.ok(todas.mesas.every((m) => m.completa));
+  assert.ok(api.marcarTodasLasMesas(todas, false).mesas.every((m) => !('completa' in m)));
+  // Los lugares de una mesa completa lo llevan en su grupo.
+  api.generarPlano('mixta-ambos', una);
+  assert.deepEqual(api.butacas.find((b) => b.id === 'M3-N1').grupo, { id: 'M3', nombre: 'Mesa 3', completa: true });
+  assert.equal(api.butacas.find((b) => b.id === 'M1-N1').grupo.completa, false);
+});
+
+test('en una mesa completa se eligen y se sueltan todos sus lugares libres a la vez', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  // M3 completa, con un lugar bloqueado: se vende con los otros tres.
+  api.generarPlano('mixta-ambos', { ...api.marcarMesaCompleta(plano, 'M3', true), bloqueadas: ['M3-S2'] });
+  const ids = new Set();
+  const lugar = (id) => api.butacas.find((b) => b.id === id);
+  assert.equal(api.alternarEleccion(ids, lugar('M3-N1'), api.butacas), true);
+  assert.deepEqual([...ids], ['M3-N1', 'M3-N2', 'M3-S1']);
+  // Tocar otro de sus lugares la suelta entera.
+  assert.equal(api.alternarEleccion(ids, lugar('M3-S1'), api.butacas), false);
+  assert.equal(ids.size, 0);
+  // Un lugar bloqueado no se puede tocar; una mesa por lugares elige de uno en uno.
+  assert.equal(api.alternarEleccion(ids, lugar('M3-S2'), api.butacas), null);
+  assert.equal(api.alternarEleccion(ids, lugar('M1-N1'), api.butacas), true);
+  assert.deepEqual([...ids], ['M1-N1']);
+});
+
+test('una mesa completa con algun lugar ocupado se vendio entera', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  // La plantilla tiene dos lugares ocupados en M2 (S1 y S2).
+  api.generarPlano('mixta-ambos', api.marcarMesaCompleta(plano, 'M2', true));
+  assert.deepEqual(api.butacas.filter((b) => b.grupo && b.grupo.id === 'M2').map((b) => b.estado),
+    ['ocupada', 'ocupada', 'ocupada', 'ocupada']);
+  assert.equal(api.alternarEleccion(new Set(), api.butacas.find((b) => b.id === 'M2-N1'), api.butacas), null);
+  // Por lugares, siguen libres los que no se vendieron.
+  api.generarPlano('mixta-ambos', plano);
+  assert.equal(api.butacas.find((b) => b.id === 'M2-N1').estado, 'libre');
+});
+
+test('al marcar una mesa completa, una seleccion parcial se completa', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  api.generarPlano('mixta-ambos', api.marcarMesaCompleta(plano, 'M1', true));
+  const ids = new Set(['M1-N1', 'luneta-A1']);
+  assert.deepEqual(api.completarMesasElegidas(ids, api.butacas), ['Mesa 1']);
+  assert.deepEqual([...ids].sort(), ['M1-N1', 'M1-N2', 'M1-S1', 'M1-S2', 'luneta-A1']);
+  assert.deepEqual(api.completarMesasElegidas(ids, api.butacas), []);   // ya estaba completa
+});
+
+test('los mapas guardan y validan las mesas completas', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const conCompletas = { ...api.marcarMesaCompleta(plano, 'M3', true),
+    mesas: [...api.marcarMesaCompleta(plano, 'M3', true).mesas,
+            { id: 'M7', tipo: 'redonda', x: 1, y: 14, lugares: 8, giro: 0, completa: true }], siguiente: 8 };
+  const sala = api.generarPlano('mixta-ambos', conCompletas);
+  const extraido = api.planoDesdeSala('mixta-ambos', sala);
+  assert.deepEqual(extraido.mesas.filter((m) => m.completa).map((m) => m.id), ['M3', 'M7']);
+  assert.equal('completa' in extraido.mesas[0], false);
+  const mapa = JSON.parse(JSON.stringify(api.mapaDesdePlano('Completas', extraido, null)));
+  const { mapa: leido, errores } = api.validarMapa(mapa);
+  assert.equal(errores, undefined);
+  assert.deepEqual(leido.mesas.filter((m) => m.completa).map((m) => m.id), ['M3', 'M7']);
+  const con = (cambio) => { const m = JSON.parse(JSON.stringify(mapa)); cambio(m); return api.validarMapa(m).errores || []; };
+  assert.ok(con((m) => { m.mesas[0].completa = 'si'; }).includes('M1: completa debe ser true o false'));
 });

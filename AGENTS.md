@@ -105,6 +105,10 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   la columna `numero`.
 - **Una mesa nunca queda partida por un pasillo**, ni en el reparto automático ni en el editor:
   `motivoNoCabe` lo decide con `esMesa` (sin `tipo`, o `tipo: 'redonda'`).
+- **Mesa completa (`completa: true`)**: sus lugares llevan `grupo.completa`. Elegir pasa siempre por
+  `alternarEleccion` (todos sus lugares libres a la vez), y `completarMesasElegidas` corrige las
+  selecciones parciales al regenerar. El precio no se guarda: es la suma de los lugares libres, cada
+  uno al de su zona. En `generarPlano`, si un lugar está ocupado, los demás libres pasan a ocupados.
 - **Una mesa redonda solo guarda sus lugares** (un número par de 2 a 16); el diámetro sale de
   `diametroRedonda` (los lugares entre cuatro, hacia arriba) y las sillas van por parejas en cada
   lado, sin esquinas (`ladosDeRedonda`, `geometriaMesaRedonda`). `cambiarLugaresRedonda` recibe pasos
