@@ -427,7 +427,7 @@
           <button type="button" class="icono" id="agregar-barra" aria-label="Un lado: mesa de largo 4 con lugares en un solo lado" data-tooltip="Mesa de un lado"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mesa-un-lado"></use></svg></button>
           <button type="button" class="icono" id="agregar-redonda" aria-label="Mesa redonda: 8 lugares alrededor" data-tooltip="Mesa redonda"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mesa-redonda"></use></svg></button>
     <button type="button" class="icono" id="agregar-bloque" aria-label="Bloque de filas: 5 butacas por fila y 2 filas" data-tooltip="Bloque de filas"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-bloque"></use></svg></button>
-          <button type="button" class="icono" id="agregar-butaca" aria-label="Butaca suelta: una butaca de la zona General" data-tooltip="Butaca suelta"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-butaca"></use></svg></button>
+          <button type="button" class="icono" id="agregar-butaca" aria-label="Butaca suelta: una butaca con la zona de su banda" data-tooltip="Butaca suelta"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-butaca"></use></svg></button>
           <button type="button" class="icono" id="agregar-pista" aria-label="Pista de baile: 4 × 4 celdas" data-tooltip="Pista de baile"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-pista"></use></svg></button>
           <button type="button" class="icono" id="agregar-forma-barra" aria-label="Barra: 4 × 1 celdas" data-tooltip="Barra"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-barra"></use></svg></button>
         </div>
@@ -646,8 +646,9 @@
             <button type="button" class="icono" id="agregar-zona" aria-label="Agregar una zona" data-tooltip="Agregar zona"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar-zona"></use></svg></button>
           </div>
           <p class="pista">
-            Precio por lugar, en pesos. Las filas, bloques y butacas sueltas eligen su zona; los lugares de
-            mesa son siempre de la zona de mesas. Una zona en uso no se puede eliminar.
+            Precio por lugar, en pesos. Cada banda le da su zona a lo que cae dentro: mesas, bloques y
+            butacas sueltas. En «Pieza seleccionada» puedes darle a una su propia zona, y con el pincel,
+            a una butaca. Una zona en uso no se puede eliminar.
           </p>
       </details>
       <details class="grupo" open>
@@ -828,6 +829,12 @@ const zonasDe = (plano) => (plano && plano.zonas) || ZONAS_POR_DEFECTO;
 // la primera que no sea la de mesas.
 const zonaParaFilas = (lista) => (lista.some((z) => z.id === 'general') ? 'general'
   : (lista.find((z) => z.id !== 'mesas') || {}).id);
+// La zona de una banda de mesas que no lleva la suya: la de mesas si existe. Se lee del
+// indice, no de una lista, porque la usa disponerBandas al colocar el arbol.
+const zonaDeMesasActual = () => (zonas.mesas ? 'mesas' : Object.keys(zonas)[0] || null);
+// La zona efectiva de una banda: la suya y, en una zona de mesas sin zona propia, la de
+// mesas. Es la que heredan las piezas que caen dentro (ver zonaEnCelda).
+const zonaDeBanda = (banda) => banda.zona || (banda.tipo === 'mesas' ? zonaDeMesasActual() : null);
 
 // Butacas. 'id' es estable: no cambia al mover piezas, y es lo que usan la
 // seleccion, las reservas y las bloqueadas. 'fila', 'numero' y 'seccion' son la
@@ -950,6 +957,17 @@ function ubicar(bandas, id, padre = null) {
   return null;
 }
 
+// Todos los nodos del arbol: bandas, franjas y verticales. Las hojas no bastan cuando
+// lo que se busca (una zona, por ejemplo) puede estar en cualquier nivel.
+function nodosDeBandas(bandas) {
+  const todos = [];
+  for (const b of bandas) {
+    todos.push(b);
+    for (const v of b.verticales || []) todos.push(v, ...nodosDeBandas(v.bandas));
+  }
+  return todos;
+}
+
 // Los ids de una banda o vertical y de todo lo que tiene dentro.
 function idsDentro(item) {
   const ids = [item.id, item.id + ':resto'];
@@ -981,6 +999,7 @@ function disponerBandas(bandas, anchoSala) {
     let cursor = y;
     const colocadas = lista.map((banda) => {
       const colocada = { ...banda, nombre: nombreDe(banda), nombrePropio: banda.nombre || null,
+                         zona: zonaDeBanda(banda), zonaPropia: banda.zona || null,
                          x, y: cursor, anchoOcupado: ancho, profundidad };
       if (esDivision(banda)) {
         const n = banda.verticales.length;
@@ -991,6 +1010,7 @@ function disponerBandas(bandas, anchoSala) {
           const w = i < n - 1 ? v.ancho : Math.max(1, resto);
           const interior = pila(v.bandas, vx, cursor, w, profundidad + 2);
           const colV = { ...v, nombre: v.nombre || 'Vertical ' + (i + 1), nombrePropio: v.nombre || null,
+                         zona: v.zona || null, zonaPropia: v.zona || null,
                          x: vx, y: cursor, anchoOcupado: w,
                          profundidad: profundidad + 1, bandas: interior.colocadas, altoPila: interior.alto };
           vx += w;
@@ -999,7 +1019,7 @@ function disponerBandas(bandas, anchoSala) {
         colocada.alto = Math.max(1, ...colocada.verticales.map((v) => v.altoPila));
         for (const v of colocada.verticales) {
           v.alto = colocada.alto;
-          regiones.push({ id: v.id, tipo: 'vertical', x: v.x, y: v.y, ancho: v.anchoOcupado, alto: v.alto, profundidad: v.profundidad });
+          regiones.push({ id: v.id, tipo: 'vertical', zona: v.zona, x: v.x, y: v.y, ancho: v.anchoOcupado, alto: v.alto, profundidad: v.profundidad });
           if (v.altoPila < v.alto) {
             regiones.push({ id: v.id + ':resto', tipo: 'resto', x: v.x, y: v.y + v.altoPila, ancho: v.anchoOcupado,
                             alto: v.alto - v.altoPila, profundidad: v.profundidad + 1 });
@@ -1008,7 +1028,7 @@ function disponerBandas(bandas, anchoSala) {
       } else {
         colocada.alto = altoDeBanda(banda);
       }
-      regiones.push({ id: banda.id, tipo: 'banda', x, y: cursor, ancho, alto: colocada.alto, profundidad });
+      regiones.push({ id: banda.id, tipo: 'banda', zona: colocada.zona, x, y: cursor, ancho, alto: colocada.alto, profundidad });
       cursor += colocada.alto;
       return colocada;
     });
@@ -1016,6 +1036,20 @@ function disponerBandas(bandas, anchoSala) {
   };
   const { colocadas, alto } = pila(bandas, 1, 0, anchoSala, 0);
   return { colocadas, regiones, alto, error };
+}
+
+// La zona que se hereda en una celda: la de la banda mas interna que la cubre y
+// tiene zona, o null si ninguna la tiene (una mesa sobre un espacio sin precio).
+// Es lo que hace que todo lo que cae dentro de una banda cueste lo que ella.
+// Gana la mas profunda, no la primera: el orden de 'regiones' es cosa de
+// disponerBandas y no debe decidir el precio de nadie.
+function zonaEnCelda(sala, x, y) {
+  let mejor = null;
+  for (const r of sala.regiones) {
+    if (!r.zona || x < r.x || x >= r.x + r.ancho || y < r.y || y >= r.y + r.alto) continue;
+    if (!mejor || r.profundidad > mejor.profundidad) mejor = r;
+  }
+  return mejor && mejor.zona;
 }
 
 // Las columnas de la sala que caen en el tramo de una banda colocada.
@@ -1248,6 +1282,8 @@ const configDeMesa = (mesa) => ({
     : { id: mesa.id, x: mesa.x, y: mesa.y, largo: mesa.largo, cabeceras: mesa.cabeceras,
         unLado: mesa.unLado, giro: mesa.giro }),
   ...(mesa.completa ? { completa: true } : {}),
+  // Solo la zona puesta a mano se guarda: sin ella, la mesa hereda la de su banda.
+  ...(mesa.zona ? { zona: mesa.zona } : {}),
 });
 const mesas = [];     // {id, nombre, x, y, largo, cabeceras, unLado, giro, geo}
 
@@ -1286,11 +1322,13 @@ function girar90({ ancho, alto, tablero, lugares, redonda }) {
   };
 }
 
-function agregarMesa(config, ocupadas = []) {
+// 'zona' es la que acaban teniendo sus lugares: la propia de la mesa si la lleva, o
+// la que hereda de su banda (la resuelve generarPlano).
+function agregarMesa(config, ocupadas = [], zona = zonaDeMesasActual()) {
   const { id, x, y } = config;
   const nombre = 'Mesa ' + id.slice(1);
   const geo = esMesaRedonda(config) ? geometriaMesaRedonda(config) : geometriaMesa(config);
-  mesas.push({ ...config, nombre, geo });
+  mesas.push({ ...config, nombre, zonaEfectiva: zona, geo });
   if (geo.redonda) {
     muebles.push({ tipo: 'mesa-redonda', mesa: id, x: x + geo.redonda.dx, y: y + geo.redonda.dy,
                    w: geo.redonda.diametro, h: geo.redonda.diametro, texto: nombre, numero: id.slice(1) });
@@ -1301,7 +1339,7 @@ function agregarMesa(config, ocupadas = []) {
   geo.lugares.forEach((l, i) => {
     butacas.push({
       id: id + '-' + l.lado, fila: id, numero: i + 1, x: x + l.dx, y: y + l.dy, mira: l.mira,
-      zona: 'mesas', grupo: { id, nombre, completa: Boolean(config.completa) },
+      zona, grupo: { id, nombre, completa: Boolean(config.completa) },
       estado: ocupadas.includes(l.lado) ? 'ocupada' : 'libre',
     });
   });
@@ -1386,26 +1424,26 @@ const configDeForma = ({ id, forma, x, y, ancho, alto, nombrePropio }) =>
 const butacasSueltas = [];   // {id, tipo: 'butaca', x, y, zona, giro, nombre, geo}
 const esButacaSuelta = (pieza) => Boolean(pieza) && pieza.tipo === 'butaca';
 
-function agregarButacaSuelta(config) {
+function agregarButacaSuelta(config, zona = config.zona) {
   const geo = huellaDe(config);
-  butacasSueltas.push({ ...config, nombre: 'Butaca suelta ' + config.id.slice(1), geo });
+  butacasSueltas.push({ ...config, nombre: 'Butaca suelta ' + config.id.slice(1), zonaEfectiva: zona, geo });
   butacas.push({ id: config.id, fila: 'A', numero: 1, suelta: config.id, x: config.x, y: config.y,
-                 mira: geo.lugares[0].mira, zona: config.zona, grupo: null, estado: 'libre' });
+                 mira: geo.lugares[0].mira, zona, grupo: null, estado: 'libre' });
 }
 
-const configDeButaca = ({ id, x, y, zona, giro }) => ({ id, tipo: 'butaca', x, y, zona, giro });
+const configDeButaca = ({ id, x, y, zona, giro }) => ({ id, tipo: 'butaca', x, y, giro, ...(zona ? { zona } : {}) });
 
-function agregarBloqueFilas(config) {
+function agregarBloqueFilas(config, zona = config.zona) {
   const geo = geometriaBloqueFilas(config);
   const nombre = config.nombre || 'Bloque ' + config.id.slice(1);
-  bloquesFilas.push({ ...config, nombre, nombrePropio: config.nombre || null, geo });
+  bloquesFilas.push({ ...config, nombre, nombrePropio: config.nombre || null, zonaEfectiva: zona, geo });
   for (const l of geo.lugares) {
     butacas.push({
       id: config.id + '-' + (l.fila + 1) + '-' + (l.columna + 1),
       fila: LETRAS[l.fila], numero: l.columna + 1, seccion: nombre,
       bloque: config.id, filaLocal: l.fila, numeroLocal: l.columna + 1,
       x: config.x + l.dx, y: config.y + l.dy, mira: l.mira,
-      zona: config.zona, grupo: null, estado: 'libre',
+      zona, grupo: null, estado: 'libre',
     });
   }
 }
@@ -1593,7 +1631,8 @@ function generarPlano(tipo, plano = null) {
 
   // Zonas: las del plano, las del mapa o las de siempre. Antes de disponer las bandas,
   // que toman de ellas su nombre por defecto.
-  usarZonas((plano && plano.zonas) || definicion.zonas || ZONAS_POR_DEFECTO);
+  const listaDeZonas = (plano && plano.zonas) || definicion.zonas || ZONAS_POR_DEFECTO;
+  usarZonas(listaDeZonas);
 
   // Las bandas se apilan: cada una empieza donde acaba la anterior. Las que no
   // traen nombre toman el de su zona, numerado si se repite: General, General 2.
@@ -1627,15 +1666,24 @@ function generarPlano(tipo, plano = null) {
   // Las filas de las bandas miran hacia donde este el escenario.
   for (const b of butacas) if (b.banda) b.mira = miraHaciaEscenario(b.y);
 
+  // El precio de una pieza: el de su zona propia si la lleva, el de la banda que la
+  // contiene, o el de las filas como ultimo recurso (una pieza fuera de toda zona; el
+  // editor obliga a elegirle una, ver zonasObligatorias).
+  const respaldo = zonaParaFilas(listaDeZonas);
+  const zonaDePieza = (config) => (zonas[config.zona] && config.zona) ||
+    zonaEnCelda(sala, config.x, config.y) || respaldo;
+
   const ocupadasDeMesas = definicion.mesasOcupadas || {};
   for (const config of plano ? plano.mesas : definicion.mesas || mesasAutomaticas(sala)) {
-    agregarMesa(config, ocupadasDeMesas[config.id]);
+    agregarMesa(config, ocupadasDeMesas[config.id], zonaDePieza(config));
   }
   for (const config of (plano && plano.bloquesFilas) || definicion.bloquesFilas || []) {
-    agregarBloqueFilas(config);
+    agregarBloqueFilas(config, zonaDePieza(config));
   }
   for (const config of (plano && plano.formas) || definicion.formas || []) agregarForma(config);
-  for (const config of (plano && plano.butacasSueltas) || definicion.butacasSueltas || []) agregarButacaSuelta(config);
+  for (const config of (plano && plano.butacasSueltas) || definicion.butacasSueltas || []) {
+    agregarButacaSuelta(config, zonaDePieza(config));
+  }
 
   // Bloqueadas: la lista del plano o del mapa manda; si no hay, las de las bandas.
   const bloqueadas = new Set((plano && plano.bloqueadas) || definicion.bloqueadas ||
@@ -1979,14 +2027,16 @@ function planoDesdeSala(tipo, sala) {
   const definicion = typeof tipo === 'string' ? TIPOS_DE_SALA[tipo] : tipo;
   // Quita lo calculado al disponer (posicion, alto calculado, nombre por defecto).
   const limpiar = (lista) => lista.map(({ x, y, alto, anchoOcupado, profundidad, altoPila, nombre, nombrePropio,
-                                          bloqueadasAlFinal, verticales, ...banda }) => ({
+                                          zona, zonaPropia, bloqueadasAlFinal, verticales, ...banda }) => ({
     ...banda,
     ...(tieneAlto(banda) ? { alto } : {}),
     ...(nombrePropio ? { nombre: nombrePropio } : {}),
+    // Solo la zona puesta a mano: la de una zona de mesas sin zona propia se calcula.
+    ...(zonaPropia ? { zona: zonaPropia } : {}),
     ...(verticales ? {
       verticales: verticales.map(({ x: _x, y: _y, alto: _a, anchoOcupado: _w, profundidad: _p, altoPila: _h,
-                                   nombre: _n, nombrePropio: propioV, bandas, ...v }) => ({
-        ...v, ...(propioV ? { nombre: propioV } : {}), bandas: limpiar(bandas),
+                                   nombre: _n, nombrePropio: propioV, zona: _z, zonaPropia: propiaV, bandas, ...v }) => ({
+        ...v, ...(propioV ? { nombre: propioV } : {}), ...(propiaV ? { zona: propiaV } : {}), bandas: limpiar(bandas),
       })),
     } : {}),
   }));
@@ -2053,7 +2103,8 @@ function cambiarAnchoLienzo(plano, sala, ancho) {
 
 // La configuracion guardable de un bloque: sin geometria ni nombre por defecto.
 const configDeBloque = ({ id, x, y, ancho, filas, zona, giro, nombrePropio }) =>
-  ({ id, tipo: 'filas', x, y, ancho, filas, zona, giro, ...(nombrePropio ? { nombre: nombrePropio } : {}) });
+  ({ id, tipo: 'filas', x, y, ancho, filas, giro, ...(zona ? { zona } : {}),
+     ...(nombrePropio ? { nombre: nombrePropio } : {}) });
 
 // Bloquea o desbloquea una butaca por id. Es parte del diseño del recinto (una
 // butaca sin visibilidad), no de la venta: por eso se guarda con el mapa.
@@ -2081,7 +2132,7 @@ function alternarBloqueada(plano, id) {
 // bandas de tipo 'espacio' (con 'guias') y el escenario ya no es banda obligatoria.
 // ---------------------------------------------------------------------------
 const FORMATO_MAPA = 'selector-asientos/mapa';
-const VERSION_MAPA = 3;
+const VERSION_MAPA = 4;
 const PASILLOS_VALIDOS = ['ninguno', 'izquierda', 'derecha', 'ambos'];
 const GRUPO_MAPAS = 'Mis mapas';
 const claveDeMapa = (nombre) => 'mapa:' + nombre;
@@ -2147,7 +2198,7 @@ function nombreDeArchivo(nombre) {
 function validarMapa(dato) {
   if (!dato || typeof dato !== 'object' || Array.isArray(dato)) return { errores: ['el archivo no contiene un mapa'] };
   if (dato.formato !== FORMATO_MAPA) return { errores: ['no es un mapa de este selector de asientos'] };
-  if (![1, 2, VERSION_MAPA].includes(dato.version)) {
+  if (![1, 2, 3, VERSION_MAPA].includes(dato.version)) {
     return { errores: ['versión de mapa no compatible (' + dato.version + ')'] };
   }
   const errores = [];
@@ -2195,6 +2246,10 @@ function validarMapa(dato) {
   }
   const idsZona = new Set(zonasLimpias.map((z) => z.id));
   const zonaDeFilas = (zona) => zona !== 'mesas' && idsZona.has(zona);
+  // Desde la version 4, una mesa, un bloque, una butaca suelta o una banda que no es de
+  // filas pueden no traer zona: heredan la de la banda que las contiene. Si la traen,
+  // tiene que ser una zona del mapa.
+  const zonaHeredable = (zona) => zona === undefined || idsZona.has(zona);
   usarZonas(zonasLimpias);   // disponerBandas toma de aqui los nombres por defecto
 
   const bandasDato = Array.isArray(dato.bandas) ? dato.bandas : [];
@@ -2224,12 +2279,16 @@ function validarMapa(dato) {
     } else if (b.tipo === 'mesas' || (b.tipo === 'espacio' && dato.version >= 3)) {
       if (!esEntero(b.alto, 1, ALTO_MAXIMO)) errores.push(donde + ': alto fuera de rango');
       limpia.alto = b.alto;
+      if (!zonaHeredable(b.zona)) errores.push(donde + ': zona desconocida');
+      else if (b.zona !== undefined) limpia.zona = b.zona;
       if (b.tipo === 'espacio' && b.guias === true) limpia.guias = true;
     } else if (b.tipo === 'division' && !enVertical) {
       const verticales = Array.isArray(b.verticales) ? b.verticales : [];
       if (verticales.length < 1 || verticales.length > VERTICALES_MAXIMAS) {
         errores.push(donde + ': debe tener de 1 a ' + VERTICALES_MAXIMAS + ' bandas verticales');
       }
+      if (!zonaHeredable(b.zona)) errores.push(donde + ': zona desconocida');
+      else if (b.zona !== undefined) limpia.zona = b.zona;
       limpia.verticales = verticales.map((v, k) => {
         const dondeV = donde + ', vertical ' + (k + 1);
         if (!v || !idValido(v.id)) {
@@ -2239,6 +2298,8 @@ function validarMapa(dato) {
         idsBanda.add(v.id);
         const limpiaV = { id: v.id };
         if (typeof v.nombre === 'string' && v.nombre.trim()) limpiaV.nombre = v.nombre.trim().slice(0, 40);
+        if (!zonaHeredable(v.zona)) errores.push(dondeV + ': zona desconocida');
+        else if (v.zona !== undefined) limpiaV.zona = v.zona;
         if (k < verticales.length - 1) {
           if (!esEntero(v.ancho, 1, ANCHO_MAXIMO)) errores.push(dondeV + ': ancho fuera de rango');
           limpiaV.ancho = v.ancho;
@@ -2277,20 +2338,23 @@ function validarMapa(dato) {
     if (![0, 90, 180, 270].includes(m.giro)) errores.push(m.id + ': giro no válido');
     if (m.completa !== undefined && typeof m.completa !== 'boolean') errores.push(m.id + ': completa debe ser true o false');
     const completa = m.completa === true ? { completa: true } : {};
+    // Sin zona propia, los lugares de la mesa heredan la de su banda.
+    if (!zonaHeredable(m.zona)) errores.push(m.id + ': zona desconocida');
+    const zonaPropia = zonaHeredable(m.zona) && m.zona !== undefined ? { zona: m.zona } : {};
     // Mesa redonda: solo lugares. Las rectangulares no llevan 'tipo' (mapas anteriores).
     if (m.tipo === 'redonda') {
       if (!esEntero(m.lugares, LUGARES_MINIMOS_REDONDA, LUGARES_MAXIMOS_REDONDA) || m.lugares % 2) {
         errores.push(m.id + ': los lugares de una mesa redonda deben ser un número par de ' +
                      LUGARES_MINIMOS_REDONDA + ' a ' + LUGARES_MAXIMOS_REDONDA);
       }
-      return { id: m.id, tipo: 'redonda', x: m.x, y: m.y, lugares: m.lugares, giro: m.giro, ...completa };
+      return { id: m.id, tipo: 'redonda', x: m.x, y: m.y, lugares: m.lugares, giro: m.giro, ...completa, ...zonaPropia };
     }
     if (m.tipo !== undefined) errores.push(m.id + ': tipo de mesa desconocido');
     if (!esEntero(m.largo, 1, LARGO_MAXIMO)) errores.push(m.id + ': largo fuera de rango');
     if (typeof m.cabeceras !== 'boolean' || typeof m.unLado !== 'boolean') {
       errores.push(m.id + ': cabeceras y unLado deben ser true o false');
     }
-    return { id: m.id, x: m.x, y: m.y, largo: m.largo, cabeceras: m.cabeceras, unLado: m.unLado, giro: m.giro, ...completa };
+    return { id: m.id, x: m.x, y: m.y, largo: m.largo, cabeceras: m.cabeceras, unLado: m.unLado, giro: m.giro, ...completa, ...zonaPropia };
   });
 
   // Bloques de filas: opcionales (los mapas anteriores no los tienen).
@@ -2306,9 +2370,10 @@ function validarMapa(dato) {
     if (!esEntero(b.x, 0, 999) || !esEntero(b.y, 0, 999)) errores.push(b.id + ': posición no válida');
     if (!esEntero(b.ancho, 1, ANCHO_BLOQUE_MAXIMO)) errores.push(b.id + ': butacas por fila fuera de rango');
     if (!esEntero(b.filas, 1, FILAS_MAXIMAS)) errores.push(b.id + ': número de filas fuera de rango');
-    if (!zonaDeFilas(b.zona)) errores.push(b.id + ': zona desconocida');
+    if (b.zona !== undefined && !zonaDeFilas(b.zona)) errores.push(b.id + ': zona desconocida');
     if (![0, 90, 180, 270].includes(b.giro)) errores.push(b.id + ': giro no válido');
-    const limpio = { id: b.id, tipo: 'filas', x: b.x, y: b.y, ancho: b.ancho, filas: b.filas, zona: b.zona, giro: b.giro };
+    const limpio = { id: b.id, tipo: 'filas', x: b.x, y: b.y, ancho: b.ancho, filas: b.filas, giro: b.giro,
+                     ...(b.zona !== undefined ? { zona: b.zona } : {}) };
     if (typeof b.nombre === 'string' && b.nombre.trim()) limpio.nombre = b.nombre.trim().slice(0, 40);
     return limpio;
   });
@@ -2344,9 +2409,9 @@ function validarMapa(dato) {
     }
     idsButaca.add(b.id);
     if (!esEntero(b.x, 0, 999) || !esEntero(b.y, 0, 999)) errores.push(b.id + ': posición no válida');
-    if (!zonaDeFilas(b.zona)) errores.push(b.id + ': zona desconocida');
+    if (b.zona !== undefined && !zonaDeFilas(b.zona)) errores.push(b.id + ': zona desconocida');
     if (![0, 90, 180, 270].includes(b.giro)) errores.push(b.id + ': giro no válido');
-    return { id: b.id, tipo: 'butaca', x: b.x, y: b.y, zona: b.zona, giro: b.giro };
+    return { id: b.id, tipo: 'butaca', x: b.x, y: b.y, giro: b.giro, ...(b.zona !== undefined ? { zona: b.zona } : {}) };
   });
 
   // Escenario: opcional (sin el, la franja de la banda «escenario» a todo el ancho;
@@ -2626,10 +2691,12 @@ function duplicarBanda(plano, sala, id) {
 // ---------------------------------------------------------------------------
 // Zonas editables. Devuelven un plano nuevo o { motivo }.
 // ---------------------------------------------------------------------------
-// Cuantas veces usan una zona las filas de bandas, los bloques y las butacas sueltas.
+// Cuantas veces usan una zona las bandas y las piezas con zona propia. Una pieza que
+// hereda no cuenta: su zona ya la sujeta la banda.
 function usosDeZona(plano, id) {
-  const bandas = hojasDe(plano.bandas).filter((b) => b.tipo === 'filas' && b.zona === id).length;
-  const piezas = [...(plano.bloquesFilas || []), ...(plano.butacasSueltas || [])].filter((p) => p.zona === id).length;
+  const bandas = nodosDeBandas(plano.bandas).filter((b) => zonaDeBanda(b) === id).length;
+  const piezas = [...(plano.mesas || []), ...(plano.bloquesFilas || []), ...(plano.butacasSueltas || [])]
+    .filter((p) => p.zona === id).length;
   const asientos = Object.values(plano.zonasDeAsiento || {}).filter((z) => z === id).length;
   return bandas + piezas + asientos;
 }
@@ -2681,6 +2748,28 @@ function eliminarZona(plano, id) {
   const nuevo = copiarPlano(plano);
   nuevo.zonas = copiarZonas(lista.filter((z) => z.id !== id));
   return nuevo;
+}
+
+// Una pieza con butacas que cae fuera de toda banda con zona se queda sin precio de
+// quien heredar, asi que se le escribe el suyo: el editor no guarda una pieza sin zona.
+// Devuelve { plano, fijadas } con los ids a los que hubo que ponersela (el plano es el
+// mismo objeto si no hizo falta ninguna).
+const LISTAS_CON_BUTACAS = ['mesas', 'bloquesFilas', 'butacasSueltas'];
+function fijarZonasSueltas(plano, sala) {
+  const fijadas = [];
+  for (const lista of LISTAS_CON_BUTACAS) {
+    for (const pieza of plano[lista] || []) {
+      if (zonas[pieza.zona] || zonaEnCelda(sala, pieza.x, pieza.y)) continue;
+      fijadas.push(pieza.id);
+    }
+  }
+  if (!fijadas.length) return { plano, fijadas };
+  const zona = zonaParaFilas(zonasDe(plano));
+  const nuevo = copiarPlano(plano);
+  for (const lista of LISTAS_CON_BUTACAS) {
+    for (const pieza of nuevo[lista] || []) if (fijadas.includes(pieza.id)) pieza.zona = zona;
+  }
+  return { plano: nuevo, fijadas, zona };
 }
 
 // Lee un precio escrito en pesos («350», «350.50», «$1,200.00») y lo da en centavos, o null.
@@ -2825,7 +2914,9 @@ const capaRotuloSeleccion = document.getElementById('rotulo-seleccion');
 const formatoDinero = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 const dinero = (centavos) => formatoDinero.format(centavos / 100);
 const porId = new Map();   // id -> butaca, para no recorrer la lista en cada interaccion
-const zonaDeLugar = (b) => (b.zona !== 'mesas' && zonas[b.zona] ? ', ' + zonas[b.zona].nombre : '');
+// El lugar de una mesa dice su zona: es la que le da precio, la herede de su banda o
+// se la hayan puesto a mano.
+const zonaDeLugar = (b) => (zonas[b.zona] ? ', ' + zonas[b.zona].nombre : '');
 const etiquetaDe = (b) => (b.grupo && b.grupo.completa ? b.grupo.nombre + ', mesa completa, lugar ' + b.numero + zonaDeLugar(b)
   : b.grupo ? b.grupo.nombre + ', lugar ' + b.numero + zonaDeLugar(b)
                                    : b.seccion + ', fila ' + b.fila + ', butaca ' + b.numero);
@@ -3036,9 +3127,9 @@ const etiquetaPieza = (m) => (esEscenario(m)
   : esForma(m)
   ? m.nombre + ', ' + FORMAS[m.forma].nombre.toLowerCase() + ' de ' + m.ancho + ' × ' + m.alto + ' celdas'
   : esButacaSuelta(m)
-  ? m.nombre + ', zona ' + zonas[m.zona].nombre + (m.giro ? ', girada ' + m.giro + '°' : '')
+  ? m.nombre + ', zona ' + zonas[m.zonaEfectiva].nombre + (m.giro ? ', girada ' + m.giro + '°' : '')
   : esBloqueFilas(m)
-  ? m.nombre + ', bloque de ' + m.filas + ' × ' + m.ancho + ' butacas, zona ' + zonas[m.zona].nombre +
+  ? m.nombre + ', bloque de ' + m.filas + ' × ' + m.ancho + ' butacas, zona ' + zonas[m.zonaEfectiva].nombre +
     (m.giro ? ', girado ' + m.giro + '°' : '')
   : m.nombre + ', ' + m.geo.lugares.length + ' lugares' +
     (m.giro ? ', girada ' + m.giro + '°' : '') + (m.cabeceras ? ', con cabeceras' : '') +
@@ -3084,10 +3175,17 @@ function dibujarTodo() {
 const listaBandas = document.getElementById('lista-bandas');
 
 // Las zonas que pueden llevar filas (todas menos la de mesas), con su precio.
-function llenarZonasDeFilas(select, actual) {
+// 'heredada' es la zona que la pieza tomaria de su banda: con ella, la primera opcion
+// es heredarla, que es como nacen las piezas. Sin ella (una pieza fuera de toda banda
+// con zona) hay que elegir una: el plano nunca guarda una butaca sin precio.
+function llenarZonasDeFilas(select, actual, { heredada = null, conMesas = false } = {}) {
   select.textContent = '';
+  if (heredada && zonas[heredada]) {
+    select.appendChild(new Option('Hereda: ' + zonas[heredada].nombre + ' · ' + dinero(zonas[heredada].precio),
+                                  '', false, !actual));
+  }
   for (const [id, { nombre, precio }] of Object.entries(zonas)) {
-    if (id !== 'mesas') select.appendChild(new Option(nombre + ' · ' + dinero(precio), id, false, id === actual));
+    if (id !== 'mesas' || conMesas) select.appendChild(new Option(nombre + ' · ' + dinero(precio), id, false, id === actual));
   }
 }
 
@@ -3145,7 +3243,7 @@ function dibujarZonas() {
   const activo = document.activeElement;
   const foco = listaZonas.contains(activo) ? { op: activo.dataset.op, zona: activo.dataset.zona } : null;
   listaZonas.textContent = '';
-  const usadas = { bandas: salaActual.bandas, bloquesFilas, butacasSueltas,
+  const usadas = { bandas: salaActual.bandas, mesas, bloquesFilas, butacasSueltas,
     zonasDeAsiento: Object.fromEntries(butacas.filter((b) => b.zona !== b.zonaOriginal).map((b) => [b.id, b.zona])) };
   for (const [id, { nombre, precio }] of Object.entries(zonas)) {
     const li = document.createElement('li');
@@ -3995,7 +4093,7 @@ const configDePieza = (p) => (esEscenario(p) ? { id: 'escenario', tipo: 'escenar
 const genero = (p) => (esBloqueFilas(p) || esEscenario(p) ? 'o' : 'a');
 const resumenDePieza = (p) => (esEscenario(p) || esForma(p) ? p.ancho + ' × ' + p.alto + ' celdas'
   : esMesaRedonda(p) ? 'redonda, ' + plural(p.lugares, 'lugar', 'lugares')
-  : esButacaSuelta(p) ? 'zona ' + zonas[p.zona].nombre : esBloqueFilas(p)
+  : esButacaSuelta(p) ? 'zona ' + zonas[p.zonaEfectiva].nombre : esBloqueFilas(p)
   ? p.filas + ' × ' + p.ancho + ' butacas'
   : p.geo.lugares.length + ' lugares');
 
@@ -4081,12 +4179,15 @@ function actualizarControles() {
   casilla.disabled = !deMesa;
   casilla.checked = deMesa && Boolean(m.completa);
   document.getElementById('completa-todas').disabled = !deMesa;
-  // Zona: bloques y butacas sueltas. Nombre: bloques y formas. No se pisa lo que se esta escribiendo.
+  // Zona: mesas, bloques y butacas sueltas (lo que tiene butacas). Nombre: bloques y
+  // formas. No se pisa lo que se esta escribiendo.
   const zona = document.getElementById('zona-pieza');
   const nombre = document.getElementById('nombre-pieza');
-  zona.disabled = !(bloque || suelta);
+  const conButacas = Boolean(m) && (bloque || suelta || deMesa);
+  zona.disabled = !conButacas;
   nombre.disabled = !(bloque || forma);
-  llenarZonasDeFilas(zona, bloque || suelta ? m.zona : null);
+  llenarZonasDeFilas(zona, conButacas ? m.zona : null,
+                     { heredada: conButacas ? zonaEnCelda(salaActual, m.x, m.y) : null, conMesas: deMesa });
   if (document.activeElement !== nombre) nombre.value = bloque || forma ? m.nombrePropio || '' : '';
 }
 
@@ -4176,6 +4277,16 @@ const fotoDeButacas = () => butacas.map((b) => ({ id: b.id, estado: b.estado }))
 // 'antes' se puede pasar hecho cuando el plano ya se genero para validarlo.
 function regenerar(mensaje, antes = fotoDeButacas()) {
   salaActual = generarPlano(tipoActual, planos[tipoActual]);
+  // Una pieza que quedo fuera de toda banda con zona no tiene de quien heredar: se le
+  // escribe la suya y se dice, que cambia su precio.
+  let sueltas = { fijadas: [] };
+  if (planos[tipoActual]) {
+    sueltas = fijarZonasSueltas(planos[tipoActual], salaActual);
+    if (sueltas.fijadas.length) {
+      planos[tipoActual] = sueltas.plano;
+      salaActual = generarPlano(tipoActual, sueltas.plano);
+    }
+  }
   const existe = new Set(butacas.map((b) => b.id));
   const { ausentes, noLibres } = conciliarSeleccion(elegidas, butacas);
   const completadas = completarMesasElegidas(elegidas, butacas);
@@ -4194,6 +4305,9 @@ function regenerar(mensaje, antes = fotoDeButacas()) {
     ocupadasQuitadas.length
       ? 'Atención: se quitaron lugares ocupados: ' + ocupadasQuitadas.join(', ') + '.' : '',
     completadas.length ? 'Se venden completas, así que se eligieron todos sus lugares: ' + completadas.join(', ') + '.' : '',
+    sueltas.fijadas.length
+      ? 'Fuera de toda zona, así que se les asignó ' + zonas[sueltas.zona].nombre + ': ' +
+        sueltas.fijadas.join(', ') + '.' : '',
   ].filter(Boolean).join(' ');
 }
 
@@ -4299,7 +4413,8 @@ function agregarMesaNueva(estilo) {
 function agregarBloqueNuevo() {
   const plano = planoEditable();
   const id = 'F' + plano.siguienteBloque;
-  const base = { id, tipo: 'filas', x: 0, y: 0, ancho: 5, filas: 2, zona: 'general', giro: 0 };
+  // Sin zona: hereda la de la banda donde caiga (si no hay, regenerar le pone una).
+  const base = { id, tipo: 'filas', x: 0, y: 0, ancho: 5, filas: 2, giro: 0 };
   // Se busca sitio sin girar, se orienta hacia el escenario desde ahi y se vuelve
   // a buscar con ese giro. Si girado no cabe en ningun sitio, se queda sin girar.
   const ocupadas = celdasOcupadas(null);
@@ -4342,7 +4457,7 @@ function agregarButacaNueva() {
   const plano = planoEditable();
   const tipoDeLista = listaDeId('B1');
   const id = 'B' + (plano.siguienteButaca || 1);
-  const sitio = buscarSitioLibre(salaActual, celdasOcupadas(null), { id, tipo: 'butaca', x: 0, y: 0, zona: 'general', giro: 0 });
+  const sitio = buscarSitioLibre(salaActual, celdasOcupadas(null), { id, tipo: 'butaca', x: 0, y: 0, giro: 0 });
   if (!sitio) {
     anunciar('No hay sitio libre para otra butaca. Haz espacio o agrega un espacio.');
     return;
@@ -4350,7 +4465,10 @@ function agregarButacaNueva() {
   nuevoIdDe(plano, tipoDeLista);
   plano.butacasSueltas = [...(plano.butacasSueltas || []), { ...sitio, giro: giroHaciaEscenario(sitio.x + 0.5, sitio.y + 0.5) }];
   mesaActiva = id;
-  regenerar('Butaca suelta ' + id.slice(1) + ' agregada en columna ' + sitio.x + ', fila ' + sitio.y + ', zona General.');
+  // La zona se dice despues de regenerar: es la que hereda de la banda donde cayo.
+  regenerar('');
+  anunciar('Butaca suelta ' + id.slice(1) + ' agregada en columna ' + sitio.x + ', fila ' + sitio.y +
+           ', zona ' + zonas[piezaPorId(id).zonaEfectiva].nombre + '.');
   asegurarVisible({ x: sitio.x, y: sitio.y });
 }
 
@@ -4415,8 +4533,19 @@ function cambiarDatoDeBloque(cambio, mensaje) {
   reemplazarMesa({ ...configDePieza(b), ...cambio });
   regenerar(mensaje(b));
 }
+// La zona de una pieza con butacas. Vacia es heredar la de su banda: se quita la propia.
 document.getElementById('zona-pieza').addEventListener('change', (e) => {
-  cambiarDatoDeBloque({ zona: e.target.value }, (b) => b.nombre + ' pasa a la zona ' + zonas[e.target.value].nombre + '.');
+  const pieza = piezaPorId(mesaActiva);
+  if (!pieza || esForma(pieza) || esEscenario(pieza)) return;
+  const config = { ...configDePieza(pieza) };
+  if (e.target.value) config.zona = e.target.value;
+  else delete config.zona;
+  reemplazarMesa(config);
+  regenerar('');
+  const despues = piezaPorId(pieza.id);
+  const zona = zonas[e.target.value] || zonas[zonaEnCelda(salaActual, despues.x, despues.y)];
+  anunciar(pieza.nombre + (e.target.value ? ' pasa a la zona ' : ' hereda la zona de su banda: ') +
+           zona.nombre + ', ' + dinero(zona.precio) + '.');
 });
 function aplicarNombreDeBloque() {
   const b = piezaPorId(mesaActiva);

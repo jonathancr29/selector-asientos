@@ -4,9 +4,36 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Hojas de información y pie en una barra
+## Sin publicar — La zona se hereda de la banda
 
-Rama `claude/info-y-pie`.
+Rama `claude/herencia-de-zona`.
+
+### Cambiado
+
+- **Cada banda le da su zona, y con ella su precio, a lo que cae dentro:** mesas, bloques de filas y
+  butacas sueltas. Las zonas de mesas, los espacios, las franjas y las bandas verticales pueden llevar
+  su zona; antes solo las bandas de filas.
+- **Orden de precedencia:** la zona pintada en la butaca, la propia de la pieza, la de la banda más
+  interna que la contiene y, si no hay ninguna, la que el editor le escribe.
+- Los lugares de mesa dejan de estar atados a la zona «Mesas»: toman la de su banda, y una mesa puede
+  llevar la suya desde *Pieza seleccionada*, que ahora también funciona con mesas y ofrece
+  «Hereda: ⟨zona⟩».
+- Una pieza que queda fuera de toda banda con zona recibe la suya y se dice en el aviso: ninguna
+  butaca se guarda sin precio.
+- La etiqueta de un lugar de mesa dice siempre su zona: *«Mesa 1, lugar 2, Luneta»*.
+- Las piezas nuevas (mesa, bloque, butaca suelta) nacen heredando, en vez de nacer en *General*.
+- `usosDeZona` cuenta las bandas por su zona efectiva y las piezas con zona propia, mesas incluidas.
+
+### Formato de mapa
+
+- **Versión 4:** `zona` es opcional en mesas, bloques y butacas sueltas, y las bandas que no son de
+  filas pueden llevarla. Los mapas de la versión 3 se leen igual; sus mesas pasan a heredar la zona de
+  su banda, que es la de mesas.
+
+## 2026-09-18 — PR #25: hojas de información y pie en una barra
+
+[PR #25](https://github.com/jonathancr29/selector-asientos/pull/25), fusionado en `main` con el
+commit `da7e0b6`.
 
 ### Cambiado
 

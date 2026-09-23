@@ -159,7 +159,8 @@ importar y eliminar; en *Columnas*, aplicar (✓); en *Zonas*, eliminar y agrega
 
 - **Nombre:** un campo con el nombre propio de la banda. Vacío, toma el de por defecto.
 - **Zona:** cualquier zona de la sala salvo la de mesas, con su precio. El nombre por defecto sigue a
-  la zona; uno propio se queda.
+  la zona; uno propio se queda. La zona de la banda es también la que heredan las mesas, los bloques y
+  las butacas sueltas que caigan dentro.
 - **↑ / ↓:** sube o baja la banda. Sus piezas viajan con ella.
 - **Duplicar:** crea una copia justo debajo, con todo lo que tiene dentro (ver más abajo).
 - **Eliminar:** quita la banda y las piezas que empiezan dentro de ella; lo de debajo sube.
@@ -181,15 +182,32 @@ Cada sala o mapa tiene **sus propias zonas**: al empezar, *Luneta* ($350), *Mesa
   escrito). El precio es por lugar, en pesos: `350`, `350.50` o `$1,200.00`, de 0 a 1,000,000. Los
   nombres no se repiten.
 - **Agregar zona** crea *Zona N* a $0 y lleva a su nombre. Hasta 20 zonas.
-- **Eliminar** solo se puede con una zona que no use ninguna banda de filas, bloque ni butaca suelta.
+- **Eliminar** solo se puede con una zona que no use ninguna banda ni ninguna pieza con zona propia.
   La zona de mesas no se elimina, y siempre queda al menos una zona para filas.
 - Cada fila muestra cuántos lugares tiene la zona.
 
-Las bandas de filas, los bloques y las butacas sueltas eligen su zona entre todas menos la de mesas;
-los lugares de mesa son siempre de la zona de mesas. Todo lo que muestra la zona usa sus valores
-actuales: la etiqueta de las butacas (*«VIP, fila A, butaca 1»*), el nombre por defecto de las bandas,
-los selectores y el resumen con su total. Las filas nuevas nacen en *General* o, si no existe, en la
-primera zona de filas. **Restablecer sala** vuelve a las tres de siempre.
+Todo lo que muestra la zona usa sus valores actuales: la etiqueta de las butacas (*«VIP, fila A,
+butaca 1»*), el nombre por defecto de las bandas, los selectores y el resumen con su total. Las filas
+nuevas nacen en *General* o, si no existe, en la primera zona de filas. **Restablecer sala** vuelve a
+las tres de siempre.
+
+### La zona se hereda de la banda
+
+**Cada banda le da su zona, y con ella su precio, a todo lo que cae dentro:** mesas, bloques de filas
+y butacas sueltas. Una mesa dentro de la *Zona de mesas* cuesta lo que ella; esa misma banda puesta en
+Luneta hace que sus mesas cuesten lo que la Luneta. Las bandas de filas ya llevaban su zona; ahora
+también pueden llevarla las zonas de mesas, los espacios y las bandas verticales.
+
+De lo más concreto a lo más general, manda:
+
+1. la zona **pintada en esa butaca** (*Asignar zona*, más abajo);
+2. la zona **propia de esa mesa, bloque o butaca suelta**, si se la diste en *Pieza seleccionada*;
+3. la zona de la **banda** que la contiene y, si hay bandas dentro de bandas, la más interna;
+4. si no cae dentro de ninguna banda con zona, el editor le escribe una y lo dice en el aviso: una
+   pieza nunca se guarda sin precio.
+
+En *Pieza seleccionada*, el selector de zona empieza en **«Hereda: ⟨zona de la banda⟩»**; elegir una
+zona concreta la fija y volver a *Hereda* la suelta. Las piezas nuevas nacen heredando.
 
 **Asignar zona a cada asiento.** El botón **Asignar zona** del grupo *Sala* (como *Bloquear butacas*)
 abre un selector con todas las zonas. Eliges una y haces clic en las butacas, o Enter sobre ellas, para
@@ -380,8 +398,8 @@ las mesas»**, que copia el valor de la casilla a todas las mesas del plano.
 - **Mesa completa:** en Previsualizar, un clic en la mesa (el tablero) o en cualquiera de sus lugares
   **elige la mesa y todos sus lugares libres** a la vez; otro clic los suelta. El tablero se marca
   con sus lugares, y el resumen la muestra como *«Mesa 3 · mesa completa, 4 lugares · $2,000.00»*.
-- **Precio:** la suma de sus lugares libres, cada uno al precio de su zona (la de Mesas, salvo que se le
-  asigne otra). Un lugar **bloqueado** no se vende ni se cobra: la mesa se vende con los demás.
+- **Precio:** la suma de sus lugares libres, cada uno al precio de su zona (la que herede de su banda,
+  salvo que la mesa o el lugar lleven otra). Un lugar **bloqueado** no se vende ni se cobra: la mesa se vende con los demás.
 - **Una mesa completa con algún lugar ocupado se vendió entera:** todos sus lugares salen ocupados.
 - **Por lugares** (casilla sin marcar, lo de siempre): cada lugar se elige por separado.
 - Si se marca completa una mesa que tenía solo algunos lugares elegidos, se eligen todos y se avisa.
@@ -513,8 +531,8 @@ rectángulo de butacas que se agrega, arrastra, gira y redimensiona como una mes
  B   ▣ ▣ ▣ ▣ ▣        ▣ ▣
 ```
 
-- **Datos:** `{ id: 'F1', tipo: 'filas', x, y, ancho, filas, zona, giro, nombre? }`. `ancho` son las
-  butacas por fila (1 a 40) y `filas`, las filas (1 a 26).
+- **Datos:** `{ id: 'F1', tipo: 'filas', x, y, ancho, filas, giro, zona?, nombre? }`. Sin `zona` toma
+  la de su banda. `ancho` son las butacas por fila (1 a 40) y `filas`, las filas (1 a 26).
 - **Pasillos:** los pone quien diseña, dejando espacio entre bloques. Un bloque puede ocupar columnas
   que en las bandas son pasillo; una mesa, no.
 - **Choques:** un bloque no puede pisar filas, mesas ni otros bloques. Si no cabe, se explica igual
@@ -555,7 +573,7 @@ cero, por ejemplo un salón de eventos. Al elegirla se abre directamente el modo
   fila, para ubicarse. No son butacas ni se venden.
 - **Escenario:** el botón **Agregar escenario** de la barra lo pone en el primer hueco libre: a todo
   el ancho si cabe, si no de 8 o de 4 columnas. Después se mueve y cambia de tamaño como siempre.
-- **Guardar:** con un nombre, en «Mis mapas», como cualquier mapa (versión 3 del formato).
+- **Guardar:** con un nombre, en «Mis mapas», como cualquier mapa (versión 4 del formato).
 
 ### Butacas sueltas y formas
 
@@ -563,8 +581,8 @@ Tres piezas más en la barra del editor, en cualquier sala (no solo en el mapa e
 en el primer hueco libre, se arrastran o se mueven con flechas, y se duplican (Ctrl+D) y eliminan
 como las demás. Pueden cruzar pasillos.
 
-- **Butaca suelta:** una sola butaca de la zona General, que se crea mirando al escenario. Se gira
-  de 90 en 90 (R) y se cambia de zona con el selector **Zona**. **Se numera con las demás butacas de
+- **Butaca suelta:** una sola butaca, que se crea mirando al escenario y con la zona de su banda. Se
+  gira de 90 en 90 (R) y se le puede dar zona propia con el selector **Zona**. **Se numera con las demás butacas de
   su zona**, por altura y de izquierda a derecha, mire hacia donde mire: junto a un bloque de General
   en la misma fila, puede ser la *General A1* y el bloque seguir en A2. Su id es el de la pieza (`B3`).
 - **Pista de baile** (4 × 4) y **barra** (4 × 1): rectángulos con nombre que ocupan sus celdas, así que
@@ -650,10 +668,15 @@ no se carga. Un archivo de más de **1 MB** no se importa: un mapa real ocupa po
 }
 ```
 
-**Versión 3** (la actual) añade `lienzo` (mapa en blanco, sin pasillos), `escenario: null` (sin
-escenario) y bandas de tipo `espacio` (con `guias`); el escenario ya no tiene que ser la primera
-banda. También guarda `formas` y `butacasSueltas` (listas opcionales) con sus contadores
-`siguienteForma` y `siguienteButaca`. Los mapas de la versión 2 se leen igual que antes.
+**Versión 3** añade `lienzo` (mapa en blanco, sin pasillos), `escenario: null` (sin escenario) y
+bandas de tipo `espacio` (con `guias`); el escenario ya no tiene que ser la primera banda. También
+guarda `formas` y `butacasSueltas` (listas opcionales) con sus contadores `siguienteForma` y
+`siguienteButaca`. Los mapas de la versión 2 se leen igual que antes.
+
+**Versión 4** (la actual) es la de la herencia de zona: `zona` es **opcional** en las mesas, los
+bloques y las butacas sueltas —sin ella heredan la de su banda— y las zonas de mesas, los espacios,
+las franjas y las bandas verticales pueden llevar la suya. Un mapa de la versión 3 se lee igual: como
+sus mesas no traían zona, pasan a heredar la de la banda donde están, que es la de mesas.
 
 Los mapas de la versión 1 (que guardaban `"pasillos": "ambos"`) se siguen leyendo: se convierten a
 bloques y pasillos al cargarlos.
@@ -687,7 +710,7 @@ node --test pruebas.mjs
 
 Cubren la rejilla, el reparto de mesas, el aforo de la tabla anterior, la conciliación de la
 selección al cambiar de sala, los tipos de sala y las bandas, y las reglas del editor: geometría de las mesas, hacia dónde
-mira cada silla, dónde caben, girar, alargar, cabeceras, un solo lado y sitio para mesas nuevas; también el mapa en blanco (lienzo, espacios, guías, escenario opcional y mapas versión 3), butacas sueltas y formas, duplicar piezas y bandas, renombrar bandas, subtítulos y selección de bandas por clic. No hay copia del código: `pruebas.mjs` lee `index.html` y
+mira cada silla, dónde caben, girar, alargar, cabeceras, un solo lado y sitio para mesas nuevas; también el mapa en blanco (lienzo, espacios, guías, escenario opcional y mapas versión 4), butacas sueltas y formas, duplicar piezas y bandas, renombrar bandas, subtítulos y selección de bandas por clic. No hay copia del código: `pruebas.mjs` lee `index.html` y
 evalúa la parte del script anterior a la marca *«Fin de la parte sin DOM»*, así que el proyecto
 sigue siendo un solo archivo. Requiere Node 18 o posterior.
 

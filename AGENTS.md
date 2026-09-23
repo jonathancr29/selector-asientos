@@ -44,8 +44,8 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    `distribucionDeSala` hace el camino inverso. `motivoDistribucion` y `leerDistribucion` validan y
    leen lo que se escribe en el editor. `repartirMesas` coloca mesas dentro de los bloques.
 3. **Datos y tipos de sala:** `zonas` (índice de la sala generada), `ZONAS_POR_DEFECTO`, `usarZonas`,
-   `zonaParaFilas`, `butacas`, `muebles`, `TIPOS_DE_SALA` (pasillos y bandas de
-   cada tipo), `altoDeBanda`, `agregarFilas`.
+   `zonaParaFilas`, `zonaDeMesasActual`, `zonaDeBanda` (zona efectiva de una banda), `butacas`,
+   `muebles`, `TIPOS_DE_SALA` (pasillos y bandas de cada tipo), `altoDeBanda`, `agregarFilas`.
 4. **Mesas:** `geometriaMesa({ largo, cabeceras, unLado, giro })` calcula huella, tablero y lugares,
    cada uno con `mira` (giro del icono hacia el tablero); `girar90` da el cuarto de vuelta.
    `ESTILOS` (lados, cruz, barra), `agregarMesa`, `mesasAutomaticas`. `generarPlano(tipo, plano)`
@@ -105,6 +105,17 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   la columna `numero`.
 - **Una mesa nunca queda partida por un pasillo**, ni en el reparto automático ni en el editor:
   `motivoNoCabe` lo decide con `esMesa` (sin `tipo`, o `tipo: 'redonda'`).
+- **La zona se hereda de la banda:** cada banda colocada lleva su `zona` efectiva (`zonaDeBanda`: la
+  suya y, en una zona de mesas sin zona propia, la de mesas) y la pasa a sus regiones. `zonaEnCelda`
+  devuelve la de la banda **más profunda** que cubre una celda, y `generarPlano` resuelve con ella la
+  zona de cada mesa, bloque y butaca suelta: manda la propia de la pieza, si no la heredada, si no
+  `zonaParaFilas`. La pieza generada guarda `zonaEfectiva` (para mostrar) y `zona` solo si es propia
+  (es lo que guardan `configDeMesa`, `configDeBloque` y `configDeButaca`): **nunca escribas la zona
+  heredada en el plano**, o dejaría de seguir a su banda. Lo que muestra la zona de una pieza usa
+  `zonaEfectiva`, no `zona`.
+- **Ninguna pieza con butacas se queda sin zona:** si no cae dentro de ninguna banda con zona,
+  `fijarZonasSueltas` (que llama `regenerar`) le escribe la suya y el aviso lo dice. Si añades una
+  forma de crear o mover piezas, no la saltes.
 - **Zona por asiento (`plano.zonasDeAsiento`):** se aplica en `generarPlano` **después** de
   `numerarFilas`, así que cambia `zona` y `seccion` pero no `fila` ni `numero`. Cada butaca guarda
   `zonaOriginal`; `planoDesdeSala` extrae las que difieren. Asignar la zona original quita la entrada
@@ -113,7 +124,7 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - **Mesa completa (`completa: true`)**: sus lugares llevan `grupo.completa`. Elegir pasa siempre por
   `alternarEleccion` (todos sus lugares libres a la vez), y `completarMesasElegidas` corrige las
   selecciones parciales al regenerar. El precio no se guarda: es la suma de los lugares libres, cada
-  uno al de su zona. En `generarPlano`, si un lugar está ocupado, los demás libres pasan a ocupados.
+  uno al de su zona (la que herede la mesa, o la propia del lugar). En `generarPlano`, si un lugar está ocupado, los demás libres pasan a ocupados.
 - **Una mesa redonda solo guarda sus lugares** (un número par de 2 a 16); el diámetro sale de
   `diametroRedonda` (los lugares entre cuatro, hacia arriba) y las sillas van por parejas en cada
   lado, sin esquinas (`ladosDeRedonda`, `geometriaMesaRedonda`). `cambiarLugaresRedonda` recibe pasos
@@ -227,8 +238,10 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   centavos). `generarPlano` la vuelca en el índice `zonas` con `usarZonas` antes de disponer las
   bandas, así que `zonas[id]` siempre es de la sala actual. `validarMapa` también llama a
   `usarZonas` antes de `disponerBandas`. No escribas ids de zona fijos (`'luneta'`, `'general'`):
-  valida contra la lista y usa `zonaParaFilas` para las filas nuevas. La zona `mesas` es la de los
-  lugares de mesa: siempre existe y no se asigna a filas.
+  valida contra la lista y usa `zonaParaFilas` para las filas nuevas. La zona `mesas` es la que toman
+  las zonas de mesas que no llevan otra: siempre existe y no se asigna a filas. `usosDeZona` cuenta
+  las bandas (por su zona efectiva) y las piezas con zona **propia**: lo que hereda no cuenta, porque
+  ya lo sujeta su banda.
 - **Aforo máximo: `BUTACAS_MAXIMAS` (20.000).** `validarMapa` lo comprueba con `motivoDeAforo`;
   `aplicarBandas` lo trata como un error de bandas y revierte; los cambios de piezas (agregar,
   transformar, duplicar) pasan por `conTopeDeAforo`, que copia el plano antes y lo restaura si se
@@ -241,10 +254,12 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   descartan los campos desconocidos y se comprueba que las mesas quepan. No se confía en el archivo.
 - **Las bloqueadas son una lista de ids** (`plano.bloqueadas`). `bloqueadasAlFinal` de las plantillas
   solo se usa si no hay lista.
-- **Formato del mapa, versión 3:** `lienzo`, `escenario: null` y bandas `espacio` (con `guias`); el
-  escenario ya no es banda obligatoria. Hasta la versión 2 se exige el escenario como primera banda
-  y no se admiten espacios. La versión 2 guarda `distribucion`; `validarMapa` convierte la versión 1
-  (`pasillos` con nombre). Si cambias el formato otra vez, sube `VERSION_MAPA` y convierte los mapas
+- **Formato del mapa, versión 4:** `zona` es opcional en mesas, bloques y butacas sueltas (sin ella,
+  heredan) y las bandas que no son de filas pueden llevarla. La versión 3 añadió `lienzo`,
+  `escenario: null` y bandas `espacio` (con `guias`), y el escenario dejó de ser banda obligatoria;
+  hasta la versión 2 se exige el escenario como primera banda y no se admiten espacios. La versión 2
+  guarda `distribucion`; `validarMapa` convierte la versión 1 (`pasillos` con nombre). Un mapa de la
+  versión 3 no se toca al leerlo: sus mesas no traían zona, así que pasan a heredar la de su banda. Si cambias el formato otra vez, sube `VERSION_MAPA` y convierte los mapas
   viejos en lugar de
   rechazarlos.
 
@@ -316,6 +331,10 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
      y quitar escenario, guardar y recargar.
    - **Butacas sueltas y formas:** agregar, mover, girar (una barra junto al borde), cambiar tamaño,
      zona y nombre, duplicar, guardar, y elegir una butaca suelta en Previsualizar.
+   - **Herencia de zona:** una mesa o un bloque dentro de una banda toma su zona («Hereda: …» en
+     *Pieza seleccionada*); fijarle una propia y volver a heredar; en un mapa en blanco, agregar una
+     pieza fuera de toda zona y ver el aviso; guardar, recargar y comprobar que lo heredado sigue
+     siguiendo a su banda.
    - **Duplicar y nombres:** Duplicar y Ctrl+D en una mesa, un bloque, una banda, una vertical y una
      franja; clic en el fondo para seleccionar bandas (y subir de nivel); renombrar en el panel y con
      doble clic en un subtítulo; que los subtítulos se lean en Previsualizar sin tapar clics.
