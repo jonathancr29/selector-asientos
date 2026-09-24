@@ -4,9 +4,26 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Integración continua y limpieza del código
+## Sin publicar — Una sola forma de agregar una pieza
 
-Rama `claude/limpieza-y-ci`. Sale de una revisión completa del proyecto: no cambia lo que hace la
+Rama `claude/agregar-pieza`. Segundo paso de la revisión (A4). No cambia lo que hace la aplicación.
+
+### Cambiado
+
+- **Las cuatro formas de agregar una pieza comparten camino.** `agregarPiezaNueva` saca el id y el
+  contador de `LISTAS_DE_PIEZAS`, busca el primer hueco libre y, si cabe, guarda la pieza y la deja
+  seleccionada; `agregarMesaNueva`, `agregarBloqueNuevo`, `agregarButacaNueva` y `agregarFormaNueva`
+  se quedan con lo suyo: la configuración de partida, el aviso si no cabe y cómo se cuenta.
+- **Ninguna toca ya el contador a mano.** La mesa y el bloque hacían `plano.siguiente++` y
+  `plano.bloquesFilas.push(...)` por su cuenta, saltándose `nuevoIdDe`, que las otras dos sí usaban.
+  Ahora las cuatro pasan por la misma tabla.
+- **Un solo `asegurarVisible`** (`mostrarPiezaNueva`) en lugar de tres versiones, cada una con su
+  forma de medir la huella.
+
+## 2026-09-24 — PR #34: integración continua y limpieza del código
+
+[PR #34](https://github.com/jonathancr29/selector-asientos/pull/34), fusionado en `main` con el
+commit `3f371e7`. Sale de una revisión completa del proyecto: no cambia lo que hace la
 aplicación, solo quita repeticiones y código que ya no pintaba nada.
 
 ### Agregado

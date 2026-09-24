@@ -5244,46 +5244,64 @@ function transformarMesa(id, accion) {
            posicionTexto(nueva, colocada));
 }
 
-function agregarMesaNueva(estilo) {
+// El camino que comparten las cuatro formas de agregar una pieza: el id y el contador de
+// su lista (de LISTAS_DE_PIEZAS, nunca a mano), el primer hueco libre y, si cabe, a su
+// lista y seleccionada. Lo unico propio de cada tipo es 'colocar', que recibe el hueco
+// encontrado y devuelve la pieza que se guarda; 'buscarCon' le deja volver a buscar con
+// otra configuracion, que es lo que necesita un bloque al girarse hacia el escenario.
+// Devuelve { id, sitio } o null si no cabia, y entonces ya lo ha dicho.
+function agregarPiezaNueva(prefijo, base, sinSitio, colocar = (sitio) => sitio) {
   const plano = planoEditable();
-  const id = 'M' + plano.siguiente;
-  const config = { id, x: 0, y: 0, ...ESTILOS[estilo], giro: 0 };
-  const sitio = buscarSitioLibre(salaActual, celdasOcupadas(null), config);
-  if (!sitio) {
-    anunciar('No hay sitio libre para otra mesa. Mueve o acorta alguna antes.');
-    return;
+  const tipoDeLista = listaDeId(prefijo + '1');
+  const id = prefijo + (plano[tipoDeLista.contador] || 1);
+  const config = { id, x: 0, y: 0, ...base };
+  const ocupadas = celdasOcupadas(null);
+  const buscarCon = (extra) => buscarSitioLibre(salaActual, ocupadas, { ...config, ...extra });
+  const hueco = buscarCon({});
+  if (!hueco) {
+    anunciar(sinSitio);
+    return null;
   }
-  plano.siguiente++;
-  plano.mesas.push(sitio);
+  const sitio = colocar(hueco, buscarCon);
+  nuevoIdDe(plano, tipoDeLista);
+  plano[tipoDeLista.lista] = [...(plano[tipoDeLista.lista] || []), sitio];
   marcarActivas([id]);
-  regenerar('Mesa ' + id.slice(1) + (estilo === 'redonda' ? ' (redonda, 8 lugares)' : '') +
-            ' agregada en columna ' + sitio.x + ', fila ' + sitio.y + '.');
-  const m = piezaPorId(id);
-  asegurarVisible({ x: m.x, y: m.y, w: m.geo.ancho, h: m.geo.alto });
+  return { id, sitio };
+}
+
+// Donde quedo, para el aviso.
+const columnaYFila = (sitio) => 'columna ' + sitio.x + ', fila ' + sitio.y;
+
+// Lleva a la vista la pieza recien agregada. Va despues de regenerar, que es cuando la
+// pieza existe con su huella calculada.
+function mostrarPiezaNueva(id) {
+  const p = piezaPorId(id);
+  if (p) asegurarVisible({ x: p.x, y: p.y, w: p.geo.ancho, h: p.geo.alto });
+}
+
+function agregarMesaNueva(estilo) {
+  const nueva = agregarPiezaNueva('M', { ...ESTILOS[estilo], giro: 0 },
+    'No hay sitio libre para otra mesa. Mueve o acorta alguna antes.');
+  if (!nueva) return;
+  regenerar('Mesa ' + nueva.id.slice(1) + (estilo === 'redonda' ? ' (redonda, 8 lugares)' : '') +
+            ' agregada en ' + columnaYFila(nueva.sitio) + '.');
+  mostrarPiezaNueva(nueva.id);
 }
 
 // Agrega un bloque de filas de 5 × 2 en el primer hueco libre, mirando al escenario.
 function agregarBloqueNuevo() {
-  const plano = planoEditable();
-  const id = 'F' + plano.siguienteBloque;
   // Sin zona: hereda la de la banda donde caiga (si no hay, regenerar le pone una).
-  const base = { id, tipo: 'filas', x: 0, y: 0, ancho: 5, filas: 2, giro: 0 };
-  // Se busca sitio sin girar, se orienta hacia el escenario desde ahi y se vuelve
-  // a buscar con ese giro. Si girado no cabe en ningun sitio, se queda sin girar.
-  const ocupadas = celdasOcupadas(null);
-  const primero = buscarSitioLibre(salaActual, ocupadas, base);
-  const giro = primero ? giroHaciaEscenario(primero.x + 2.5, primero.y + 1) : 0;
-  const sitio = (giro && buscarSitioLibre(salaActual, ocupadas, { ...base, giro })) || primero;
-  if (!sitio) {
-    anunciar('No hay sitio libre para un bloque de 5 × 2. Haz espacio o agrega una zona de mesas.');
-    return;
-  }
-  plano.siguienteBloque++;
-  plano.bloquesFilas.push(sitio);
-  marcarActivas([id]);
-  regenerar('Bloque ' + id.slice(1) + ' agregado en columna ' + sitio.x + ', fila ' + sitio.y + '.');
-  const b = piezaPorId(id);
-  asegurarVisible({ x: b.x, y: b.y, w: b.geo.ancho, h: b.geo.alto });
+  const nueva = agregarPiezaNueva('F', { tipo: 'filas', ancho: 5, filas: 2, giro: 0 },
+    'No hay sitio libre para un bloque de 5 × 2. Haz espacio o agrega una zona de mesas.',
+    // Se orienta hacia el escenario desde donde cupo derecho y se vuelve a buscar con ese
+    // giro. Si girado no cabe en ningun sitio, se queda sin girar.
+    (hueco, buscarCon) => {
+      const giro = giroHaciaEscenario(hueco.x + 2.5, hueco.y + 1);
+      return (giro && buscarCon({ giro })) || hueco;
+    });
+  if (!nueva) return;
+  regenerar('Bloque ' + nueva.id.slice(1) + ' agregado en ' + columnaYFila(nueva.sitio) + '.');
+  mostrarPiezaNueva(nueva.id);
 }
 
 // Duplica una mesa o bloque junto al original; la copia queda activa.
@@ -5307,40 +5325,27 @@ function duplicarPiezaPorId(id) {
 
 // Butaca suelta de la zona General en el primer hueco libre, mirando al escenario.
 function agregarButacaNueva() {
-  const plano = planoEditable();
-  const tipoDeLista = listaDeId('B1');
-  const id = 'B' + (plano.siguienteButaca || 1);
-  const sitio = buscarSitioLibre(salaActual, celdasOcupadas(null), { id, tipo: 'butaca', x: 0, y: 0, giro: 0 });
-  if (!sitio) {
-    anunciar('No hay sitio libre para otra butaca. Haz espacio o agrega un espacio.');
-    return;
-  }
-  nuevoIdDe(plano, tipoDeLista);
-  plano.butacasSueltas = [...(plano.butacasSueltas || []), { ...sitio, giro: giroHaciaEscenario(sitio.x + 0.5, sitio.y + 0.5) }];
-  marcarActivas([id]);
+  const nueva = agregarPiezaNueva('B', { tipo: 'butaca', giro: 0 },
+    'No hay sitio libre para otra butaca. Haz espacio o agrega un espacio.',
+    // Una butaca ocupa una celda, asi que girarla nunca la deja sin caber: no hay que
+    // volver a buscar, solo mirar al escenario desde donde quedo.
+    (hueco) => ({ ...hueco, giro: giroHaciaEscenario(hueco.x + 0.5, hueco.y + 0.5) }));
+  if (!nueva) return;
   // La zona se dice despues de regenerar: es la que hereda de la banda donde cayo.
   regenerar('');
-  anunciar('Butaca suelta ' + id.slice(1) + ' agregada en columna ' + sitio.x + ', fila ' + sitio.y +
-           ', zona ' + zonas[piezaPorId(id).zonaEfectiva].nombre + '.');
-  asegurarVisible({ x: sitio.x, y: sitio.y });
+  anunciar('Butaca suelta ' + nueva.id.slice(1) + ' agregada en ' + columnaYFila(nueva.sitio) +
+           ', zona ' + zonas[piezaPorId(nueva.id).zonaEfectiva].nombre + '.');
+  mostrarPiezaNueva(nueva.id);
 }
 
 // Pista de baile (4 × 4) o barra (4 × 1) en el primer hueco libre.
 function agregarFormaNueva(forma) {
-  const plano = planoEditable();
   const { nombre, ancho, alto } = FORMAS[forma];
-  const tipoDeLista = listaDeId('P1');
-  const id = 'P' + (plano.siguienteForma || 1);
-  const sitio = buscarSitioLibre(salaActual, celdasOcupadas(null), { id, tipo: 'forma', forma, x: 0, y: 0, ancho, alto });
-  if (!sitio) {
-    anunciar('No hay sitio libre para ' + nombre.toLowerCase() + ' de ' + ancho + ' × ' + alto + ' celdas.');
-    return;
-  }
-  nuevoIdDe(plano, tipoDeLista);
-  plano.formas = [...(plano.formas || []), sitio];
-  marcarActivas([id]);
-  regenerar(nombre + ' ' + id.slice(1) + ' agregada en columna ' + sitio.x + ', fila ' + sitio.y + '.');
-  asegurarVisible({ x: sitio.x, y: sitio.y, w: ancho, h: alto });
+  const nueva = agregarPiezaNueva('P', { tipo: 'forma', forma, ancho, alto },
+    'No hay sitio libre para ' + nombre.toLowerCase() + ' de ' + ancho + ' × ' + alto + ' celdas.');
+  if (!nueva) return;
+  regenerar(nombre + ' ' + nueva.id.slice(1) + ' agregada en ' + columnaYFila(nueva.sitio) + '.');
+  mostrarPiezaNueva(nueva.id);
 }
 
 // Las piezas que puede atrapar la marquesina: todo menos el escenario, que es único y

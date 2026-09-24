@@ -95,7 +95,8 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 10. **Selección y teclado:** `alternar`, `moverFoco`, `asegurarVisible`, manejadores `focusin` y
     `keydown`.
 11. **Modo editor:** `modo`, `mesaActiva`, `planos` (por tipo de sala), sombra de destino, arrastre, `regenerar`,
-    `transformarMesa`, `agregarMesaNueva`, `eliminarMesa`, atajos (`ATAJOS`), `cambiarModo`,
+    `transformarMesa`, `agregarPiezaNueva` (con `agregarMesaNueva`, `agregarBloqueNuevo`,
+    `agregarButacaNueva` y `agregarFormaNueva`), `eliminarMesa`, atajos (`ATAJOS`), `cambiarModo`,
     `herramienta` (mesas o bloquear), `cambiarHerramienta`, `alternarBloqueo`.
 12. **Resumen y cambio de tipo de sala:** `actualizarResumen`, `actualizarAforo`, `redibujar`, y el
     selector de tipos, que se construye desde `TIPOS_DE_SALA` (`construirSelector`).
@@ -251,9 +252,18 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   cambia con `cambiarAnchoLienzo`, no con `cambiarDistribucion` (que recolocaría las piezas).
 - **Las guías de fila son decorado** (muebles `guia`): no son butacas, no ocupan celdas ni se numeran.
 - **Las piezas en listas se recorren con `LISTAS_DE_PIEZAS`:** mesas (`M`), bloques (`F`), formas
-  (`P`) y butacas sueltas (`B`). Copiar, reanclar, duplicar y buscar su lista (`listaDeId`) salen de
-  ahí. Si añades un tipo de pieza, agrégalo a la tabla y a `piezaPorId`, `primeraPiezaQueNoCabe`,
+  (`P`) y butacas sueltas (`B`). Copiar, reanclar, duplicar, crear y buscar su lista (`listaDeId`)
+  salen de ahí; ninguna función toca `plano.siguiente` ni empuja a `plano.mesas` a mano. Si añades un tipo de pieza, agrégalo a la tabla y a `piezaPorId`, `primeraPiezaQueNoCabe`,
   `dibujarPiezas`, `planoDesdeSala`, `mapaDesdePlano` y `validarMapa`.
+- **Agregar una pieza pasa por `agregarPiezaNueva(prefijo, base, sinSitio, colocar)`:** saca el id y
+  el contador de `LISTAS_DE_PIEZAS` con `nuevoIdDe`, busca el primer hueco libre y, si cabe, guarda
+  la pieza en su lista y la deja seleccionada; devuelve `{ id, sitio }`, o `null` tras decir por que
+  no cabia. **El contador solo avanza si cupo**, asi que un intento fallido no quema un id. Lo propio
+  de cada tipo va en `colocar(hueco, buscarCon)`: un bloque se orienta hacia el escenario y **vuelve
+  a buscar** con ese giro (girado puede no caber donde cabia derecho, y entonces se queda sin girar);
+  una butaca solo mira hacia el escenario, porque ocupa una celda y girarla nunca la deja fuera. El
+  aviso y `mostrarPiezaNueva` van despues de `regenerar`, que es cuando la pieza tiene huella y zona
+  heredada.
 - **Solo las mesas respetan los pasillos:** `motivoNoCabe` lo decide por `!pieza.tipo` (las mesas son
   las únicas piezas sin `tipo`).
 - **Una butaca suelta no lleva guion en su id** (`B3`): `copiarBloqueadas` usa el id entero como
