@@ -4,9 +4,43 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Transformar, zona y venta con varias piezas
+## Sin publicar — La zona es la banda, y el editor cambia de lado
 
-Rama `claude/grupo-acciones`.
+Rama `claude/zona-es-banda`.
+
+### Cambiado
+
+- **Una zona y una banda son la misma cosa.** Cada banda nueva nace con **su zona**: color propio,
+  nombre a partir de su tipo (*General 2*, *Mesas 2*) y precio 0. Los espacios siguen naciendo sin
+  zona, porque un hueco no da precio a nada.
+- **El botón de la etiqueta crea una zona nueva con su espacio**, para ponerle nombre y precio y meter
+  dentro lo que haga falta. El otro botón de espacio crea el hueco **sin** zona.
+- **Un ✓ en cada fila** guarda el nombre y el precio a la vez (Enter y salir del campo siguen
+  funcionando).
+- **El color es de la zona:** dos bandas que la comparten se ven del mismo color, en el panel y en el
+  plano. El nombre de una banda también es el de su zona, así que la zona de mesas de la sala mixta
+  pasa a llamarse *Mesas*.
+- **Al eliminar una banda se va su zona**, salvo que la use otra banda, una pieza o alguna butaca
+  pintada. Las que se quedan sin banda van al final de la misma lista.
+- El grupo *Otras zonas* desaparece: todo vive en **«Zonas y precios»**, y el tope sube a **40 zonas**
+  porque cada banda trae la suya.
+- **Los dos laterales cambian de lado:** a la izquierda la sala (Vista, tipo de sala, Mapa, Columnas,
+  Zonas y precios y Leyenda) y a la derecha las piezas (Agregar, Pieza seleccionada y Sala). Al editar,
+  la columna ancha es la izquierda.
+- **Menos palabras:** *Previsualizar* y *Editar plano* se quedan con su icono, el detalle de una banda
+  dice «12 filas» en vez de «12 filas de alto», y el selector de zona de cada fila ya no repite el
+  precio, que está en su campo al lado.
+- El **tipo de sala** se ve en los dos modos; el resto del grupo *Mapa*, solo al editar.
+
+### Agregado
+
+- **Botón de información (ⓘ)** junto al título de *Columnas* y de *Zonas y precios*: abre y cierra su
+  explicación, que ya no ocupa sitio.
+
+## 2026-09-23 — PR #31: transformar, zona y venta con varias piezas
+
+[PR #31](https://github.com/jonathancr29/selector-asientos/pull/31), fusionado en `main` con el
+commit `1af8bca`.
 
 ### Agregado
 

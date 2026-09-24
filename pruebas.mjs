@@ -415,7 +415,8 @@ const posiciones = (mesas) => Object.fromEntries(mesas.map((m) => [m.id, m.y]));
 test('las bandas se apilan y cada banda de filas empieza su secuencia en A', () => {
   const { generarPlano, butacas } = cargar();
   const sala = generarPlano('mixta-ambos');
-  assert.deepEqual(resumenBandas(sala), ['Escenario@0+2', 'Luneta@2+3', 'Zona de mesas@5+13', 'General@18+2']);
+  // Cada banda se llama como su zona: la de mesas, «Mesas».
+  assert.deepEqual(resumenBandas(sala), ['Escenario@0+2', 'Luneta@2+3', 'Mesas@5+13', 'General@18+2']);
   assert.deepEqual([sala.alto, sala.filas.min, sala.filas.max], [20, 0, 19]);
   const a1 = butacas.filter((b) => b.fila === 'A' && b.numero === 1).map((b) => [b.id, b.bandaNombre, b.y]);
   assert.deepEqual(a1, [['luneta-A1', 'Luneta', 2], ['general-A1', 'General', 18]]);
@@ -446,7 +447,7 @@ test('las bandas sin nombre toman el de su zona, numerado si se repite', () => {
   assert.deepEqual(conOtra.bandas.slice(-2).map((b) => b.id), ['banda1', 'banda2']);
   assert.equal(conOtra.siguienteBanda, 3);
   const sala = api.generarPlano('mixta-ambos', conOtra);
-  assert.deepEqual(resumenBandas(sala).slice(-2), ['General 2@20+2', 'Zona de mesas 2@22+4']);
+  assert.deepEqual(resumenBandas(sala).slice(-2), ['General 2@20+2', 'Mesas 2@22+4']);
   assert.ok(api.butacas.some((b) => b.id === 'banda1-A1' && b.bandaNombre === 'General 2'));
   // Cambiar la zona cambia el nombre y el precio.
   const luneta = api.generarPlano('mixta-ambos', api.cambiarZonaBanda(conOtra, 'banda1', 'luneta'));
@@ -483,7 +484,7 @@ test('mover una banda lleva consigo sus mesas y no pasa por encima del escenario
   // General sube por encima de la zona de mesas: ocupa las filas 5-6 y las mesas bajan 2.
   const subida = api.moverBanda(plano, sala, 'general', -1);
   const salaSubida = api.generarPlano('mixta-ambos', subida);
-  assert.deepEqual(resumenBandas(salaSubida), ['Escenario@0+2', 'Luneta@2+3', 'General@5+2', 'Zona de mesas@7+13']);
+  assert.deepEqual(resumenBandas(salaSubida), ['Escenario@0+2', 'Luneta@2+3', 'General@5+2', 'Mesas@7+13']);
   assert.deepEqual(posiciones(subida.mesas), { M1: 9, M2: 9, M3: 9, M4: 13, M5: 13, M6: 13 });
   assert.equal(api.primeraPiezaQueNoCabe(salaSubida), null);
 
@@ -843,7 +844,8 @@ test('un bloque de General a la altura de la banda General comparte fila y sigue
 test('dos bandas de la misma zona continuan la secuencia en lugar de reiniciar en A', () => {
   const api = cargar();
   const { plano } = planoDe(api, 'mixta-ambos');
-  const conOtra = api.agregarBanda(plano, 'filas');   // otra de General, al final
+  // Una banda nueva nace con su zona: para que compartan hay que decirlo.
+  const conOtra = api.cambiarZonaBanda(api.agregarBanda(plano, 'filas'), 'banda1', 'general');
   api.generarPlano('mixta-ambos', conOtra);
   assert.deepEqual(['general-A1', 'general-B1', 'banda1-A1', 'banda1-B1'].map((id) => etiqueta(api, id)),
     ['General A1', 'General B1', 'General C1', 'General D1']);
@@ -1368,16 +1370,16 @@ test('subtitulos: las bandas de la sala en el margen, las verticales en su borde
   const subtitulos = api.muebles.filter((m) => m.tipo === 'subtitulo');
   assert.deepEqual(subtitulos.map((m) => [m.lugar, m.banda, m.texto, m.x, m.y]), [
     ['margen', 'luneta', 'Luneta', -2, 2],
-    ['margen', 'mesas', 'Zona de mesas', -3, 5],
+    ['margen', 'mesas', 'Mesas', -2, 5],
     ['margen', 'general', 'General', -2, 18],
     ['margen', 'banda1', 'Franja dividida', -3, 20],
-    ['borde', 'banda3', 'Vertical 1 · Zona de mesas 2', 1, 20],
+    ['borde', 'banda3', 'Vertical 1 · Mesas 2', 1, 20],
     ['borde', 'banda5', 'Vertical 2 · General 2', 8, 20],
   ]);
   // Una segunda banda dentro de una vertical lleva su propio subtitulo.
   api.generarPlano('mixta-ambos', api.agregarBandaEnVertical(plano, sala, 'banda4', 'mesas'));
   assert.deepEqual(api.muebles.filter((m) => m.tipo === 'subtitulo').at(-1),
-    { tipo: 'subtitulo', lugar: 'borde', banda: 'banda6', texto: 'Zona de mesas 3', x: 8, y: 22 });
+    { tipo: 'subtitulo', lugar: 'borde', banda: 'banda6', texto: 'Mesas 2', x: 8, y: 22 });
 });
 
 test('capas y seleccion de bandas por celda: clic a clic se sube por el arbol', () => {
@@ -1738,12 +1740,14 @@ test('agregar y eliminar zonas: las nuevas sirven para filas, las usadas no se e
   const lienzo = planoDe(api, 'mapa-en-blanco').plano;
   const sinGeneral = api.eliminarZona(lienzo, 'luneta');
   assert.deepEqual(api.eliminarZona(sinGeneral, 'general'), { motivo: 'debe quedar al menos una zona para filas' });
-  // Sin General, las bandas de filas nuevas nacen en la primera zona de filas.
+  // Una banda de filas nueva nace con su zona, nombrada a partir de la que le toca de
+  // partida: sin General, esa es Luneta, asi que la suya es «Luneta 2».
   const sinGen = api.eliminarZona(api.agregarZona(lienzo), 'general');
-  assert.equal(api.agregarBanda(sinGen, 'filas').bandas.at(-1).zona, 'luneta');
+  const conFilas = api.agregarBanda(sinGen, 'filas');
+  assert.deepEqual([conFilas.bandas.at(-1).zona, conFilas.zonas.at(-1).nombre], ['zona2', 'Luneta 2']);
   let lleno = plano;
-  for (let i = 0; i < 17; i++) lleno = api.agregarZona(lleno);
-  assert.deepEqual(api.agregarZona(lleno), { motivo: 'ya hay el máximo de zonas (20)' });
+  for (let i = 0; i < 37; i++) lleno = api.agregarZona(lleno);
+  assert.deepEqual(api.agregarZona(lleno), { motivo: 'ya hay el máximo de zonas (40)' });
   void sala;
 });
 
@@ -1764,7 +1768,7 @@ test('los mapas guardan y validan las zonas; sin ellas, las de siempre', () => {
   assert.ok(con((m) => { m.zonas[3].nombre = 'luneta'; }).includes('zona 4: nombre repetido'));
   assert.ok(con((m) => { m.zonas[3].precio = -5; }).includes('zona 4: precio no válido'));
   assert.ok(con((m) => { m.zonas[3].id = 'Zona 1'; }).includes('zona 4: id no válido o repetido'));
-  assert.ok(con((m) => { m.zonas = []; }).includes('debe haber de 1 a 20 zonas'));
+  assert.ok(con((m) => { m.zonas = []; }).includes('debe haber de 1 a 40 zonas'));
   assert.ok(con((m) => { m.zonas = [{ id: 'mesas', nombre: 'Mesas', precio: 1 }]; }).includes('falta una zona para filas'));
   assert.ok(con((m) => { m.bandas[1].zona = 'mesas'; }).includes('banda 2: zona desconocida'));
   // Sin zonas en el archivo (mapas anteriores): Luneta, Mesas y General de siempre.
@@ -2058,8 +2062,9 @@ test('un bloque y una butaca suelta sin zona heredan la de la banda donde caen',
     bloquesFilas: [{ id: 'F1', tipo: 'filas', x: 1, y: 20, ancho: 3, filas: 2, giro: 0 }],
     butacasSueltas: [{ id: 'B1', tipo: 'butaca', x: 8, y: 20, giro: 0 }] };
   api.generarPlano('mixta-ambos', sinZona);
+  // La zona de mesas agregada trae su propia zona («Mesas 2»), y es la que heredan.
   assert.deepEqual([api.butacas.find((b) => b.id === 'F1-1-1').zona, api.butacas.find((b) => b.id === 'B1').zona],
-    ['mesas', 'mesas']);
+    ['zona1', 'zona1']);
   // Con zona propia, la suya; y planoDesdeSala solo guarda la propia.
   const conPropia = { ...sinZona,
     bloquesFilas: [{ ...sinZona.bloquesFilas[0], zona: 'general' }],
@@ -2171,8 +2176,8 @@ test('zonaNuevaParaBanda le da a la banda una zona propia con su nombre', () => 
   assert.equal('nombre' in api.zonaNuevaParaBanda(conNombre, 'general', 'Balcón').bandas.at(-1), false);
   assert.deepEqual(api.zonaNuevaParaBanda(plano, 'fantasma', 'X'), { motivo: 'esa banda ya no existe' });
   let lleno = plano;
-  for (let i = 0; i < 17; i++) lleno = api.agregarZona(lleno);
-  assert.deepEqual(api.zonaNuevaParaBanda(lleno, 'general', 'X'), { motivo: 'ya hay el máximo de zonas (20)' });
+  for (let i = 0; i < 37; i++) lleno = api.agregarZona(lleno);
+  assert.deepEqual(api.zonaNuevaParaBanda(lleno, 'general', 'X'), { motivo: 'ya hay el máximo de zonas (40)' });
 });
 
 test('una banda que no es de filas se puede quedar sin zona', () => {
@@ -2490,4 +2495,53 @@ test('la zona y la venta se pueden cambiar en varias piezas a la vez', () => {
   const porButacas = api.marcarVentaDeMesas(plano, ['M2'], false);
   assert.deepEqual(porButacas.mesas.map((m) => Boolean(m.completa)), [false, false]);
   assert.equal(plano.mesas[1].completa, true);   // no toca el plano de entrada
+});
+
+// --- Una zona es una banda ----------------------------------------------------------
+
+test('una banda nueva nace con su zona, y un espacio sin ninguna', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  // Filas: su zona sale de la que le toca de partida (General), numerada.
+  const conFilas = api.agregarBanda(plano, 'filas');
+  assert.deepEqual([conFilas.bandas.at(-1).zona, conFilas.zonas.at(-1), conFilas.siguienteZona],
+    ['zona1', { id: 'zona1', nombre: 'General 2', precio: 0 }, 2]);
+  // Mesas: la suya sale de la de mesas.
+  const conMesas = api.agregarBanda(conFilas, 'mesas');
+  assert.deepEqual([conMesas.bandas.at(-1).zona, conMesas.zonas.at(-1).nombre], ['zona2', 'Mesas 2']);
+  // Un espacio es un hueco: no da precio a nada, así que nace sin zona.
+  const conEspacio = api.agregarBanda(conMesas, 'espacio');
+  assert.equal('zona' in conEspacio.bandas.at(-1), false);
+  assert.equal(conEspacio.zonas.length, conMesas.zonas.length);
+  // Una franja tampoco, y sus bandas de dentro sí.
+  const { plano: franja, sala } = conFranja(api);
+  const dentro = api.agregarBandaEnVertical(franja, sala, 'banda2', 'filas');
+  const banda = api.ubicar(dentro.bandas, 'banda6').item;
+  assert.deepEqual([banda.zona, dentro.zonas.at(-1).nombre], ['zona1', 'General 2']);
+  // La banda se llama como su zona: son la misma cosa.
+  const salaConFilas = api.generarPlano('mixta-ambos', conFilas);
+  assert.equal(salaConFilas.bandas.at(-1).nombre, 'General 2');
+});
+
+test('eliminar una banda se lleva su zona, salvo que alguien más la use', () => {
+  const api = cargar();
+  const { plano, sala } = planoDe(api, 'mixta-ambos');
+  // La zona de la Luneta es solo suya: se va con ella.
+  const sinLuneta = api.eliminarBanda(plano, sala, 'luneta');
+  assert.deepEqual(sinLuneta.zonas.map((z) => z.id), ['mesas', 'general']);
+  assert.deepEqual(plano.zonas.map((z) => z.id), ['luneta', 'mesas', 'general']);   // no toca el de entrada
+  // Compartida con otra banda, la zona se queda.
+  const compartida = api.cambiarZonaBanda(plano, 'general', 'luneta');
+  const salaCompartida = api.generarPlano('mixta-ambos', compartida);
+  assert.deepEqual(api.eliminarBanda(compartida, salaCompartida, 'luneta').zonas.map((z) => z.id),
+    ['luneta', 'mesas', 'general']);
+  // Usada por una pieza o por butacas pintadas, también se queda.
+  const conPieza = { ...plano, bloquesFilas: [bloque('F1', 1, 20, { zona: 'luneta' })] };
+  assert.ok(api.eliminarBanda(conPieza, api.generarPlano('mixta-ambos', conPieza), 'luneta')
+    .zonas.some((z) => z.id === 'luneta'));
+  const conPintada = { ...plano, zonasDeAsiento: { 'general-A1': 'luneta' } };
+  assert.ok(api.eliminarBanda(conPintada, api.generarPlano('mixta-ambos', conPintada), 'luneta')
+    .zonas.some((z) => z.id === 'luneta'));
+  // La zona de mesas nunca se va sola: siempre tiene que haber una para los lugares.
+  assert.ok(api.eliminarBanda(plano, sala, 'mesas').zonas.some((z) => z.id === 'mesas'));
 });
