@@ -735,12 +735,49 @@ test('leerDistribucion entiende lo que se escribe y explica lo que no vale', () 
   assert.equal(motivo('', ''), 'escribe cuántas butacas lleva cada bloque, separadas por comas');
   assert.equal(motivo('4, 6, 4', '1'), 'con 3 bloques hacen falta 2 anchos de pasillo');
   assert.equal(motivo('12', '1'), 'con un solo bloque no hay pasillos');
-  assert.equal(motivo('4, x, 4', ''), 'cada bloque debe tener de 1 a 40 butacas');
-  assert.equal(motivo('4, 4.5', ''), 'cada bloque debe tener de 1 a 40 butacas');
-  assert.equal(motivo('4, 0', ''), 'cada bloque debe tener de 1 a 40 butacas');
+  assert.equal(motivo('4, x, 4', ''), 'cada bloque debe tener de 1 a 60 butacas');
+  assert.equal(motivo('4, 4.5', ''), 'cada bloque debe tener de 1 a 60 butacas');
+  assert.equal(motivo('4, 0', ''), 'cada bloque debe tener de 1 a 60 butacas');
   assert.equal(motivo('4, 4', '0'), 'cada pasillo debe medir de 1 a 10 columnas');
-  assert.equal(motivo('30, 30', '5'), 'la sala mediría 65 columnas y el máximo es 60');
-  assert.equal(motivo('1,1,1,1,1,1,1,1,1,1,1', ''), 'debe haber de 1 a 10 bloques');
+  // Un recinto ancho si vale: 5 bloques de 40 con pasillos de 2 son 208 columnas.
+  assert.deepEqual(leerDistribucion('40, 40, 40, 40, 40', '2, 2, 2, 2'),
+                   { distribucion: { bloques: [40, 40, 40, 40, 40], pasillos: [2, 2, 2, 2] } });
+  assert.equal(motivo('60, 60, 60, 60, 60, 60', '10, 10, 10, 10, 10'),
+               'la sala mediría 410 columnas y el máximo es 300');
+  assert.equal(motivo('61', ''), 'cada bloque debe tener de 1 a 60 butacas');
+  assert.equal(motivo(Array(21).fill('1').join(','), ''), 'debe haber de 1 a 20 bloques');
+});
+
+test('un recinto ancho: 249 columnas, miles de butacas y el escenario cruzando la sala', () => {
+  const api = cargar();
+  const distribucion = { bloques: [60, 60, 60, 60], pasillos: [3, 3, 3] };
+  assert.equal(api.motivoDistribucion(distribucion), null);
+  const rejilla = api.rejillaDeBloques(distribucion);
+  assert.deepEqual([rejilla.ancho, rejilla.columnas.length], [249, 240]);
+  const mapa = {
+    formato: api.FORMATO_MAPA, version: 4, nombre: 'Arena', guardado: null, distribucion,
+    bandas: [{ id: 'escenario', tipo: 'escenario' },
+             { id: 'baja', tipo: 'filas', zona: 'luneta', filas: 26 },
+             { id: 'alta', tipo: 'filas', zona: 'general', filas: 26 }],
+    mesas: [], bloquesFilas: [], formas: [], butacasSueltas: [],
+    // El escenario cruza la sala entera: antes no podia pasar de 60 columnas.
+    escenario: { x: 1, y: 0, ancho: 249, alto: 2 },
+    bloqueadas: [], zonasDeAsiento: {},
+    zonas: [{ id: 'mesas', nombre: 'Mesas', precio: 0 },
+            { id: 'luneta', nombre: 'Luneta', precio: 150000 },
+            { id: 'general', nombre: 'General', precio: 70000 }],
+    siguiente: 1, siguienteBanda: 4, siguienteBloque: 1, siguienteForma: 1,
+    siguienteZona: 1, siguienteButaca: 1,
+  };
+  const { mapa: limpio, errores } = api.validarMapa(mapa);
+  assert.equal(errores, undefined);
+  const sala = api.generarPlano(api.definicionDeMapa(limpio), limpio);
+  assert.deepEqual([sala.ancho, api.butacas.length], [249, 240 * 52]);
+  // La sala es mas ancha que alta, que es la forma de una arena de verdad.
+  assert.ok(sala.ancho > sala.alto, sala.ancho + ' x ' + sala.alto);
+  // Y la numeracion aguanta las 240 butacas por fila y las 26 filas de cada zona.
+  const ultima = api.butacas[api.butacas.length - 1];
+  assert.deepEqual([ultima.fila, ultima.numero], ['Z', 240]);
 });
 
 test('una sala con columnas propias: pasillos vacios, escenario al ancho y aforo', () => {
@@ -1517,8 +1554,8 @@ test('cambiar el ancho del lienzo: las piezas se quedan y el escenario a todo el
   // Mas angosto que el bloque: el bloque se sale y el cambio no debe aplicarse.
   const angosto = api.generarPlano('mapa-en-blanco', api.cambiarAnchoLienzo(plano, sala, 12));
   assert.deepEqual([api.primeraPiezaQueNoCabe(angosto).pieza.id, api.primeraPiezaQueNoCabe(angosto).motivo], ['F1', 'se sale de la sala']);
-  assert.deepEqual(api.cambiarAnchoLienzo(plano, sala, 41), { motivo: 'el ancho del lienzo debe ser de 1 a 40 columnas' });
-  assert.deepEqual(api.cambiarAnchoLienzo(plano, sala, 0), { motivo: 'el ancho del lienzo debe ser de 1 a 40 columnas' });
+  assert.deepEqual(api.cambiarAnchoLienzo(plano, sala, 61), { motivo: 'el ancho del lienzo debe ser de 1 a 60 columnas' });
+  assert.deepEqual(api.cambiarAnchoLienzo(plano, sala, 0), { motivo: 'el ancho del lienzo debe ser de 1 a 60 columnas' });
 });
 
 test('mapas version 3: lienzo, sin escenario y espacios con guias, y se validan al leer', () => {

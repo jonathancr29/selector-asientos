@@ -4,10 +4,41 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Las pruebas ven toda la API sin tener que apuntarla
+## Sin publicar — Recintos anchos: hasta 300 columnas
 
-Rama `claude/exportar-solo`. Cuarto paso de la revisión (B4). Solo toca `pruebas.mjs`: la
-aplicación no cambia en nada.
+Rama `claude/salas-anchas`. Sale de comprobar si cabía un recinto de 20.000 asistentes: cabía en
+aforo, pero no en forma.
+
+### Cambiado
+
+- **La sala llega a 300 columnas** (antes 60), con **de 1 a 20 bloques** (antes 10) de **hasta 60
+  butacas** cada uno (antes 40). Con eso `60, 60, 60, 60` y pasillos `3, 3, 3` son 249 columnas y 240
+  butacas por fila: la forma de una arena. Con el tope anterior, 20.000 lugares solo cabían en una
+  tira de 59 × 348, casi seis veces más alta que ancha.
+- **El escenario puede cruzar la sala entera:** su ancho máximo pasa a ser el de la sala.
+- **El ancho del lienzo llega a 60 columnas** (antes 40), porque lo topa el tamaño de un bloque.
+- **El zoom se acerca lo mismo en cualquier recinto.** El tope salía del encuadre inicial, que se
+  estira a la proporción del hueco del plano: cuanto más alto el recinto, más ancho ese encuadre y
+  menos acercaba. En un recinto de 20.000 butacas el máximo dejaba **2,6 px por butaca**, ilegible.
+  Ahora se topa en celdas y se llega a **40 px por butaca** en cualquier recinto, igual que en la sala
+  de ejemplo.
+
+### Agregado
+
+- Prueba de un recinto ancho: 249 columnas, 12.480 butacas, más ancho que alto, con el escenario
+  cruzando la sala y la numeración llegando a la butaca 240 de la fila Z.
+
+### Sin cambios
+
+- **El aforo sigue topado en 20.000 lugares.** Subir el ancho cambia la forma del recinto, no cuánta
+  gente cabe. Y editar un recinto así sigue costando unos 350 ms por acción: eso es otro asunto (el
+  render incremental).
+
+## 2026-09-24 — PR #37: las pruebas ven toda la API sin tener que apuntarla
+
+[PR #37](https://github.com/jonathancr29/selector-asientos/pull/37), fusionado en `main` con el
+commit `31ad570`. Cuarto paso de la revisión (B4). Solo tocó `pruebas.mjs`: la aplicación no cambió
+en nada.
 
 ### Cambiado
 
