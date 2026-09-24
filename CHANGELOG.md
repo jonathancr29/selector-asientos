@@ -4,10 +4,47 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Un cuarto de nodos menos en el plano
+## Sin publicar — La documentación, para retomar el proyecto desde cero
 
-Rama `claude/render-mas-ligero`. La fase barata del render incremental (B2). No cambia nada de lo
-que se ve ni de lo que se puede hacer.
+Rama `claude/documentacion`. No toca `index.html`: solo documentación y dos pruebas nuevas.
+
+Los documentos describían bien **el código** (se auditaron las 572 citas entre acentos graves y solo
+una no estaba en el proyecto), pero no decían nada de **cómo se trabaja** ni de **dónde está** el
+proyecto, que es justo lo que necesita quien lo retoma.
+
+### Agregado
+
+- **`AGENTS.md` → «Cómo se trabaja en este proyecto»:** una rama y un PR por cambio, el ritual del
+  CHANGELOG (de «Sin publicar» a una entrada fechada con su PR y su commit de fusión), y que
+  **fusionar solo se hace cuando se pide**.
+- **«Cómo editar un archivo de 6.000 líneas»:** guiones de sustitución exacta que fallan si no hay
+  una sola coincidencia, `replace` con función y no con cadena, y por qué el guion no se escribe con
+  un `heredoc` del shell.
+- **«Qué aguanta, medido»** en los dos documentos: los números de un recinto de 18.720 butacas
+  (generar ~20 ms, redibujar ~290 ms, elegir una butaca menos de 1 ms, mapa de unos pocos KB), para
+  saber qué es normal y qué sería una regresión.
+- **«A dónde va esto»:** la integración con Sin Taquilla y el único obstáculo técnico real, su
+  `style-src 'self'`, que impide incrustar un `<style>` en línea.
+- **Un orden de lectura** al principio de `AGENTS.md` para quien llega de cero.
+- **Dos pruebas que vigilan la documentación:** que los topes que citan `README.md` y `AGENTS.md` sean
+  los del código, y que no nombren nada que ya no exista. Comprobado con cinco escenarios de deriva
+  (subir el aforo, el ancho o la versión del mapa sin tocar el texto, renombrar una función citada y
+  citar algo inexistente): las dos pruebas los cazan todos.
+
+### Cambiado
+
+- **«Cómo verificar un cambio»** pasa a contar el listón de verdad: prueba de mutación para cada
+  regla nueva de la parte sin DOM, comparación con la versión anterior en los refactors y en los
+  cambios con DOM, y desconfiar del reloj del navegador (en una sesión, el mismo redibujado midió
+  337 ms y 2.504 ms).
+- **«Pendiente»** deja de ser una lista suelta y dice lo que de verdad queda, por orden de valor: no
+  rehacer los nodos que no cambian, y partir el archivo en `src/`.
+
+## 2026-09-24 — PR #39: un cuarto de nodos menos en el plano
+
+[PR #39](https://github.com/jonathancr29/selector-asientos/pull/39), fusionado en `main` con el
+commit `ca35a43`. La fase barata del render incremental (B2). No cambió nada de lo que se ve ni de
+lo que se puede hacer.
 
 ### Cambiado
 

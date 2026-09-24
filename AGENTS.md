@@ -1,7 +1,21 @@
 # AGENTS.md
 
-Guía para asistentes de IA (y personas) que trabajen en este proyecto. Para qué hace y por qué,
-lee primero [README.md](README.md). Para el historial de cambios, [CHANGELOG.md](CHANGELOG.md).
+Guía para asistentes de IA (y personas) que trabajen en este proyecto.
+
+**Si llegas de cero, en este orden:**
+
+1. **[README.md](README.md)** — qué resuelve y por qué, el modelo de datos, la rejilla, las zonas y
+   las bandas, el editor y la accesibilidad. Es la referencia del *comportamiento*.
+2. **Este archivo**, de arriba abajo. *Cómo se trabaja en este proyecto* y *Cómo verificar un cambio*
+   son el listón que se espera; *Reglas que no se deben romper* y *Trampas conocidas* son la memoria
+   de los errores ya cometidos, y cada una dice «pasó» cuando viene de uno real.
+3. **[CHANGELOG.md](CHANGELOG.md)**, las últimas entradas — por qué está el código como está.
+4. ***Qué aguanta, medido*** y ***Pendiente***, al final de este archivo: dónde está el proyecto y qué
+   es lo siguiente.
+
+Y una advertencia que ahorra tiempo: **las pruebas comprueban también estos documentos** (que los
+topes que citan sean los del código y que no nombren funciones que ya no existen), así que si
+renombras algo o cambias una constante, el texto va en el mismo commit o la CI se queja.
 
 ## Qué es
 
@@ -19,9 +33,10 @@ en el propio archivo.
 | Archivo | Contenido |
 |---|---|
 | `index.html` | Toda la aplicación: HTML, CSS y el `<script>`. |
-| `pruebas.mjs` | Pruebas con `node:test` de la parte del script que no usa el DOM. |
+| `pruebas.mjs` | Pruebas con `node:test` de la parte del script que no usa el DOM, y dos que vigilan que estos documentos sigan describiendo el código. |
 | `README.md` | Qué resuelve, modelo de datos, rejilla, accesibilidad, modo editor. |
 | `CHANGELOG.md` | Historial de cambios. |
+| `.github/workflows/pruebas.yml` | La única automatización: `node --test pruebas.mjs` en cada PR. |
 | `LICENSE`, `NOTICE` | MIT. El icono de butaca es de Material Icons (Apache 2.0). |
 
 La carpeta `.claude/` (si existe) es de trabajo de Claude Code y no forma parte del proyecto.
@@ -30,10 +45,72 @@ La carpeta `.claude/` (si existe) es de trabajo de Claude Code y no forma parte 
 
 - **Abrir:** `index.html` directamente en el navegador. Opcional: `python -m http.server 8000`.
 - **Pruebas:** `node --test pruebas.mjs` (Node 18 o posterior). Deben pasar todas antes de hacer commit.
+  Dos de ellas no prueban código sino **documentación**: que los topes que `README.md` y `AGENTS.md`
+  citan sean los del código, y que no nombren nada que ya no exista. Si fallan, arregla el texto.
 - **Integración continua:** `.github/workflows/pruebas.yml` corre esas mismas pruebas en cada pull
   request y en cada empujón a `main`. Es lo único que corre: si añades otra comprobación, que no
   necesite dependencias.
 - **No hay** `package.json`, linter ni build. No los añadas sin que se pida.
+
+## Cómo se trabaja en este proyecto
+
+Un cambio, una rama, un pull request. El ritmo es siempre el mismo, y conviene seguirlo porque el
+CHANGELOG y los mensajes de commit dependen de él.
+
+1. **Rama** `claude/tema-en-dos-o-tres-palabras`, desde `main`. Nunca se trabaja en `main`.
+2. **Se implementa y se verifica** (ver *Cómo verificar un cambio*). La verificación no es opcional
+   en este proyecto: es lo que sustituye a los tipos, al linter y a la revisión de otra persona.
+3. **Se actualizan los documentos** en el mismo commit: `README.md` si cambia el comportamiento,
+   `AGENTS.md` si aparece una regla o una trampa nueva, y `CHANGELOG.md` siempre.
+4. **Commit** con el cuerpo contando el problema, la decisión y **cómo se comprobó, con números**.
+   Un commit por cambio; no se parte en migajas ni se mezclan dos temas.
+5. **Pull request**, y se espera a que la CI esté en verde.
+6. **Fusionar solo cuando quien mantiene el proyecto lo pide.** Abrir el PR no autoriza a fusionarlo.
+7. Al fusionar: `--delete-branch`, y `git fetch --prune` en local.
+
+### El CHANGELOG lleva un ritual
+
+Mientras el cambio está sin fusionar, su entrada es:
+
+```markdown
+## Sin publicar — Título del cambio
+
+Rama `claude/el-tema`.
+```
+
+Cuando **empieza el cambio siguiente**, esa entrada pasa a llevar su fecha, su número de PR y el
+commit de la fusión, y la nueva se pone encima:
+
+```markdown
+## 2026-09-24 — PR #39: título del cambio
+
+[PR #39](https://github.com/jonathancr29/selector-asientos/pull/39), fusionado en `main` con el
+commit `ca35a43`.
+```
+
+Así el historial queda con una entrada fechada y trazable por cambio, y nunca hay dos «Sin
+publicar».
+
+## Cómo editar un archivo de 6.000 líneas
+
+`index.html` es un archivo grande y las ediciones a ciegas son la principal fuente de destrozos.
+Lo que funciona:
+
+- **Un guion de Node que sustituye texto exacto y falla si no hay exactamente una coincidencia.**
+  Así un cambio no se aplica dos veces ni en el sitio equivocado:
+
+```js
+const n = t.split(de).length - 1;
+if (n !== 1) throw new Error(n + ' coincidencias');
+t = t.replace(de, () => a);   // funcion, nunca cadena
+```
+
+- **`t.replace(de, () => a)` con una función, nunca con una cadena.** En una cadena de reemplazo,
+  `$'` y `$&` son especiales y pueden duplicar medio archivo.
+- **El guion se escribe con una herramienta de escritura de archivos, no con un `heredoc` del shell.**
+  Las barras invertidas y los acentos graves se estropean por el camino: pasó tres veces en una sola
+  sesión. Si el guion necesita una barra invertida, `String.fromCharCode(92)` evita el problema.
+- Los guiones son de usar y tirar: van al directorio temporal de trabajo, no al repositorio.
 
 ## Cómo está organizado el script
 
@@ -484,6 +561,31 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 
 ## Cómo verificar un cambio
 
+El listón de este proyecto es más alto que «pasan las pruebas», porque no hay tipos ni linter que
+recojan lo que se escape. Según lo que hayas tocado:
+
+**Si tocaste la parte sin DOM** (antes de la marca), además de las pruebas:
+
+- **Prueba de mutación.** Estropea a propósito cada regla nueva (invierte una condición, quita un
+  `return`, salta un aviso) y comprueba que **alguna prueba falla**. Si una mutación sobrevive, o
+  falta una prueba y hay que escribirla, o la mutación es equivalente y no se observa desde fuera;
+  en ese segundo caso, dilo en el PR y descártala. Así se encontraron cuatro huecos de pruebas.
+- **Si el cambio es un refactor**, compara la salida con la de antes en vez de confiar en la
+  lectura: carga las dos versiones en el mismo proceso y pásales los mismos casos. Para
+  `validarMapa` fueron 679 (7 tipos de sala × 97 archivos estropeados), comparando la lista de
+  errores **en su orden** y el mapa limpio.
+
+**Si tocaste la parte con DOM**, no hay pruebas que te cubran, así que:
+
+- **Compara contra la versión anterior servida en paralelo:** `git show HEAD:index.html > antes.html`,
+  y pasa el mismo guion por las dos anotando lo que importe (avisos, ids, posiciones, contadores).
+  Tienen que salir iguales. Borra `antes.html` antes del commit.
+- **Mide antes y después** si el cambio es de rendimiento, y **desconfía del reloj del navegador**:
+  en una misma sesión, el mismo redibujado midió 337 ms y 2.504 ms. Prefiere una cifra determinista
+  —número de nodos, de recorridos— y si das milisegundos, di en qué condiciones.
+
+Y en todos los casos, el repaso de siempre:
+
 1. `node --test pruebas.mjs`: todas en verde. Añade pruebas si tocas la parte sin DOM.
 2. Abre `index.html` y comprueba, según lo que hayas tocado:
    - **Previsualizar:** elegir y soltar butacas (clic, Enter, Espacio), recorrer con flechas,
@@ -527,7 +629,45 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
      probar el guardado, sirve la carpeta por HTTP.
 3. Revisa que no haya errores en la consola del navegador.
 
+## Qué aguanta, medido
+
+Números de un recinto grande de verdad (una arena de 249 columnas con 18.720 butacas de fila en
+cuatro bloques), en un portátil de escritorio. Sirven para saber qué es normal y qué sería una
+regresión; en una máquina modesta, multiplica por dos o tres.
+
+| | |
+|---|---:|
+| Tope de aforo (`BUTACAS_MAXIMAS`) | 20.000 lugares |
+| Ancho de la sala (`ANCHO_MAXIMO`) | 300 columnas |
+| `generarPlano` con 18.720 butacas | ~20 ms |
+| `validarMapa` con 18.720 butacas | ~300 ms (solo al importar o abrir) |
+| `dibujarTodo` con 18.720 butacas | ~290 ms, 56.160 nodos (3 por butaca) |
+| Elegir una butaca en Previsualizar | menos de 1 ms |
+| Zoom y desplazamiento | imperceptible (mueven el `viewBox`) |
+| JSON de un mapa así | unos pocos KB |
+| Acercamiento máximo | ~40 px por butaca en cualquier recinto |
+
+Lo que hay que entender de esa tabla: **vender va instantáneo a cualquier aforo**, porque elegir una
+butaca conmuta clases sobre el nodo que ya existe y no redibuja nada. Lo que cuesta es **cada acción
+del editor**, que pasa por `regenerar` → `dibujarTodo` y rehace el plano entero. El JSON es pequeño
+porque un mapa guarda **el diseño, no las butacas**: una banda de 26 filas son tres líneas, generen
+58 o 5.800 asientos.
+
 ## Pendiente
+
+Lo grande, por orden de valor:
+
+- **No rehacer los nodos que no han cambiado** en `dibujarButacas` (reconciliar por id en vez de
+  vaciar e injertar). Es lo único que baja de orden de magnitud el coste de una acción del editor:
+  hoy son ~290 ms con 18.720 butacas, y ya se hizo la parte barata (un cuarto de nodos menos, entre
+  un 13% y un 23%). Medido: lo caro es **crear** los nodos y ponerles los atributos, no injertarlos,
+  así que mover el injerto o clonar un molde no sirve (probado: 12%). Es cirugía sobre
+  `dibujarButacas` y `dibujarTodo`; hazlo con medición antes y después de cada paso.
+- **Partir el archivo en `src/`** con un guion de unión de unas 30 líneas, sin dependencias, que siga
+  produciendo el `index.html` de doble clic. Rompe la regla del archivo único, así que es una
+  decisión, no una corrección; el motivo externo está en *A dónde va esto*.
+
+Lo demás, sin prisa:
 
 - Probar el pellizco en un móvil o tablet real.
 - Guardar los mapas en un servidor: hoy se guardan en el navegador o como archivos JSON.
@@ -535,3 +675,27 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - Decidir si una mesa con lugares ocupados se puede mover, acortar o eliminar (hoy sí, con aviso).
 - Más formas: escenario secundario, cabina de DJ, columna.
 - Comprobar que las piezas caben sin recalcular las celdas por cada pieza (cuadrático con muchas piezas).
+- `calcularEncuadre` usa cuatro `Math.min(...lista)` sobre todas las butacas. Con 20.000 va bien
+  (~9 ms) pero un `spread` de esa longitud está a un factor tres del límite de argumentos del motor:
+  si algún día sube `BUTACAS_MAXIMAS`, hay que pasarlo a un solo recorrido.
+
+## A dónde va esto
+
+El destino previsto es **Sin Taquilla**, un sistema de ticketing en PHP que ya tiene lo que este
+proyecto no: transacciones contra sobreventa, reservas que caducan, cobro y control de acceso. Lo
+que le falta es justo esto, el asiento identificado.
+
+Para que el selector se pueda incrustar ahí hay **un solo obstáculo técnico**, y conviene saberlo
+antes de tocar nada: la cabecera de seguridad de esa aplicación es
+
+```
+default-src 'self'; style-src 'self'; script-src 'self' 'nonce-…'
+```
+
+`style-src 'self'` **sin** `'unsafe-inline'` y sin nonce: una etiqueta `<style>` en línea no se
+ejecuta, punto. El `<script>` podría salvarse con un nonce; la hoja de estilos no.
+
+Lo llamativo es que **todo lo demás ya es compatible**: cero `innerHTML`, cero `eval`, cero
+manejadores `onclick=` en el HTML, cero atributos `style=`, y las pocas escrituras a `.style` desde
+el script son CSSOM, que esa cabecera no bloquea. Separan el despliegue **exactamente dos bloques en
+línea**, que es lo que resolvería partir el archivo.

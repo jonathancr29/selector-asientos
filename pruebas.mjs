@@ -2616,3 +2616,63 @@ test('eliminar una banda se lleva su zona, salvo que alguien más la use', () =>
   // La zona de mesas nunca se va sola: siempre tiene que haber una para los lugares.
   assert.ok(api.eliminarBanda(plano, sala, 'mesas').zonas.some((z) => z.id === 'mesas'));
 });
+
+// ---------------------------------------------------------------------------
+// Los documentos, contra el codigo. Sin esto, README.md y AGENTS.md se quedan
+// describiendo una version anterior y nadie se entera hasta que estorba.
+// ---------------------------------------------------------------------------
+const DOCUMENTOS = ['README.md', 'AGENTS.md']
+  .map((nombre) => ({ nombre, texto: readFileSync(new URL('./' + nombre, import.meta.url), 'utf8') }));
+
+test('los documentos citan los topes que de verdad tiene el codigo', () => {
+  const api = cargar();
+  const todo = DOCUMENTOS.map((d) => d.texto).join('\n');
+  const miles = (n) => n.toLocaleString('de-DE');   // 20000 -> «20.000»
+  // Cada tope, y como tiene que aparecer escrito. Si se cambia la constante y no el
+  // texto, esta prueba falla y dice cual.
+  const topes = [
+    ['BUTACAS_MAXIMAS', miles(api.BUTACAS_MAXIMAS) + ' lugares'],
+    ['BUTACAS_MAXIMAS', miles(api.BUTACAS_MAXIMAS) + ' butacas'],
+    ['ANCHO_MAXIMO', api.ANCHO_MAXIMO + ' columnas'],
+    ['ZONAS_MAXIMAS', api.ZONAS_MAXIMAS + ' zonas'],
+    ['BUTACAS_POR_BLOQUE', '1 a ' + api.BUTACAS_POR_BLOQUE + ' butacas'],
+    ['BLOQUES_MAXIMOS', '1 a ' + api.BLOQUES_MAXIMOS + ' bloques'],
+    ['VERSION_MAPA', 'versión ' + api.VERSION_MAPA],
+  ];
+  for (const [constante, comoSeEscribe] of topes) {
+    assert.ok(todo.includes(comoSeEscribe),
+      'los documentos no dicen «' + comoSeEscribe + '»: ¿cambió ' + constante + ' y no el texto?');
+  }
+});
+
+test('los documentos no citan codigo que ya no existe', () => {
+  const fuentes = readFileSync(new URL('./index.html', import.meta.url), 'utf8') + '\n' + fuente;
+  // Palabras entre acentos graves que parecen un identificador suelto o una llamada.
+  const parece = /^[a-zA-Z_$][A-Za-z0-9_$]*$/;
+  // Lo que no es de este proyecto: JavaScript, el DOM, HTML, y los nombres de campo que
+  // los documentos usan en prosa al describir la forma de los datos.
+  const ajenos = new Set(('true false null undefined object string boolean number function class ' +
+    'document window localStorage JSON Set Map Math Array Object RegExp Number String Boolean ' +
+    'svg use symbol g rect text path circle title main aside summary details span div input ' +
+    'hidden id class style href x y w h dx dy i n b m p r v z k e t d f s ' +
+    'ancho alto zona nombre precio tipo filas bloques pasillos mesas lugares giro largo ' +
+    'cabeceras unLado completa guias lienzo escenario bandas verticales motivo errores mapa ' +
+    'plano sala butaca butacas fila numero seccion estado ocupadas bloqueadas elegidas zonas ' +
+    'formas muebles regiones colocadas cambiadas limpias ids siguiente formato version guardado ' +
+    'texto forma grupo subtitulo mira geo tablero profundidad item columnas ver data node npm ' +
+    'bash js json html css mjs yml sh markdown Enter Esc Tab Supr Alt Ctrl Shift WHERE ' +
+    'heredoc return spread ' +
+    // Estos aparecen en los documentos precisamente porque el proyecto NO los usa.
+    'innerHTML insertAdjacentHTML outerHTML eval onclick unsafe-inline').split(' '));
+  const huerfanos = [];
+  for (const { nombre, texto } of DOCUMENTOS) {
+    for (const cita of new Set([...texto.matchAll(/`([^`\n]+)`/g)].map((m) => m[1].trim()))) {
+      const limpio = cita.replace(/\(.*\)$/, '').replace(/^#/, '');
+      if (!parece.test(limpio) || ajenos.has(limpio)) continue;
+      if (/^[A-Z]\d+$/.test(limpio)) continue;        // un id de ejemplo: M2, F1, B3, N3
+      if (/^[0-9a-f]{7,40}$/.test(limpio)) continue;   // un hash de commit
+      if (!fuentes.includes(limpio)) huerfanos.push(nombre + ': ' + cita);
+    }
+  }
+  assert.deepEqual(huerfanos, [], 'los documentos nombran cosas que no estan en el codigo');
+});

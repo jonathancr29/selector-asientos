@@ -814,8 +814,34 @@ evalúa la parte del script anterior a la marca *«Fin de la parte sin DOM»*, a
 sigue siendo un solo archivo, y la API que ven las pruebas se escanea del propio archivo: una
 función nueva se prueba sin tocar el arnés. Requiere Node 18 o posterior.
 
+Dos de ellas vigilan **esta documentación**: que los topes que se citan aquí y en `AGENTS.md` sean
+los que tiene el código, y que no se nombre ninguna función que ya no exista. Así el texto no se
+queda describiendo una versión anterior sin que nadie se entere.
+
 Se ejecutan solas en cada pull request y en cada empujón a `main`
 (`.github/workflows/pruebas.yml`).
+
+## Qué aguanta
+
+Medido sobre una arena de 249 columnas con 18.720 butacas, en un portátil de escritorio (en una
+máquina modesta, multiplica por dos o tres):
+
+| | |
+|---|---:|
+| Aforo máximo | **20.000 lugares** |
+| Ancho de la sala | **300 columnas** |
+| Generar el plano | ~20 ms |
+| Redibujarlo entero | ~290 ms |
+| **Elegir una butaca** | **menos de 1 ms** |
+| Zoom y desplazamiento | imperceptible |
+| Tamaño del mapa guardado | unos pocos KB |
+
+**Comprar va instantáneo a cualquier aforo:** elegir una butaca no redibuja el plano, solo cambia
+clases en el nodo que ya existe. Lo que cuesta es cada acción del **editor**, que rehace el plano
+entero; con recintos de miles de butacas se nota, y está anotado como lo siguiente por hacer.
+
+El mapa guardado es pequeño porque guarda **el diseño, no las butacas**: una banda de 26 filas
+ocupa tres líneas de JSON, genere 58 o 5.800 asientos.
 
 ## Qué no incluye
 
