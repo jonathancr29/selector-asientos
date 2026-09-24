@@ -189,7 +189,13 @@
   .banda-vertical > .banda-nombre::before { content: '⇕ '; color: #64748b; }
   .banda { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 6px 0; border-top: 1px solid #2c2c36; }
   .banda:first-child { border-top: 0; }
-  .banda-nombre { flex: 1 1 130px; min-width: 110px; font-size: 13px; color: #e2e8f0; }
+  .banda-nombre { flex: 1 1 110px; min-width: 90px; font-size: 13px; color: #e2e8f0; }
+  .banda > .precio-zona {
+    flex: 0 0 76px; width: 76px; height: 28px; padding: 0 8px; text-align: right;
+    font: inherit; font-size: 13px; color: #e2e8f0;
+    background: #17171c; border: 1px solid #3a3a46; border-radius: 6px;
+  }
+  .banda > .precio-zona:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
   .banda-nombre input { width: 100%; }
   .banda-detalle { flex: 0 1 auto; min-width: 0; font-size: 12px; color: #94a3b8; }
   /* Los controles de cada banda, en su propia linea. */
@@ -291,6 +297,8 @@
   .pieza:focus-visible { stroke-dasharray: none; stroke-width: 1.4; }
   /* La activa: contorno continuo y relleno, distinto del foco (solo contorno mas grueso). */
   .pieza.activa { stroke-dasharray: none; fill: rgba(147, 197, 253, .14); }
+  /* Las butacas de la pieza seleccionada, marcadas con ella. */
+  .butaca.de-pieza-activa { color: #93c5fd; }
   #plano.moviendo-mesa, #plano.moviendo-mesa .pieza { cursor: grabbing; }
   .levantada { opacity: .3; }
   /* La sombra marca el destino. Verde si cabe; si no, roja y con contorno
@@ -455,8 +463,14 @@
           <label class="campo" for="nombre-pieza" data-tooltip="Nombre"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-nombre"></use></svg><span class="solo-lector">Nombre</span></label>
           <input type="text" id="nombre-pieza" maxlength="40" autocomplete="off" disabled placeholder="Ej.: Lateral izquierdo">
         </div>
-        <!-- Solo para mesas: si se vende entera (un solo precio, la suma de sus lugares). -->
-        <label class="casilla"><input type="checkbox" id="mesa-completa" disabled> Vender como mesa completa</label>
+        <!-- Solo para mesas: por mesa es un solo precio, la suma de sus lugares libres. -->
+        <div class="herramientas campo-ancho">
+          <label class="campo" for="venta-mesa" data-tooltip="Venta"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mesa-lados"></use></svg><span class="solo-lector">Venta</span></label>
+          <select id="venta-mesa" disabled>
+            <option value="butacas">Venta por butacas</option>
+            <option value="mesa">Venta por mesa</option>
+          </select>
+        </div>
         <button type="button" class="ancho-completo" id="completa-todas" disabled>Aplicar a todas las mesas</button>
       </details>
       <details class="grupo" open>
@@ -640,20 +654,24 @@
           </p>
       </details>
       <details class="grupo" open>
-        <summary>Zonas y precios</summary>
-        <ol class="zonas" id="lista-zonas"></ol>
+        <summary>Otras zonas</summary>
+        <ol class="zonas" id="lista-zonas" hidden></ol>
           <div class="herramientas">
             <button type="button" class="icono" id="agregar-zona" aria-label="Agregar una zona" data-tooltip="Agregar zona"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar-zona"></use></svg></button>
           </div>
           <p class="pista">
-            Precio por lugar, en pesos. Cada banda le da su zona a lo que cae dentro: mesas, bloques y
-            butacas sueltas. En «Pieza seleccionada» puedes darle a una su propia zona, y con el pincel,
-            a una butaca. Una zona en uso no se puede eliminar.
+            Las zonas de las bandas se editan en su fila, abajo. Aquí quedan las demás: la de una pieza
+            con zona propia, las que pintas con «Asignar zona» y las que aún no usa nadie. Una zona en
+            uso no se puede eliminar.
           </p>
       </details>
       <details class="grupo" open>
-        <summary>Bandas</summary>
+        <summary>Bandas y precios</summary>
         <ol id="lista-bandas"></ol>
+          <p class="pista">
+            El precio es por lugar, en pesos, y se lo da a todo lo que cae dentro de la banda. Dos
+            bandas con la misma zona comparten precio y numeración; «Zona nueva» le da una propia.
+          </p>
           <div class="rejilla-iconos herramientas">
             <button type="button" class="icono" id="agregar-banda-filas" aria-label="Agregar una banda de filas al final" data-tooltip="Agregar banda de filas"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar-filas"></use></svg></button>
             <button type="button" class="icono" id="agregar-banda-mesas" aria-label="Agregar una zona de mesas al final" data-tooltip="Agregar zona de mesas"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar-mesas"></use></svg></button>
@@ -2517,10 +2535,73 @@ function cambiarDistribucion(plano, sala, distribucion) {
   return nuevo;
 }
 
+// Cambia la zona de una banda. Sin zona ('' o null) se la quita: un espacio o una
+// franja sin zona no da precio a nada y lo de dentro hereda de mas afuera.
 function cambiarZonaBanda(plano, id, zona) {
   const nuevo = copiarPlano(plano);
-  const banda = ubicar(nuevo.bandas, id).item;
-  banda.zona = zona;   // un nombre puesto a mano se queda; el de por defecto sigue a la zona
+  const u = ubicar(nuevo.bandas, id);
+  if (!u) return { motivo: 'esa banda ya no existe' };
+  if (zona && !zonasDe(nuevo).some((z) => z.id === zona)) return { motivo: 'esa zona ya no existe' };
+  if (u.item.tipo === 'filas' && !zona) return { motivo: 'una banda de filas necesita una zona' };
+  if (zona) u.item.zona = zona;   // un nombre puesto a mano se queda; el de por defecto sigue a la zona
+  else delete u.item.zona;
+  return nuevo;
+}
+
+// La zona que una banda tiene para ella sola: nadie mas la usa, ni otra banda ni una
+// pieza con zona propia. Es la que se puede renombrar desde la fila de la banda, porque
+// renombrarla no cambia el precio de nada mas.
+function zonaExclusivaDeBanda(plano, id) {
+  const banda = nodosDeBandas(plano.bandas).find((b) => b.id === id);
+  const zona = banda && zonaDeBanda(banda);
+  if (!zona) return null;
+  const otras = nodosDeBandas(plano.bandas).filter((b) => b.id !== id && zonaDeBanda(b) === zona);
+  const piezas = [...(plano.mesas || []), ...(plano.bloquesFilas || []), ...(plano.butacasSueltas || [])]
+    .filter((p) => p.zona === zona);
+  return otras.length || piezas.length ? null : zona;
+}
+
+// Le da a una banda una zona nueva, con su nombre y precio 0. El nombre de la banda
+// pasa a ser el de la zona: en el panel son lo mismo.
+function zonaNuevaParaBanda(plano, id, nombre) {
+  const nuevo = copiarPlano(plano);
+  const u = ubicar(nuevo.bandas, id);
+  if (!u) return { motivo: 'esa banda ya no existe' };
+  const lista = copiarZonas(zonasDe(nuevo));
+  if (lista.length >= ZONAS_MAXIMAS) return { motivo: 'ya hay el máximo de zonas (' + ZONAS_MAXIMAS + ')' };
+  const base = String(nombre || '').trim().slice(0, NOMBRE_MAXIMO) || 'Zona';
+  let propio = base;
+  for (let n = 2; lista.some((z) => z.nombre.toLowerCase() === propio.toLowerCase()); n++) propio = base + ' ' + n;
+  let k = nuevo.siguienteZona || 1;
+  while (lista.some((z) => z.id === 'zona' + k)) k++;
+  lista.push({ id: 'zona' + k, nombre: propio, precio: 0 });
+  nuevo.zonas = lista;
+  nuevo.siguienteZona = k + 1;
+  u.item.zona = 'zona' + k;
+  delete u.item.nombre;   // el nombre vive ahora en la zona
+  return nuevo;
+}
+
+// Las mesas que caen dentro de una banda, franja o vertical (tambien las de sus bandas
+// interiores: su region esta dentro). Es lo que permite vender de golpe toda una zona de
+// mesas por mesa o por lugares.
+function mesasDeBanda(sala, id, lista = mesas) {
+  const region = sala.regiones.find((r) => r.id === id && r.tipo !== 'resto');
+  if (!region) return [];
+  return lista.filter((m) => m.x >= region.x && m.x < region.x + region.ancho &&
+                             m.y >= region.y && m.y < region.y + region.alto).map((m) => m.id);
+}
+
+// Pone o quita la venta por mesa en todas las mesas de una banda.
+function marcarMesasDeBanda(plano, sala, id, completa) {
+  const dentro = new Set(mesasDeBanda(sala, id, plano.mesas || []));
+  if (!dentro.size) return { motivo: 'esa banda no tiene mesas' };
+  const nuevo = copiarPlano(plano);
+  for (const mesa of nuevo.mesas) {
+    if (!dentro.has(mesa.id)) continue;
+    if (completa) mesa.completa = true;
+    else delete mesa.completa;
+  }
   return nuevo;
 }
 
@@ -3096,6 +3177,11 @@ function dibujarButacas() {
     if (b.grupo) g.dataset.pieza = b.grupo.id;
     else if (b.bloque) g.dataset.pieza = b.bloque;
     else if (b.suelta) g.dataset.pieza = b.suelta;
+    // Colocando piezas, las butacas de la seleccionada se marcan con ella: mesa y
+    // lugares son una sola cosa, que es lo que se mueve, gira y elimina.
+    if (mesaActiva && g.dataset.pieza === mesaActiva && modo === 'editor' && !conButacas()) {
+      g.classList.add('de-pieza-activa');
+    }
     // El area sensible es la celda entera: contigua con sus vecinas y sin solaparlas.
     g.appendChild(nodo('rect', { class: 'toque', x: b.x * PASO, y: b.y * PASO,
       width: PASO, height: PASO, rx: 2 }));
@@ -3245,7 +3331,12 @@ function dibujarZonas() {
   listaZonas.textContent = '';
   const usadas = { bandas: salaActual.bandas, mesas, bloquesFilas, butacasSueltas,
     zonasDeAsiento: Object.fromEntries(butacas.filter((b) => b.zona !== b.zonaOriginal).map((b) => [b.id, b.zona])) };
-  for (const [id, { nombre, precio }] of Object.entries(zonas)) {
+  // Las zonas de las bandas se editan en su fila: aqui solo quedan las demas (las de
+  // una pieza suelta, las pintadas a mano y las que aun no usa nadie).
+  const deBandas = new Set(nodosDeBandas(salaActual.bandas).map(zonaDeBanda).filter(Boolean));
+  const sueltas = Object.entries(zonas).filter(([id]) => !deBandas.has(id));
+  listaZonas.hidden = !sueltas.length;
+  for (const [id, { nombre, precio }] of sueltas) {
     const li = document.createElement('li');
     li.className = 'banda';
     const campo = (clase, op, valor, etiqueta, extra = {}) => {
@@ -3365,15 +3456,71 @@ function inicioDeFila(item, clase) {
   const muestra = document.createElement('span');
   muestra.className = 'muestra-capa';
   muestra.setAttribute('aria-hidden', 'true');
+  // El nombre de una banda que tiene su zona para ella sola es el de la zona: son lo
+  // mismo en el panel, asi que renombrarla renombra la zona y las etiquetas la siguen.
+  const propia = zonaExclusivaDeBanda(planoEditable(), item.id);
   const campo = document.createElement('input');
   Object.assign(campo, { type: 'text', maxLength: NOMBRE_MAXIMO, autocomplete: 'off',
-                         value: item.nombrePropio || '', placeholder: item.nombre });
+                         value: propia ? zonas[propia].nombre : item.nombrePropio || '',
+                         placeholder: item.nombre });
   campo.setAttribute('aria-label', 'Nombre de ' + item.nombre);
   campo.dataset.op = 'nombre';
   campo.dataset.banda = item.id;
+  if (propia) campo.dataset.zona = propia;
   nombre.appendChild(campo);
-  li.append(muestra, nombre, detalle);   // la seleccionada: borde de su color y aria-current
+  li.append(muestra, nombre, precioDeBanda(item), detalle);   // la seleccionada: borde de su color y aria-current
   return { li, detalle };
+}
+
+// El precio por lugar de la zona de una banda, editable en su propia fila. Las bandas
+// sin zona (espacios y franjas que no dan precio a nada) no lo llevan.
+function precioDeBanda(item) {
+  const zona = item.zona && zonas[item.zona];
+  if (!zona) return '';
+  const campo = document.createElement('input');
+  Object.assign(campo, { type: 'text', className: 'precio-zona', inputMode: 'decimal', autocomplete: 'off',
+                         value: (zona.precio / 100).toFixed(2) });
+  campo.setAttribute('aria-label', 'Precio por lugar de ' + zona.nombre + ', en pesos');
+  campo.dataset.op = 'precio';
+  campo.dataset.banda = item.id;
+  campo.dataset.zona = item.zona;
+  return campo;
+}
+
+// La zona de una banda: la suya o la de otra banda (así dos bandas comparten precio y
+// numeración), «Zona nueva» para darle una propia, y «Sin zona» donde se puede no dar
+// precio (espacios y franjas: lo de dentro hereda de más afuera).
+function selectorDeZona(banda) {
+  const select = document.createElement('select');
+  select.setAttribute('aria-label', 'Zona de ' + banda.nombre);
+  select.dataset.op = 'zona';
+  select.dataset.banda = banda.id;
+  if (banda.tipo !== 'filas' && banda.tipo !== 'mesas') {
+    select.appendChild(new Option('Sin zona', '', false, !banda.zona));
+  }
+  for (const [id, { nombre, precio }] of Object.entries(zonas)) {
+    if (id === 'mesas' && banda.tipo === 'filas') continue;   // la de mesas no numera filas
+    select.appendChild(new Option(nombre + ' · ' + dinero(precio), id, false, id === banda.zona));
+  }
+  select.appendChild(new Option('Zona nueva…', 'nueva'));
+  return select;
+}
+
+// En una zona de mesas, cómo se venden todas sus mesas. «Mixta» solo aparece cuando ya
+// lo son, para no perder el estado de cada mesa sin querer.
+function selectorDeVenta(banda) {
+  const dentro = mesasDeBanda(salaActual, banda.id);
+  if (!dentro.length) return null;
+  const completas = dentro.filter((id) => mesas.find((m) => m.id === id).completa).length;
+  const select = document.createElement('select');
+  select.setAttribute('aria-label', 'Venta de las mesas de ' + banda.nombre);
+  select.dataset.op = 'venta';
+  select.dataset.banda = banda.id;
+  const mixta = completas > 0 && completas < dentro.length;
+  if (mixta) select.appendChild(new Option('Venta mixta', 'mixta', false, true));
+  select.appendChild(new Option('Venta por butacas', 'butacas', false, !mixta && !completas));
+  select.appendChild(new Option('Venta por mesa', 'mesa', false, !mixta && completas === dentro.length));
+  return select;
 }
 
 function filasDeBandas(bandas, enVertical) {
@@ -3393,18 +3540,16 @@ function filasDeBandas(bandas, enVertical) {
         (enVertical ? ' · ' + plural(banda.anchoOcupado, 'columna', 'columnas') : '');
       controles.append(
         boton('menos-fila', 'Quitar una fila a ' + n, 'menos', banda.id, banda.filas <= 1),
-        boton('mas-fila', 'Agregar una fila a ' + n, 'mas', banda.id, banda.filas >= FILAS_MAXIMAS));
-      const zona = document.createElement('select');
-      zona.setAttribute('aria-label', 'Zona de ' + n);
-      zona.dataset.op = 'zona';
-      zona.dataset.banda = banda.id;
-      llenarZonasDeFilas(zona, banda.zona);
-      controles.appendChild(zona);
+        boton('mas-fila', 'Agregar una fila a ' + n, 'mas', banda.id, banda.filas >= FILAS_MAXIMAS),
+        selectorDeZona(banda));
     } else if (tieneAlto(banda)) {
       detalle.textContent = plural(banda.alto, 'fila', 'filas') + ' de alto';
       controles.append(
         boton('menos-fila', 'Quitar una fila de alto a ' + n, 'menos', banda.id, banda.alto <= 1),
-        boton('mas-fila', 'Agregar una fila de alto a ' + n, 'mas', banda.id, banda.alto >= ALTO_MAXIMO));
+        boton('mas-fila', 'Agregar una fila de alto a ' + n, 'mas', banda.id, banda.alto >= ALTO_MAXIMO),
+        selectorDeZona(banda));
+      const venta = selectorDeVenta(banda);
+      if (venta) controles.appendChild(venta);
       if (banda.tipo === 'espacio') {
         const guias = boton('guias', 'Guías de fila en ' + n, 'guias', banda.id);
         guias.setAttribute('aria-pressed', String(Boolean(banda.guias)));
@@ -3413,8 +3558,10 @@ function filasDeBandas(bandas, enVertical) {
     } else {
       detalle.textContent = plural(banda.verticales.length, 'banda vertical', 'bandas verticales') +
         ' · ' + plural(banda.alto, 'fila', 'filas') + ' de alto';
-      controles.appendChild(boton('agregar-vertical', 'Agregar una banda vertical a ' + n, 'agregar-vertical', banda.id,
-                                  banda.verticales.length >= VERTICALES_MAXIMAS));
+      controles.append(
+        boton('agregar-vertical', 'Agregar una banda vertical a ' + n, 'agregar-vertical', banda.id,
+              banda.verticales.length >= VERTICALES_MAXIMAS),
+        selectorDeZona(banda));
     }
     const anterior = bandas[i - 1];
     controles.append(
@@ -3508,6 +3655,16 @@ function aplicarNombreDeBanda(campo) {
   const banda = bandaDe(salaActual, id);
   if (!banda) return;
   const nombre = campo.value.trim().slice(0, NOMBRE_MAXIMO);
+  // Con zona para ella sola, el nombre es el de la zona: las etiquetas lo siguen.
+  const propia = campo.dataset.zona;
+  if (propia) {
+    if (nombre === zonas[propia].nombre) return;
+    if (!aplicarBandas(editarZona(planoEditable(), propia, { nombre }),
+                       zonas[propia].nombre + ' se llama ahora «' + nombre + '».')) {
+      campo.value = zonas[propia].nombre;
+    }
+    return;
+  }
   if (nombre === (banda.nombrePropio || '')) return;
   aplicarBandas(renombrarBanda(planoEditable(), id, nombre),
     nombre ? banda.nombre + ' se llama ahora «' + nombre + '».' : banda.nombre + ' vuelve a su nombre por defecto.');
@@ -3573,28 +3730,65 @@ listaBandas.addEventListener('focusin', (e) => {
 });
 
 listaBandas.addEventListener('keydown', (e) => {
-  const campo = e.target.closest('input[data-op="nombre"]');
+  const campo = e.target.closest('input[data-op]');
   if (!campo) return;
+  const esNombre = campo.dataset.op === 'nombre';
   if (e.key === 'Enter') {
-    aplicarNombreDeBanda(campo);
+    if (esNombre) aplicarNombreDeBanda(campo);
+    else aplicarPrecioDeBanda(campo);
   } else if (e.key === 'Escape') {
     const banda = bandaDe(salaActual, campo.dataset.banda);
-    campo.value = (banda && banda.nombrePropio) || '';
+    const zona = zonas[campo.dataset.zona];
+    campo.value = !esNombre ? (zona ? (zona.precio / 100).toFixed(2) : campo.value)
+      : zona ? zona.nombre : (banda && banda.nombrePropio) || '';
   }
 });
 
 listaBandas.addEventListener('change', (e) => {
-  const campo = e.target.closest('input[data-op="nombre"]');
+  const campo = e.target.closest('input[data-op]');
   if (campo) {
-    aplicarNombreDeBanda(campo);
+    if (campo.dataset.op === 'nombre') aplicarNombreDeBanda(campo);
+    else aplicarPrecioDeBanda(campo);
     return;
   }
-  const control = e.target.closest('select[data-op="zona"]');
+  const control = e.target.closest('select[data-op]');
   if (!control) return;
-  const antes = bandaDe(salaActual, control.dataset.banda).nombre;
-  aplicarBandas(cambiarZonaBanda(planoEditable(), control.dataset.banda, control.value),
-                antes + ' pasa a la zona ' + zonas[control.value].nombre + '.');
+  const { op, banda: id } = control.dataset;
+  const antes = bandaDe(salaActual, id).nombre;
+  if (op === 'venta') {
+    if (control.value === 'mixta') return;
+    const completa = control.value === 'mesa';
+    aplicarBandas(marcarMesasDeBanda(planoEditable(), salaActual, id, completa),
+                  'Las mesas de ' + antes + ' se venden ' + (completa ? 'por mesa.' : 'por butacas.'));
+    return;
+  }
+  if (control.value === 'nueva') {
+    if (aplicarBandas(zonaNuevaParaBanda(planoEditable(), id, antes), '')) {
+      const puesta = bandaDe(salaActual, id);
+      anunciar(antes + ' pasa a su propia zona «' + zonas[puesta.zona].nombre + '», a ' + dinero(0) +
+               ' por lugar. Escribe su precio.');
+    }
+    return;
+  }
+  aplicarBandas(cambiarZonaBanda(planoEditable(), id, control.value),
+                control.value ? antes + ' pasa a la zona ' + zonas[control.value].nombre + '.'
+                              : antes + ' se queda sin zona: lo de dentro hereda de más afuera.');
 });
+
+// El precio por lugar escrito en la fila de una banda: es el de su zona.
+function aplicarPrecioDeBanda(campo) {
+  const zona = zonas[campo.dataset.zona];
+  if (!zona) return;
+  const precio = leerPrecio(campo.value);
+  if (precio === null) {
+    anunciar('No se pudo: el precio debe ser de 0 a 1,000,000.00.');
+    campo.value = (zona.precio / 100).toFixed(2);
+    return;
+  }
+  if (precio === zona.precio) return;
+  aplicarBandas(editarZona(planoEditable(), campo.dataset.zona, { precio }),
+                zona.nombre + ': ' + dinero(precio) + ' por lugar.');
+}
 
 function aplicarColumnas() {
   const { distribucion, motivo } = leerDistribucion(
@@ -4126,6 +4320,10 @@ function marcarActiva(id) {
     p.classList.toggle('activa', activa);
     p.setAttribute('aria-pressed', String(activa));
   }
+  // Las butacas de la pieza se marcan con ella: una mesa y sus lugares son una sola cosa.
+  for (const b of capaButacas.querySelectorAll('.butaca')) {
+    b.classList.toggle('de-pieza-activa', Boolean(id) && b.dataset.pieza === id);
+  }
   actualizarControles();
 }
 
@@ -4173,11 +4371,11 @@ function actualizarControles() {
   botonEscenario.setAttribute('aria-label', textoEscenario);
   botonEscenario.dataset.tooltip = textoEscenario;
   botonEscenario.querySelector('use').setAttribute('href', escenario.ausente ? '#i-escenario-agregar' : '#i-escenario-quitar');
-  // Mesa completa: solo para mesas.
-  const casilla = document.getElementById('mesa-completa');
+  // Venta por mesa o por butacas: solo para mesas.
+  const venta = document.getElementById('venta-mesa');
   const deMesa = Boolean(m) && esMesa(m) && !esEscenario(m);
-  casilla.disabled = !deMesa;
-  casilla.checked = deMesa && Boolean(m.completa);
+  venta.disabled = !deMesa;
+  venta.value = deMesa && m.completa ? 'mesa' : 'butacas';
   document.getElementById('completa-todas').disabled = !deMesa;
   // Zona: mesas, bloques y butacas sueltas (lo que tiene butacas). Nombre: bloques y
   // formas. No se pisa lo que se esta escribiendo.
@@ -4805,18 +5003,19 @@ document.getElementById('alternar-escenario').addEventListener('click', () => {
 document.getElementById('agregar-lados').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('lados')));
 document.getElementById('agregar-cruz').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('cruz')));
 document.getElementById('agregar-barra').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('barra')));
-document.getElementById('mesa-completa').addEventListener('change', (e) => {
+document.getElementById('venta-mesa').addEventListener('change', (e) => {
   const m = piezaPorId(mesaActiva);
   if (!m) return;
-  planos[tipoActual] = marcarMesaCompleta(planoEditable(), m.id, e.target.checked);
-  regenerar(e.target.checked
-    ? m.nombre + ' se vende completa: sus lugares se eligen juntos y se cobra la suma de todos.'
-    : m.nombre + ' se vende por lugares.');
+  const completa = e.target.value === 'mesa';
+  planos[tipoActual] = marcarMesaCompleta(planoEditable(), m.id, completa);
+  regenerar(completa
+    ? m.nombre + ' se vende por mesa: sus lugares se eligen juntos y se cobra la suma de todos.'
+    : m.nombre + ' se vende por butacas.');
 });
 document.getElementById('completa-todas').addEventListener('click', () => {
-  const completa = document.getElementById('mesa-completa').checked;
+  const completa = document.getElementById('venta-mesa').value === 'mesa';
   planos[tipoActual] = marcarTodasLasMesas(planoEditable(), completa);
-  regenerar(completa ? 'Todas las mesas se venden completas.' : 'Todas las mesas se venden por lugares.');
+  regenerar(completa ? 'Todas las mesas se venden por mesa.' : 'Todas las mesas se venden por butacas.');
 });
 document.getElementById('agregar-redonda').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('redonda')));
 document.getElementById('agregar-bloque').addEventListener('click', () => conTopeDeAforo(agregarBloqueNuevo));

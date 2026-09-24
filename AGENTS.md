@@ -61,7 +61,7 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    devuelven configuraciones de pieza (mesa `{ id, x, y, largo, cabeceras, unLado, giro }` o bloque
    `{ id, tipo: 'filas', x, y, ancho, filas, zona, giro, nombre? }`); nunca modifican la actual.
    **Bandas y columnas:** `planoDesdeSala`, `cambiarDistribucion`, `redimensionarBanda`, `moverBanda`, `eliminarBanda`, `agregarBanda`,
-   `cambiarZonaBanda`, `agregarZona`, `editarZona`, `eliminarZona`, `usosDeZona`, `leerPrecio`, `agregarVertical`, `cambiarAnchoVertical`, `agregarBandaEnVertical`,
+   `cambiarZonaBanda`, `zonaExclusivaDeBanda`, `zonaNuevaParaBanda`, `agregarZona`, `editarZona`, `eliminarZona`, `usosDeZona`, `leerPrecio`, `agregarVertical`, `cambiarAnchoVertical`, `agregarBandaEnVertical`,
    `renombrarBanda`, `duplicarBanda` y `duplicarPieza`. Devuelven un plano nuevo o `{ motivo }`.
    **Butacas sueltas y formas:** `agregarButacaSuelta`, `configDeButaca`, `agregarForma`,
    `configDeForma`, `cambiarTamanoForma` y `FORMAS`. `LISTAS_DE_PIEZAS` (lista, prefijo y contador de
@@ -121,6 +121,15 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   `zonaOriginal`; `planoDesdeSala` extrae las que difieren. Asignar la zona original quita la entrada
   (`asignarZonaAsiento`). Cuenta en `usosDeZona` y se copia al duplicar (`copiarZonasDeAsiento`).
   La herramienta es `herramienta === 'zona'`; `conButacas()` agrupa las que trabajan sobre butacas.
+- **El panel de bandas es el de las zonas:** cada fila lleva el nombre, el precio y la zona de su
+  banda. Si la zona es suya en exclusiva (`zonaExclusivaDeBanda`), el campo de nombre **renombra la
+  zona** (`editarZona`) y no la banda: son lo mismo para quien edita. Si la comparte, vuelve a ser el
+  nombre propio de la banda. `zonaNuevaParaBanda` es la opción «Zona nueva». El grupo *Otras zonas*
+  (`dibujarZonas`) solo lista las zonas que no son de ninguna banda, para que sigan siendo editables:
+  las de una pieza con zona propia, las pintadas y las que no usa nadie.
+- **Venta por mesa o por butacas:** `marcarMesaCompleta` (una), `marcarMesasDeBanda` (las de una
+  banda, con `mesasDeBanda`) y `marcarTodasLasMesas` (todas). En la interfaz son el selector
+  `#venta-mesa` de la pieza, el selector de la fila de la banda y «Aplicar a todas las mesas».
 - **Mesa completa (`completa: true`)**: sus lugares llevan `grupo.completa`. Elegir pasa siempre por
   `alternarEleccion` (todos sus lugares libres a la vez), y `completarMesasElegidas` corrige las
   selecciones parciales al regenerar. El precio no se guarda: es la suma de los lugares libres, cada
@@ -325,6 +334,8 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    - **Editar plano:** arrastrar una mesa a un sitio válido y a uno inválido (pasillo, otra mesa),
      Esc, flechas, girar, alargar y acortar, cabeceras, agregar Lados y Cruz, eliminar,
      «Restablecer sala», y que la selección se conserve.
+   - **Bandas y precios:** nombre, precio, zona («Zona nueva» y compartir con otra banda), venta de
+     las mesas de una zona de mesas, y que *Otras zonas* solo liste las que no son de ninguna banda.
    - **Bandas:** − / +, zona, subir y bajar, eliminar, agregar; que no se aplique un cambio que deja
      una mesa sin caber, y que el foco vuelva al mismo control.
    - **Mapa en blanco:** elegirlo abre el editor; ancho del lienzo, agregar espacios y guías, agregar

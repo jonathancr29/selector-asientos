@@ -4,9 +4,33 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — La zona se hereda de la banda
+## Sin publicar — Un solo panel: bandas con su precio
 
-Rama `claude/herencia-de-zona`.
+Rama `claude/panel-de-zonas`.
+
+### Cambiado
+
+- **El panel de bandas es el de las zonas.** Cada fila lleva el nombre, el **precio por lugar** y la
+  zona de su banda, así que ya no hay dos listas que mantener. El grupo pasa a llamarse *Bandas y
+  precios*.
+- **El nombre de una banda con zona propia es el de su zona:** cambiarlo cambia las etiquetas de sus
+  butacas. Si comparte zona con otra banda, vuelve a ser su nombre propio.
+- **Compartir o separar zonas desde la fila:** elegir la zona de otra banda las hace compartir precio
+  y numeración; *Zona nueva…* le da una propia, con su nombre y a $0. Un espacio o una franja puede
+  quedarse *Sin zona*.
+- **Otras zonas** es el grupo que queda para las zonas que no son de ninguna banda (la de una pieza
+  con zona propia, las pintadas con *Asignar zona* y las que no usa nadie). Aparece vacío cuando todas
+  son de una banda.
+- **Venta por mesa o por butacas:** la casilla «Vender como mesa completa» pasa a ser un selector
+  **Venta** con las dos opciones, y las zonas de mesas tienen el suyo en su fila para cambiar de golpe
+  todas sus mesas (*Venta mixta* cuando no coinciden). Sigue estando «Aplicar a todas las mesas».
+- **La mesa y sus lugares son una sola pieza:** al seleccionar una mesa, un bloque o una butaca suelta
+  en el editor, sus butacas se marcan con ella.
+
+## 2026-09-23 — PR #26: la zona se hereda de la banda
+
+[PR #26](https://github.com/jonathancr29/selector-asientos/pull/26), fusionado en `main` con el
+commit `b69215e`.
 
 ### Cambiado
 
