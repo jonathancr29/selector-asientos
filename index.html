@@ -303,6 +303,11 @@
   .levantada { opacity: .3; }
   /* La sombra marca el destino. Verde si cabe; si no, roja y con contorno
      discontinuo, para no depender solo del color. */
+  /* El rectangulo de las herramientas por area, con su conteo. */
+  .area { pointer-events: none; }
+  .area rect { fill: rgba(147, 197, 253, .12); stroke: #93c5fd; stroke-width: .8; stroke-dasharray: 2 1.5; }
+  .area.quitando rect { fill: rgba(248, 250, 252, .08); stroke: #cbd5e1; }
+  .area text { fill: #e2e8f0; font-size: 4px; font-weight: 700; paint-order: stroke; stroke: #17171c; stroke-width: 1.2; }
   .sombra { color: #22c55e; fill: currentColor; pointer-events: none; }
   .sombra.invalida { color: #ef4444; }
   .sombra .contorno { fill-opacity: .15; stroke: currentColor; stroke-width: 1; }
@@ -573,6 +578,7 @@
         <g id="seleccion-banda"></g>   <!-- solo en modo editor: el contorno de la banda seleccionada -->
         <g id="piezas"></g>   <!-- solo en modo editor: una zona movible por mesa -->
         <g id="rotulo-seleccion"></g>   <!-- el nombre de la banda seleccionada, encima de todo -->
+        <g id="area" class="area"></g>   <!-- el rectangulo de asignar zona o bloquear por area -->
       </svg>
     </div>
 
@@ -2135,6 +2141,77 @@ function alternarBloqueada(plano, id) {
 }
 
 // ---------------------------------------------------------------------------
+// Trabajar por area.
+//
+// Asignar zona y bloquear van butaca a butaca, que es lo justo para retocar dos
+// lugares pero imposible para «las tres primeras filas del bloque central». Un
+// area es un rectangulo de celdas, con las esquinas en cualquier orden: lo que
+// se arrastra en el plano o se extiende con Mayus y las flechas.
+//
+// Las dos operaciones devuelven { plano, cambiadas, ocupadas } para poder decir
+// que paso: las ocupadas no cambian nunca, ni de zona ni de bloqueo.
+// ---------------------------------------------------------------------------
+const areaDeCeldas = (a, b) => ({ x1: Math.min(a.x, b.x), y1: Math.min(a.y, b.y),
+                                  x2: Math.max(a.x, b.x), y2: Math.max(a.y, b.y) });
+
+const butacasEnArea = (lista, area) => lista.filter((b) =>
+  b.x >= area.x1 && b.x <= area.x2 && b.y >= area.y1 && b.y <= area.y2);
+
+// Las mesas que se venden completas y acaban con lugares de mas de una zona: su
+// precio deja de ser el de una sola zona, asi que hay que decirlo.
+function mesasConZonasMezcladas(plano, lista) {
+  const porMesa = new Map();
+  for (const b of lista) {
+    if (!b.grupo || !b.grupo.completa) continue;
+    if (!porMesa.has(b.grupo.id)) porMesa.set(b.grupo.id, { nombre: b.grupo.nombre, zonas: new Set() });
+    porMesa.get(b.grupo.id).zonas.add((plano.zonasDeAsiento || {})[b.id] || b.zonaOriginal);
+  }
+  return [...porMesa.values()].filter((m) => m.zonas.size > 1).map((m) => m.nombre);
+}
+
+// Asigna una zona a todas las butacas libres de un area. Sin zona ('' o null) las
+// devuelve a la suya de siempre, que es lo que hace Alt. Una butaca que ya esta en
+// la zona de destino no cuenta como cambiada.
+function asignarZonaEnArea(plano, lista, area, zona) {
+  const nuevo = copiarPlano(plano);
+  nuevo.zonasDeAsiento = { ...(nuevo.zonasDeAsiento || {}) };
+  const cambiadas = [], ocupadas = [];
+  for (const b of butacasEnArea(lista, area)) {
+    if (b.estado === 'ocupada') {
+      ocupadas.push(b.id);
+      continue;
+    }
+    const destino = zona || b.zonaOriginal;
+    if (destino === b.zona) continue;
+    // Solo se guarda lo que se aparta de su zona de siempre: asi el mapa no engorda
+    // con lo que ya heredaba de su banda.
+    if (destino === b.zonaOriginal) delete nuevo.zonasDeAsiento[b.id];
+    else nuevo.zonasDeAsiento[b.id] = destino;
+    cambiadas.push(b.id);
+  }
+  return { plano: nuevo, cambiadas, ocupadas, mesas: mesasConZonasMezcladas(nuevo, lista) };
+}
+
+// Bloquea o desbloquea todas las butacas libres de un area.
+function bloquearEnArea(plano, lista, area, bloquear) {
+  const nuevo = copiarPlano(plano);
+  const bloqueadas = new Set(nuevo.bloqueadas || []);
+  const cambiadas = [], ocupadas = [];
+  for (const b of butacasEnArea(lista, area)) {
+    if (b.estado === 'ocupada') {
+      ocupadas.push(b.id);
+      continue;
+    }
+    if (bloquear === bloqueadas.has(b.id)) continue;
+    if (bloquear) bloqueadas.add(b.id);
+    else bloqueadas.delete(b.id);
+    cambiadas.push(b.id);
+  }
+  nuevo.bloqueadas = [...bloqueadas];
+  return { plano: nuevo, cambiadas, ocupadas };
+}
+
+// ---------------------------------------------------------------------------
 // Mapas guardados.
 //
 // Un mapa es el diseño de un recinto en JSON: nombre, columnas (bloques y
@@ -2990,6 +3067,7 @@ const capaMuebles = document.getElementById('muebles');
 const capaButacas = document.getElementById('butacas');
 const capaPiezas = document.getElementById('piezas');
 const capaSeleccion = document.getElementById('seleccion-banda');
+const capaArea = document.getElementById('area');
 const capaSubtitulos = document.getElementById('subtitulos');
 const capaRotuloSeleccion = document.getElementById('rotulo-seleccion');
 const formatoDinero = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
@@ -4012,6 +4090,17 @@ svg.addEventListener('wheel', (e) => {
 // con dos se arrastra y se pellizca a la vez.
 const punteros = new Map();
 let arrastre = null;
+// Con la barra espaciadora pulsada, el arrastre siempre mueve el plano: es la salida
+// para desplazarse mientras una herramienta de butacas se queda con el arrastre.
+let espacioPulsado = false;
+document.addEventListener('keydown', (e) => {
+  // En un campo de texto, la barra escribe un espacio: ahi no es para el plano.
+  if (e.code === 'Space' && !e.repeat && !e.target.closest('input, select, textarea')) espacioPulsado = true;
+});
+document.addEventListener('keyup', (e) => {
+  if (e.code === 'Space') espacioPulsado = false;
+});
+window.addEventListener('blur', () => { espacioPulsado = false; });
 
 function centroDePunteros() {
   const [a, b] = punteros.values();
@@ -4020,7 +4109,10 @@ function centroDePunteros() {
 }
 
 svg.addEventListener('pointerdown', (e) => {
-  if (e.button !== 0) return;   // solo boton principal: el derecho y el central no eligen butaca
+  // El boton central siempre mueve el plano, tambien mientras se pinta por area.
+  if (e.button !== 0 && e.button !== 1) return;   // el derecho no elige butaca
+  const soloMover = e.button === 1 || espacioPulsado;
+  if (e.button === 1) e.preventDefault();
   punteros.set(e.pointerId, { x: e.clientX, y: e.clientY });
   svg.setPointerCapture(e.pointerId);
   if (punteros.size === 1) {
@@ -4033,6 +4125,9 @@ svg.addEventListener('pointerdown', (e) => {
     }
     arrastre = {
       x: e.clientX, y: e.clientY, movido: 0,
+      // Con la herramienta de zona o de bloqueo, arrastrar dibuja un rectangulo en vez
+      // de mover el plano; Alt lo deshace (zona de siempre, o desbloquear).
+      area: modo === 'editor' && conButacas() && !soloMover ? { desde: celdaBajo(e), alt: e.altKey } : null,
       // La butaca se anota AQUI, no en pointerup: setPointerCapture retargetea al
       // <svg> todos los eventos de puntero siguientes, asi que al soltar el boton
       // e.target ya es el <svg> y closest('.butaca') devuelve null.
@@ -4044,6 +4139,10 @@ svg.addEventListener('pointerdown', (e) => {
     // Un segundo dedo convierte el toque en gesto de plano: si se movia una
     // mesa, se cancela y el pellizco sigue normal.
     if (arrastreMesa) terminarArrastreMesa(false);
+    if (arrastre && arrastre.area) {
+      arrastre.area = null;
+      dibujarArea(null);
+    }
     if (arrastre) arrastre.movido = Infinity;
     else arrastre = { x: e.clientX, y: e.clientY, movido: Infinity, butaca: null };
   }
@@ -4065,6 +4164,11 @@ svg.addEventListener('pointermove', (e) => {
       Math.abs(e.clientX - arrastre.x) + Math.abs(e.clientY - arrastre.y));
   }
   if (arrastre.movido > 4) svg.classList.add('arrastrando');
+  if (arrastre.area) {
+    arrastre.area.hasta = celdaBajo(e);
+    dibujarArea(areaDeCeldas(arrastre.area.desde, arrastre.area.hasta), arrastre.area.alt);
+    return;   // el plano se queda quieto: el gesto es del rectangulo
+  }
 
   const caja = svg.getBoundingClientRect();
   vista.x -= ((despues.x - antes.x) / caja.width) * vista.w;
@@ -4083,6 +4187,13 @@ function soltarPuntero(e, cancelado) {
   }
   if (punteros.size) return;   // queda un dedo: el gesto sigue
   svg.classList.remove('arrastrando');
+  if (arrastre && arrastre.area && arrastre.area.hasta) {
+    const area = areaDeCeldas(arrastre.area.desde, arrastre.area.hasta);
+    dibujarArea(null);
+    if (!cancelado && arrastre.movido > 4) aplicarArea(area, arrastre.area.alt);
+    arrastre = null;
+    return;
+  }
   // Un arrastre no debe contar como clic sobre la butaca que quedo debajo.
   if (!cancelado && arrastre && arrastre.movido <= 4) {
     // En el editor, un clic en el fondo selecciona la banda de debajo (y otro clic,
@@ -4239,14 +4350,43 @@ svg.addEventListener('keydown', (e) => {
   }
   const elemento = e.target.closest('.butaca');
   if (!elemento) return;
+  const porArea = modo === 'editor' && conButacas();
+  if (e.key === 'Escape' && areaTeclado) {
+    e.preventDefault();
+    limpiarArea();
+    anunciar('Área cancelada.');
+    return;
+  }
+  // Con una herramienta de butacas, la barra mueve el plano mientras se pinta por
+  // area: ahi no activa la butaca enfocada, que se aplica con Enter.
+  if (e.key === ' ' && porArea) {
+    e.preventDefault();
+    return;
+  }
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault();
+    // Con un área extendida con Mayús, Enter la aplica (Alt+Enter la deshace).
+    if (areaTeclado && areaTeclado.hasta) {
+      const area = areaDeCeldas(areaTeclado.desde, areaTeclado.hasta);
+      const id = porNodo(elemento).id;
+      limpiarArea();
+      aplicarArea(area, e.altKey);
+      const vuelta = porId.get(id);
+      if (vuelta) vuelta.nodo.focus({ preventScroll: true });
+      return;
+    }
     alternar(elemento);
     return;
   }
   const flecha = FLECHAS[e.key];
+  if (flecha && e.shiftKey && porArea) {
+    e.preventDefault();
+    extenderArea(elemento, flecha);
+    return;
+  }
   if (flecha) {
     e.preventDefault();
+    if (areaTeclado) limpiarArea();
     moverFoco(elemento, flecha.dx, flecha.dy);
   }
 });
@@ -4846,9 +4986,13 @@ const ATAJOS = {
 
 const PISTAS = {
   zona: 'Elige una zona y haz clic en una butaca, o Enter sobre ella, para asignársela · otro clic la ' +
-        'devuelve a su zona · las marcadas con la palomita ya son de la zona elegida · se guarda con el mapa',
-  bloquear: 'Haz clic en una butaca, o Enter sobre ella, para bloquearla o desbloquearla · ' +
-            'flechas para recorrer · las bloqueadas se guardan con el mapa',
+        'devuelve a su zona · arrastra para pintar un área entera, con Alt para devolverla a su zona · ' +
+        'con teclado, Mayús y flechas extienden el área y Enter la aplica · el plano se mueve con la barra ' +
+        'espaciadora, el botón central o dos dedos · las marcadas con la palomita ya son de la zona elegida',
+  bloquear: 'Haz clic en una butaca, o Enter sobre ella, para bloquearla o desbloquearla · arrastra para ' +
+            'bloquear un área entera, con Alt para desbloquearla · con teclado, Mayús y flechas extienden ' +
+            'el área y Enter la aplica · el plano se mueve con la barra espaciadora, el botón central o ' +
+            'dos dedos · las bloqueadas se guardan con el mapa',
   vista: 'Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer',
   editor: 'Arrastra el escenario, una mesa, un bloque, una butaca o una forma para moverlo · con teclado, Tab ' +
           'hasta la pieza: flechas la mueven, R la gira, + y − cambian su largo (o ancho), ] y [ agregan o ' +
@@ -4861,6 +5005,7 @@ const PISTAS = {
 function cambiarModo(nuevo) {
   if (nuevo === modo) return;
   if (arrastreMesa) terminarArrastreMesa(false);
+  limpiarArea();
   modo = nuevo;
   const editando = modo === 'editor';
   svg.classList.toggle('editando', editando);
@@ -4898,6 +5043,7 @@ function actualizarAccesoButacas() {
 
 function cambiarHerramienta(nueva) {
   if (arrastreMesa) terminarArrastreMesa(false);
+  limpiarArea();
   herramienta = nueva;
   const bloqueando = herramienta === 'bloquear';
   const pintando = herramienta === 'zona';
@@ -4970,6 +5116,84 @@ function pintarZona(elemento) {
   anunciar(etiquetaDe(nueva) + ': zona ' + zonas[nueva.zona].nombre + ', ' + dinero(zonas[nueva.zona].precio) +
            (nueva.zona === nueva.zonaOriginal ? ' (la de siempre).' : '.'));
   if (nueva) nueva.nodo.focus({ preventScroll: true });
+}
+
+// ---------------------------------------------------------------------------
+// Pintar y bloquear por area.
+//
+// Con una herramienta de butacas, arrastrar por el plano dibuja un rectangulo y
+// al soltar se aplica a todo lo que abarca; con Alt se deshace (vuelve a su zona
+// de siempre, o desbloquea). Con el teclado, Mayus y las flechas lo extienden
+// desde la butaca enfocada y Enter lo aplica.
+//
+// Mientras se pinta, el arrastre deja de mover el plano: para eso estan la barra
+// espaciadora, el boton central del raton y, en tactil, dos dedos.
+// ---------------------------------------------------------------------------
+let areaTeclado = null;   // { desde, hasta } en celdas, mientras se extiende con Mayus
+
+// Las butacas de un area que la operacion puede tocar (las ocupadas nunca).
+const libresEnArea = (area) => butacasEnArea(butacas, area).filter((b) => b.estado !== 'ocupada');
+
+function dibujarArea(area, quitando = false) {
+  capaArea.textContent = '';
+  capaArea.classList.toggle('quitando', Boolean(quitando));
+  if (!area) return;
+  const ancho = (area.x2 - area.x1 + 1) * PASO, alto = (area.y2 - area.y1 + 1) * PASO;
+  capaArea.appendChild(nodo('rect', { x: area.x1 * PASO, y: area.y1 * PASO, width: ancho, height: alto, rx: 2 }));
+  const cuantas = libresEnArea(area).length;
+  if (!cuantas) return;
+  // El conteo va debajo del rectangulo, y encima si el area llega al borde de la sala:
+  // ahi abajo se saldria del plano.
+  const y = area.y2 + 1 >= salaActual.alto ? area.y1 * PASO - 2 : area.y1 * PASO + alto + 4;
+  const etiqueta = texto('', area.x1 * PASO + ancho / 2, y, plural(cuantas, 'butaca', 'butacas'));
+  etiqueta.setAttribute('text-anchor', 'middle');
+  capaArea.appendChild(etiqueta);
+}
+
+// Aplica el area con la herramienta activa. 'devolver' es lo que hace Alt: la zona
+// de siempre, o desbloquear.
+function aplicarArea(area, devolver) {
+  const plano = planoEditable();
+  const pincel = document.getElementById('zona-pincel').value;
+  const pintando = herramienta === 'zona';
+  const resultado = pintando
+    ? asignarZonaEnArea(plano, butacas, area, devolver ? '' : pincel)
+    : bloquearEnArea(plano, butacas, area, !devolver);
+  const { cambiadas, ocupadas } = resultado;
+  if (!cambiadas.length && !ocupadas.length) {
+    anunciar('El área no tiene butacas.');
+    return;
+  }
+  planos[tipoActual] = resultado.plano;
+  const zona = pintando && !devolver && zonas[pincel];
+  regenerar(!cambiadas.length ? 'Ninguna butaca del área cambió.'
+    : plural(cambiadas.length, 'butaca', 'butacas') + (pintando
+      ? (zona ? ' a la zona ' + zona.nombre + ', ' + dinero(zona.precio) + '.' : ' de vuelta a su zona de siempre.')
+      : (devolver ? ' desbloqueadas.' : ' bloqueadas.')));
+  const aviso = document.getElementById('aviso');
+  aviso.textContent = [aviso.textContent,
+    ocupadas.length ? plural(ocupadas.length, 'butaca ocupada', 'butacas ocupadas') + ' del área no cambiaron.' : '',
+    resultado.mesas && resultado.mesas.length
+      ? 'Se venden completas y quedan con lugares de más de una zona: ' + resultado.mesas.join(', ') + '.' : '',
+  ].filter(Boolean).join(' ');
+}
+
+// Extiende el area con el teclado desde la butaca enfocada y mueve el foco.
+function extenderArea(elemento, flecha) {
+  const desde = porNodo(elemento);
+  if (!desde) return;
+  if (!areaTeclado) areaTeclado = { desde: { x: desde.x, y: desde.y } };
+  moverFoco(elemento, flecha.dx, flecha.dy);
+  const hasta = porNodo(document.activeElement.closest('.butaca') || elemento);
+  areaTeclado.hasta = { x: hasta.x, y: hasta.y };
+  const area = areaDeCeldas(areaTeclado.desde, areaTeclado.hasta);
+  dibujarArea(area);
+  anunciar(plural(libresEnArea(area).length, 'butaca', 'butacas') + ' en el área. Enter para aplicar, Alt+Enter para deshacer.');
+}
+
+function limpiarArea() {
+  areaTeclado = null;
+  dibujarArea(null);
 }
 
 document.getElementById('modo-vista').addEventListener('click', () => cambiarModo('vista'));
