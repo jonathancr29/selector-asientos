@@ -4,9 +4,29 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Asignar zona y bloquear por área
+## Sin publicar — Redimensionar espacios y verticales con el ratón
 
-Rama `claude/zona-por-area`.
+Rama `claude/tiradores-de-espacios`.
+
+### Agregado
+
+- **Tiradores en el plano.** Cada espacio y cada zona de mesas lleva un agarre en su esquina inferior
+  derecha, y el borde entre dos bandas verticales, una franja de agarre a lo alto.
+- El tirador de la esquina cambia el **alto** de su banda y, si está dentro de una vertical que no es
+  la última, también el **ancho** de esa vertical: las dos medidas en el mismo gesto. El del borde
+  reparte las columnas entre verticales.
+- Va de celda en celda y **no aplica nada hasta soltar**: mientras se arrastra solo se ve el tamaño que
+  tendría, con su medida, y **Esc** cancela. Al soltar pasa por la comprobación de siempre, así que un
+  cambio que deja una mesa sin caber se revierte y se explica.
+- Los topes no se pueden pasar ni con el fantasma: de 1 a 40 filas de alto y al menos una columna para
+  la última vertical.
+- Un clic sin arrastrar en un tirador selecciona su banda. Los botones − / + del panel siguen siendo
+  el camino con teclado.
+
+## 2026-09-23 — PR #28: asignar zona y bloquear por área
+
+[PR #28](https://github.com/jonathancr29/selector-asientos/pull/28), fusionado en `main` con el
+commit `cedde17`.
 
 ### Agregado
 

@@ -303,6 +303,16 @@
   .levantada { opacity: .3; }
   /* La sombra marca el destino. Verde si cabe; si no, roja y con contorno
      discontinuo, para no depender solo del color. */
+  /* Los agarres para redimensionar espacios y verticales, y el fantasma del tamano
+     nuevo mientras se arrastra uno. */
+  .tirador { fill: #93c5fd; fill-opacity: .55; stroke: #17171c; stroke-width: .4; }
+  .tirador:hover { fill-opacity: 1; }
+  .tirador.esquina { cursor: nwse-resize; }
+  .tirador.esquina.solo-alto { cursor: ns-resize; }
+  .tirador.borde { cursor: ew-resize; }
+  .fantasma { pointer-events: none; }
+  .fantasma rect { fill: rgba(147, 197, 253, .12); stroke: #93c5fd; stroke-width: .8; stroke-dasharray: 2 1.5; }
+  .fantasma text { fill: #e2e8f0; font-size: 4px; font-weight: 700; paint-order: stroke; stroke: #17171c; stroke-width: 1.2; }
   /* El rectangulo de las herramientas por area, con su conteo. */
   .area { pointer-events: none; }
   .area rect { fill: rgba(147, 197, 253, .12); stroke: #93c5fd; stroke-width: .8; stroke-dasharray: 2 1.5; }
@@ -579,6 +589,8 @@
         <g id="piezas"></g>   <!-- solo en modo editor: una zona movible por mesa -->
         <g id="rotulo-seleccion"></g>   <!-- el nombre de la banda seleccionada, encima de todo -->
         <g id="area" class="area"></g>   <!-- el rectangulo de asignar zona o bloquear por area -->
+        <g id="tiradores" class="tiradores"></g>   <!-- solo en modo editor: agarres para redimensionar bandas -->
+        <g id="fantasma" class="fantasma"></g>   <!-- el tamano que tendria la banda al soltar el tirador -->
       </svg>
     </div>
 
@@ -2043,6 +2055,74 @@ function cambiarAnchoVertical(plano, sala, verticalId, delta) {
   return reanclarPiezas(plano, nuevo, sala.ancho, sala.ancho);
 }
 
+// ---------------------------------------------------------------------------
+// Tiradores: redimensionar bandas con el raton.
+//
+// Los botones − / + del panel siguen siendo el camino accesible; esto es la
+// comodidad del raton. Hay dos tiradores:
+//
+// - la **esquina** de una banda con alto propio (un espacio o una zona de mesas),
+//   que cambia su alto y, si esta dentro de una vertical que no es la ultima,
+//   tambien el ancho de esa vertical: el gesto de la esquina mueve las dos
+//   medidas a la vez;
+// - el **borde** entre dos verticales, que cambia el ancho de la de su izquierda.
+//
+// El ancho de una banda nunca es suyo: es el de lo que la contiene. Por eso
+// «ensanchar un espacio» es, en realidad, ensanchar su vertical, y un espacio al
+// nivel de la sala solo cambia de alto.
+// ---------------------------------------------------------------------------
+function tiradoresDeSala(sala) {
+  const lista = [];
+  const recorrer = (bandas, vertical) => {
+    for (const b of bandas) {
+      if (esDivision(b)) {
+        b.verticales.forEach((v, i) => {
+          // La ultima vertical ocupa el resto: su ancho no se agarra, se deduce.
+          const ultima = i === b.verticales.length - 1;
+          if (!ultima) {
+            lista.push({ tipo: 'borde', vertical: v.id, banda: null,
+                         x: v.x + v.anchoOcupado, y: v.y, alto: v.alto });
+          }
+          recorrer(v.bandas, ultima ? null : v);
+        });
+      } else if (tieneAlto(b)) {
+        lista.push({ tipo: 'esquina', banda: b.id, vertical: vertical && vertical.id,
+                     x: b.x + b.anchoOcupado, y: b.y + b.alto });
+      }
+    }
+  };
+  recorrer(sala.bandas, null);
+  return lista;
+}
+
+// Aplica de una vez las medidas que ha dejado el tirador: el alto de la banda (en
+// filas) y el ancho de su vertical (en columnas). Las dos son opcionales, y ninguna
+// se escribe si la otra no cabe: o el gesto entero, o nada.
+function redimensionarConTirador(plano, sala, { banda, vertical, alto, ancho }) {
+  const nuevo = copiarPlano(plano);
+  if (alto !== undefined && banda) {
+    const u = ubicar(nuevo.bandas, banda);
+    if (!u || !tieneAlto(u.item)) return { motivo: 'esa banda no tiene un alto propio' };
+    if (alto < 1) return { motivo: 'ya tiene el mínimo' };
+    if (alto > ALTO_MAXIMO) return { motivo: 'ya tiene el máximo (' + ALTO_MAXIMO + ')' };
+    u.item.alto = alto;
+  }
+  if (ancho !== undefined && vertical) {
+    const u = ubicar(nuevo.bandas, vertical);
+    if (!u || !u.esVertical) return { motivo: 'esa banda vertical ya no existe' };
+    if (u.indice === u.lista.length - 1) {
+      return { motivo: 'la última banda vertical ocupa el resto; cambia el ancho de las demás' };
+    }
+    if (ancho < 1) return { motivo: 'ya tiene el mínimo' };
+    // Lo que le queda a la ultima: el ancho de la franja menos el de las demas.
+    const franja = bandaDe(sala, u.padre.id);
+    const otras = u.lista.slice(0, -1).reduce((s, v, i) => s + (i === u.indice ? ancho : v.ancho), 0);
+    if (franja.anchoOcupado - otras < 1) return { motivo: 'la última banda vertical se quedaría sin ancho' };
+    u.item.ancho = ancho;
+  }
+  return reanclarPiezas(plano, nuevo, sala.ancho, sala.ancho);
+}
+
 // El plano editable de una sala ya generada: bandas y mesas como datos. De cada
 // banda se quitan lo calculado al generar (y, nombre por defecto) pero no los
 // datos propios: el alto de una zona de mesas SI es un dato, el de las demas no.
@@ -3330,6 +3410,7 @@ function dibujarTodo() {
   dibujarBandas();
   dibujarZonas();
   dibujarSeleccionBanda();
+  dibujarTiradores();
 }
 
 // ---------------------------------------------------------------------------
@@ -4118,6 +4199,14 @@ svg.addEventListener('pointerdown', (e) => {
   if (punteros.size === 1) {
     // En el editor, agarrar una mesa la mueve; agarrar el fondo mueve el plano.
     if (arrastreMesa) terminarArrastreMesa(false);   // nunca dos arrastres de mesa a la vez
+    // Un tirador se lleva el gesto: ni mueve el plano ni selecciona nada hasta soltar.
+    const tirador = !soloMover && modo === 'editor' && !conButacas() && e.target.closest('[data-tirador]');
+    if (tirador) {
+      const { tirador: tipo, banda, vertical } = tirador.dataset;
+      arrastreTirador = { tipo, banda: banda || null, vertical: vertical || null, pointerId: e.pointerId };
+      dibujarFantasma({});
+      return;
+    }
     const pieza = modo === 'editor' && e.target.closest('.pieza');
     if (pieza) {
       arrastreMesa = iniciarArrastreMesa(pieza, e);
@@ -4148,6 +4237,10 @@ svg.addEventListener('pointerdown', (e) => {
   }
 });
 svg.addEventListener('pointermove', (e) => {
+  if (arrastreTirador) {
+    if (e.pointerId === arrastreTirador.pointerId) dibujarFantasma(medidasDeTirador(e));
+    return;
+  }
   if (arrastreMesa) {
     if (e.pointerId === arrastreMesa.pointerId) moverSombra(e);
     return;
@@ -4181,6 +4274,10 @@ svg.addEventListener('pointermove', (e) => {
 function soltarPuntero(e, cancelado) {
   if (!punteros.delete(e.pointerId)) return;
   if (svg.hasPointerCapture(e.pointerId)) svg.releasePointerCapture(e.pointerId);
+  if (arrastreTirador) {
+    terminarArrastreTirador(!cancelado, e);
+    return;
+  }
   if (arrastreMesa) {
     terminarArrastreMesa(!cancelado);
     return;
@@ -4323,6 +4420,12 @@ svg.addEventListener('focusin', (e) => {
 });
 
 svg.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && arrastreTirador) {
+    e.preventDefault();
+    terminarArrastreTirador(false);
+    anunciar('Cambio de tamaño cancelado.');
+    return;
+  }
   if (e.key === 'Escape' && arrastreMesa) {
     e.preventDefault();
     terminarArrastreMesa(false);
@@ -4999,7 +5102,9 @@ const PISTAS = {
           'quitan filas (o alto, en el escenario y las formas), C pone o quita cabeceras, U alterna uno o dos ' +
           'lados (en una mesa redonda, + y − quitan y ponen lugares), Ctrl+D la duplica, Supr la elimina · Esc cancela un arrastre · clic en el fondo ' +
           'selecciona una banda (otro clic, la que la contiene) y Ctrl+D la duplica · doble clic en ' +
-          'un subtítulo para renombrar su banda',
+          'un subtítulo para renombrar su banda · arrastra el tirador de la esquina de un espacio o de ' +
+          'una zona de mesas para cambiar su alto (y su ancho, si está en una banda vertical), o el ' +
+          'borde entre verticales para repartir las columnas',
 };
 
 function cambiarModo(nuevo) {
@@ -5116,6 +5221,112 @@ function pintarZona(elemento) {
   anunciar(etiquetaDe(nueva) + ': zona ' + zonas[nueva.zona].nombre + ', ' + dinero(zonas[nueva.zona].precio) +
            (nueva.zona === nueva.zonaOriginal ? ' (la de siempre).' : '.'));
   if (nueva) nueva.nodo.focus({ preventScroll: true });
+}
+
+// ---------------------------------------------------------------------------
+// Tiradores en el plano.
+//
+// Se dibujan solo colocando piezas (con las herramientas de butacas el plano es
+// otra cosa). El gesto no aplica nada hasta soltar: mientras se arrastra solo se
+// ve el fantasma del tamaño nuevo, y al soltar pasa por aplicarBandas, que es
+// quien comprueba que todo siga cabiendo.
+// ---------------------------------------------------------------------------
+const capaTiradores = document.getElementById('tiradores');
+const capaFantasma = document.getElementById('fantasma');
+const LADO_TIRADOR = 4;   // en unidades del viewBox: un tercio de celda
+
+let arrastreTirador = null;
+
+function dibujarTiradores() {
+  capaTiradores.textContent = '';
+  if (modo !== 'editor' || conButacas()) return;
+  for (const t of tiradoresDeSala(salaActual)) {
+    if (t.tipo === 'borde') {
+      const agarre = nodo('rect', { class: 'tirador borde', x: t.x * PASO - 1.5, y: t.y * PASO,
+                                    width: 3, height: t.alto * PASO, rx: 1 });
+      agarre.dataset.tirador = 'borde';
+      agarre.dataset.vertical = t.vertical;
+      agarre.setAttribute('aria-hidden', 'true');
+      capaTiradores.appendChild(agarre);
+      continue;
+    }
+    const agarre = nodo('rect', { class: 'tirador esquina' + (t.vertical ? '' : ' solo-alto'),
+                                  x: t.x * PASO - LADO_TIRADOR, y: t.y * PASO - LADO_TIRADOR,
+                                  width: LADO_TIRADOR, height: LADO_TIRADOR, rx: 1 });
+    agarre.dataset.tirador = 'esquina';
+    agarre.dataset.banda = t.banda;
+    if (t.vertical) agarre.dataset.vertical = t.vertical;
+    agarre.setAttribute('aria-hidden', 'true');
+    capaTiradores.appendChild(agarre);
+  }
+}
+
+// El tamaño que tendría al soltar, en celdas, a partir de la celda bajo el puntero.
+function medidasDeTirador(e, gesto = arrastreTirador) {
+  const { banda, vertical, tipo } = gesto;
+  const celda = celdaBajo(e);
+  const medidas = {};
+  if (tipo === 'esquina') {
+    const b = bandaDe(salaActual, banda);
+    medidas.alto = Math.min(ALTO_MAXIMO, Math.max(1, celda.y - b.y + 1));
+  }
+  if (vertical) {
+    const v = bandaDe(salaActual, vertical);
+    // El tope es dejarle al menos una columna a la ultima vertical, que ocupa el resto:
+    // asi el fantasma nunca ensena un tamano que al soltar se iba a rechazar.
+    const u = ubicar(salaActual.bandas, vertical);
+    const franja = bandaDe(salaActual, u.padre.id);
+    const otras = u.lista.slice(0, -1).reduce((s, x, i) => s + (i === u.indice ? 0 : x.anchoOcupado), 0);
+    const maximo = Math.max(1, franja.anchoOcupado - otras - 1);
+    medidas.ancho = Math.min(maximo, Math.max(1, celda.x - v.x + 1));
+  }
+  return medidas;
+}
+
+function dibujarFantasma(medidas, gesto = arrastreTirador) {
+  capaFantasma.textContent = '';
+  if (!medidas || !gesto) return;
+  const { banda, vertical, tipo } = gesto;
+  const base = bandaDe(salaActual, tipo === 'esquina' ? banda : vertical);
+  const v = vertical && bandaDe(salaActual, vertical);
+  const x = tipo === 'esquina' && vertical ? v.x : base.x;
+  const ancho = medidas.ancho !== undefined ? medidas.ancho : base.anchoOcupado;
+  const alto = medidas.alto !== undefined ? medidas.alto : base.alto;
+  capaFantasma.appendChild(nodo('rect', { x: x * PASO, y: base.y * PASO,
+                                          width: ancho * PASO, height: alto * PASO, rx: 2 }));
+  const etiqueta = texto('', x * PASO + (ancho * PASO) / 2, base.y * PASO - 2,
+                         ancho + ' × ' + alto + (tipo === 'borde' ? ' columnas' : ''));
+  etiqueta.setAttribute('text-anchor', 'middle');
+  capaFantasma.appendChild(etiqueta);
+}
+
+function terminarArrastreTirador(aplicar, e) {
+  const gesto = arrastreTirador;
+  arrastreTirador = null;
+  capaFantasma.textContent = '';
+  if (!gesto) return;
+  if (!aplicar) {
+    dibujarTiradores();
+    return;
+  }
+  const medidas = e ? medidasDeTirador(e, gesto) : {};
+  const base = bandaDe(salaActual, gesto.tipo === 'esquina' ? gesto.banda : gesto.vertical);
+  const v = gesto.vertical && bandaDe(salaActual, gesto.vertical);
+  const mismoAlto = medidas.alto === undefined || !base || medidas.alto === base.alto;
+  const mismoAncho = medidas.ancho === undefined || !v || medidas.ancho === v.anchoOcupado;
+  if (mismoAlto && mismoAncho) {
+    // Sin cambio de medidas, el gesto vale como clic: selecciona su banda.
+    marcarBandaActiva(gesto.banda || gesto.vertical);
+    anunciar(base.nombre + ' seleccionada.');
+    return;
+  }
+  const nombre = base.nombre;
+  aplicarBandas(redimensionarConTirador(planoEditable(), salaActual, {
+    banda: gesto.banda, vertical: gesto.vertical,
+    ...(mismoAlto ? {} : { alto: medidas.alto }),
+    ...(mismoAncho ? {} : { ancho: medidas.ancho }),
+  }), nombre + ': ' + [mismoAncho ? '' : plural(medidas.ancho, 'columna', 'columnas'),
+                       mismoAlto ? '' : plural(medidas.alto, 'fila', 'filas') + ' de alto'].filter(Boolean).join(' y ') + '.');
 }
 
 // ---------------------------------------------------------------------------
