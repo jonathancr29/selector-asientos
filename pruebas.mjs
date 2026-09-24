@@ -30,7 +30,8 @@ const cargar = () => new Function(html.slice(inicio, fin) +
   ' formas, butacasSueltas, cambiarTamanoForma,' +
   ' FILAS_MAXIMAS, BUTACAS_MAXIMAS, motivoDeAforo,' +
   ' zonas, editarZona, agregarZona, eliminarZona, leerPrecio, usosDeZona,' +
-  ' zonaEnCelda, fijarZonasSueltas,' +
+  ' zonaEnCelda, fijarZonasSueltas, zonaExclusivaDeBanda, zonaNuevaParaBanda, mesasDeBanda,' +
+  ' marcarMesasDeBanda,' +
   ' geometriaMesaRedonda, cambiarLugaresRedonda, huellaDe,' +
   ' marcarMesaCompleta, marcarTodasLasMesas, alternarEleccion, completarMesasElegidas,' +
   ' asignarZonaAsiento };')();
@@ -2131,4 +2132,81 @@ test('mapas version 4: la zona de una mesa y la de una banda de mesas son opcion
   assert.equal(leidoViejo.version, 4);
   api.generarPlano(api.registrarMapa(leidoViejo));
   assert.equal(api.butacas.find((b) => b.id === 'M1-N1').zona, 'mesas');
+});
+
+// --- Un solo panel: la banda lleva su zona y su precio -------------------------------
+
+test('una banda tiene su zona para ella sola hasta que otra banda o pieza la usa', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  assert.equal(api.zonaExclusivaDeBanda(plano, 'luneta'), 'luneta');
+  assert.equal(api.zonaExclusivaDeBanda(plano, 'mesas'), 'mesas');   // la zona de mesas, tambien
+  // Otra banda con la misma zona: ya no es de nadie en exclusiva.
+  const compartida = api.cambiarZonaBanda(plano, 'general', 'luneta');
+  assert.equal(api.zonaExclusivaDeBanda(compartida, 'luneta'), null);
+  // Una pieza con esa zona propia cuenta igual.
+  const conPieza = { ...plano, bloquesFilas: [bloque('F1', 1, 20, { zona: 'luneta' })] };
+  assert.equal(api.zonaExclusivaDeBanda(conPieza, 'luneta'), null);
+  // Una banda sin zona (un espacio) no tiene ninguna.
+  const { plano: lienzo } = conLienzo(api);
+  assert.equal(api.zonaExclusivaDeBanda(lienzo, 'espacio'), null);
+});
+
+test('zonaNuevaParaBanda le da a la banda una zona propia con su nombre', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const compartida = api.cambiarZonaBanda(plano, 'general', 'luneta');
+  const propia = api.zonaNuevaParaBanda(compartida, 'general', 'Luneta');
+  // El nombre choca con el de la zona Luneta, asi que se numera.
+  assert.deepEqual([propia.zonas.at(-1), propia.siguienteZona], [{ id: 'zona1', nombre: 'Luneta 2', precio: 0 }, 2]);
+  const sala = api.generarPlano('mixta-ambos', propia);
+  assert.equal(sala.bandas.at(-1).nombre, 'Luneta 2');
+  assert.equal(api.butacas.find((b) => b.id === 'general-A1').zona, 'zona1');
+  assert.equal(api.zonaExclusivaDeBanda(propia, 'general'), 'zona1');
+  // El nombre puesto a mano se va: ahora el nombre vive en la zona.
+  const conNombre = api.renombrarBanda(compartida, 'general', 'Balcón');
+  assert.equal('nombre' in api.zonaNuevaParaBanda(conNombre, 'general', 'Balcón').bandas.at(-1), false);
+  assert.deepEqual(api.zonaNuevaParaBanda(plano, 'fantasma', 'X'), { motivo: 'esa banda ya no existe' });
+  let lleno = plano;
+  for (let i = 0; i < 17; i++) lleno = api.agregarZona(lleno);
+  assert.deepEqual(api.zonaNuevaParaBanda(lleno, 'general', 'X'), { motivo: 'ya hay el máximo de zonas (20)' });
+});
+
+test('una banda que no es de filas se puede quedar sin zona', () => {
+  const api = cargar();
+  const { plano } = conLienzo(api);
+  const conZona = api.cambiarZonaBanda(plano, 'espacio', 'luneta');
+  assert.equal(conZona.bandas[0].zona, 'luneta');
+  assert.equal('zona' in api.cambiarZonaBanda(conZona, 'espacio', ''), false);
+  const { plano: mixta } = planoDe(api, 'mixta-ambos');
+  assert.deepEqual(api.cambiarZonaBanda(mixta, 'luneta', ''), { motivo: 'una banda de filas necesita una zona' });
+  assert.deepEqual(api.cambiarZonaBanda(mixta, 'luneta', 'fantasma'), { motivo: 'esa zona ya no existe' });
+});
+
+test('la venta por mesa se puede poner y quitar en toda una zona de mesas', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const sala = api.generarPlano('mixta-ambos', plano);
+  // Las seis mesas de la plantilla estan en la banda de mesas; la Luneta no tiene ninguna.
+  assert.deepEqual(api.mesasDeBanda(sala, 'mesas'), ['M1', 'M2', 'M3', 'M4', 'M5', 'M6']);
+  assert.deepEqual(api.mesasDeBanda(sala, 'luneta'), []);
+  const porMesa = api.marcarMesasDeBanda(plano, sala, 'mesas', true);
+  assert.equal(porMesa.mesas.every((m) => m.completa), true);
+  api.generarPlano('mixta-ambos', porMesa);
+  assert.equal(api.butacas.find((b) => b.id === 'M1-N1').grupo.completa, true);
+  // Con mesas en dos bandas, cada una va por su lado: la de abajo se queda por butacas.
+  const { plano: dosBandas, sala: salaDos } = conZonaAbajo(api);
+  const conMesaAbajo = { ...dosBandas, mesas: [...dosBandas.mesas, mesa('M7', 1, 20)], siguiente: 8 };
+  const salaAbajo = api.generarPlano('mixta-ambos', conMesaAbajo);
+  assert.deepEqual(api.mesasDeBanda(salaAbajo, 'banda1'), ['M7']);
+  const arriba = api.marcarMesasDeBanda(conMesaAbajo, salaAbajo, 'mesas', true);
+  assert.deepEqual(arriba.mesas.filter((m) => m.completa).map((m) => m.id), ['M1', 'M2', 'M3', 'M4', 'M5', 'M6']);
+  const abajo = api.marcarMesasDeBanda(arriba, salaAbajo, 'banda1', true);
+  assert.equal(abajo.mesas.every((m) => m.completa), true);
+  assert.deepEqual(api.marcarMesasDeBanda(abajo, salaAbajo, 'mesas', false).mesas.filter((m) => m.completa).map((m) => m.id), ['M7']);
+  void salaDos;
+  const porButacas = api.marcarMesasDeBanda(porMesa, sala, 'mesas', false);
+  assert.equal(porButacas.mesas.some((m) => m.completa), false);
+  assert.equal(plano.mesas.some((m) => m.completa), false);   // no toca el plano de entrada
+  assert.deepEqual(api.marcarMesasDeBanda(plano, sala, 'luneta', true), { motivo: 'esa banda no tiene mesas' });
 });

@@ -155,12 +155,19 @@ En el modo editor, el panel **Bandas de la sala** lista las bandas con sus contr
 Los botones del panel también son iconos, con el mismo tooltip y `aria-label` que los de la barra:
 subir, bajar, duplicar, eliminar, quitar y agregar fila, ancho de una vertical, moverla, guías de
 fila, y agregar banda de filas, zona de mesas, espacio o franja. En *Mapa* son guardar, exportar,
-importar y eliminar; en *Columnas*, aplicar (✓); en *Zonas*, eliminar y agregar zona.
+importar y eliminar; en *Columnas*, aplicar (✓); en *Otras zonas*, eliminar y agregar zona.
 
-- **Nombre:** un campo con el nombre propio de la banda. Vacío, toma el de por defecto.
-- **Zona:** cualquier zona de la sala salvo la de mesas, con su precio. El nombre por defecto sigue a
-  la zona; uno propio se queda. La zona de la banda es también la que heredan las mesas, los bloques y
-  las butacas sueltas que caigan dentro.
+- **Nombre:** cuando la banda tiene su zona para ella sola, **el nombre es el de la zona**: cambiarlo
+  cambia también las etiquetas de sus butacas. Si comparte zona con otra banda, el campo es su nombre
+  propio y, vacío, toma el de por defecto.
+- **Precio:** el precio por lugar de su zona, en pesos, editable en la propia fila. Es el que paga
+  todo lo que cae dentro de la banda: sus filas, y las mesas, bloques y butacas sueltas que hereden
+  (ver *La zona se hereda de la banda*).
+- **Zona:** con qué zona va la banda. Elegir la de otra banda hace que **compartan precio y
+  numeración**; *Zona nueva…* le da una propia, con su nombre y a $0. Los espacios y las franjas
+  pueden ir *Sin zona*: entonces no dan precio a nada y lo de dentro hereda de más afuera.
+- **Venta por mesa / por butacas** (solo en las zonas de mesas que tienen mesas): cambia de golpe
+  cómo se venden todas sus mesas. Si unas van por mesa y otras por butacas, aparece *Venta mixta*.
 - **↑ / ↓:** sube o baja la banda. Sus piezas viajan con ella.
 - **Duplicar:** crea una copia justo debajo, con todo lo que tiene dentro (ver más abajo).
 - **Eliminar:** quita la banda y las piezas que empiezan dentro de ella; lo de debajo sube.
@@ -173,18 +180,23 @@ que desaparecen se avisan igual que al acortar una mesa.
 
 Las bandas sin nombre propio toman el de su zona, numerado si se repite: *General*, *General 2*.
 
-### Zonas y precios
+### Zonas y precios: una zona por banda
 
 Cada sala o mapa tiene **sus propias zonas**: al empezar, *Luneta* ($350), *Mesas* ($500) y *General*
-($200). En el panel **Diseño de la sala**, la sección **Zonas y precios** las lista:
+($200). **Se editan en la fila de su banda**, en *Bandas y precios*: el nombre, el precio por lugar y
+con qué zona va. No hay dos listas que mantener: una zona es, normalmente, una banda.
 
-- **Nombre y precio** se editan en su campo y se aplican con Enter o al salir (Esc deshace lo
-  escrito). El precio es por lugar, en pesos: `350`, `350.50` o `$1,200.00`, de 0 a 1,000,000. Los
-  nombres no se repiten.
-- **Agregar zona** crea *Zona N* a $0 y lleva a su nombre. Hasta 20 zonas.
+- **Nombre y precio** se aplican con Enter o al salir del campo (Esc deshace lo escrito). El precio es
+  por lugar, en pesos: `350`, `350.50` o `$1,200.00`, de 0 a 1,000,000. Los nombres no se repiten.
+- **Compartir:** dos bandas con la misma zona comparten precio y numeración (la *Luneta izquierda* y
+  la *derecha* de una franja son la misma zona). Mientras la comparten, el campo de nombre de cada
+  fila vuelve a ser su nombre propio, porque renombrar la zona desde ahí cambiaría el precio de la
+  otra.
+- **Otras zonas** es el grupo para las que no son de ninguna banda: la de una pieza con zona propia,
+  las que pintas con *Asignar zona* y las que aún no usa nadie. Ahí se agregan (hasta 20) y se
+  eliminan. Aparece vacío cuando todas las zonas son de una banda.
 - **Eliminar** solo se puede con una zona que no use ninguna banda ni ninguna pieza con zona propia.
   La zona de mesas no se elimina, y siempre queda al menos una zona para filas.
-- Cada fila muestra cuántos lugares tiene la zona.
 
 Todo lo que muestra la zona usa sus valores actuales: la etiqueta de las butacas (*«VIP, fila A,
 butaca 1»*), el nombre por defecto de las bandas, los selectores y el resumen con su total. Las filas
@@ -325,8 +337,8 @@ quita (el escenario nunca). Como siempre, si algo deja de caber, el cambio no se
 │ Tipo de sala │                             │                  │
 │ Vista        │           PLANO             │ Mapa             │
 │ Agregar      │                             │ Columnas         │
-│ Pieza        │                             │ Zonas y precios  │
-│ Sala         ├─────────────────────────────┤ Bandas           │
+│ Pieza        │                             │ Otras zonas      │
+│ Sala         ├─────────────────────────────┤ Bandas y precios │
 │ Leyenda      │ Estado      Seleccionadas… ▲│                  │
 └──────────────┴─────────────────────────────┴──────────────────┘
 ```
@@ -336,7 +348,7 @@ quita (el escenario nunca). Como siempre, si algo deja de caber, el cambio no se
   completa) y *Sala* (asignar zona, bloquear butacas, escenario, restablecer); y la *Leyenda*, al
   final. Los iconos van en rejilla y su tooltip sale a la derecha.
 - **Lateral derecho (configuración), solo en el editor:** *Mapa* (nombre, guardar, exportar,
-  importar), *Columnas*, *Zonas y precios* y *Bandas*.
+  importar), *Columnas*, *Otras zonas* y *Bandas y precios*.
 - **En escritorio (más de 900 px de ancho y 600 px de alto), una sola pantalla:** la página no se
   desplaza. Los laterales, el encabezado y el pie quedan fijos, y el plano llena el hueco que queda,
   así que la sala se ve completa. Lo único que se desplaza es el interior de un lateral cuando su
@@ -389,20 +401,25 @@ Los tres estilos de mesa rectangular son el mismo modelo con otros valores:
 La huella es el rectángulo completo, así que las esquinas vacías de una cruz quedan **reservadas**:
 ninguna otra mesa puede ocuparlas.
 
-### Mesas completas o por lugares
+### Venta por mesa o por butacas
 
-El organizador decide, **mesa por mesa**, cómo se vende. Con una mesa seleccionada en el editor,
-*Pieza seleccionada* tiene la casilla **«Vender como mesa completa»** y el botón **«Aplicar a todas
-las mesas»**, que copia el valor de la casilla a todas las mesas del plano.
+El organizador decide cómo se vende cada mesa, y puede hacerlo de tres formas:
 
-- **Mesa completa:** en Previsualizar, un clic en la mesa (el tablero) o en cualquiera de sus lugares
+- **Una mesa:** con la mesa seleccionada en el editor, el selector **Venta** de *Pieza seleccionada*
+  elige entre *Venta por butacas* y *Venta por mesa*.
+- **Toda una zona de mesas:** el selector **Venta** de su fila, en *Bandas y precios*, cambia de golpe
+  todas las mesas de esa banda. Si unas van por mesa y otras por butacas, muestra *Venta mixta*.
+- **Todas las del plano:** el botón **«Aplicar a todas las mesas»**, que copia a todas el modo de la
+  mesa seleccionada.
+
+- **Por mesa:** en Previsualizar, un clic en la mesa (el tablero) o en cualquiera de sus lugares
   **elige la mesa y todos sus lugares libres** a la vez; otro clic los suelta. El tablero se marca
   con sus lugares, y el resumen la muestra como *«Mesa 3 · mesa completa, 4 lugares · $2,000.00»*.
 - **Precio:** la suma de sus lugares libres, cada uno al precio de su zona (la que herede de su banda,
   salvo que la mesa o el lugar lleven otra). Un lugar **bloqueado** no se vende ni se cobra: la mesa se vende con los demás.
 - **Una mesa completa con algún lugar ocupado se vendió entera:** todos sus lugares salen ocupados.
-- **Por lugares** (casilla sin marcar, lo de siempre): cada lugar se elige por separado.
-- Si se marca completa una mesa que tenía solo algunos lugares elegidos, se eligen todos y se avisa.
+- **Por butacas** (lo de siempre): cada lugar se elige por separado y el tablero no responde al clic.
+- Si se pasa a venta por mesa una que tenía solo algunos lugares elegidos, se eligen todos y se avisa.
 - Se guarda en el mapa como `completa: true` en la mesa; sin el campo, se vende por lugares.
 
 ### Mesas redondas
@@ -458,7 +475,9 @@ En una mesa de dos lados, 0° y 180° ocupan las mismas celdas; lo que cambia es
 
 ### Qué se puede hacer
 
-Al elegir una mesa (clic o Tab), se activan los botones de la barra del editor. Son iconos: el nombre
+Al elegir una mesa (clic o Tab), **sus butacas se marcan con ella** —la mesa y sus lugares son una
+sola pieza: es lo que se mueve, gira, duplica o elimina— y se activan los botones de la barra del
+editor. Son iconos: el nombre
 de la columna «Botón» es el de su tooltip. Cada acción tiene atajo de teclado sobre la mesa enfocada:
 
 | Acción | Botón | Tecla |
