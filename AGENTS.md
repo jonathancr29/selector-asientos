@@ -277,14 +277,17 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   - **Disposición:** `<div class="app">` con el `<aside class="lateral">` de la **sala** a la izquierda
     (Vista, tipo de sala, Mapa, Columnas, Zonas y precios, Leyenda), `<main>` (encabezado, plano,
     `.barra-estado` y pie) y `<aside id="lateral-configuracion">` con las **piezas** a la derecha
-    (Agregar, Pieza seleccionada, Sala), que `cambiarModo` muestra solo en el editor junto con la clase
+    (Agregar, Editar, Sala), que `cambiarModo` muestra solo en el editor junto con la clase
     `editando` de `#app` (tercera columna de la rejilla). En el editor la columna ancha es la izquierda.
     Del grupo *Mapa* (`#grupo-mapa`) y del panel de la sala (`#panel-bandas`) se encarga tambien
     `cambiarModo`; el **tipo de sala** se ve en los dos modos, porque es como se cambia de recinto.
     Los controles se buscan por id: moverlos de grupo no rompe el script.
   - **Los textos de ayuda de un grupo van tras un boton de informacion** en su `<summary>`
     (`#info-columnas`, `#info-zonas`): el clic hace `preventDefault` y `stopPropagation`, o abriria y
-    cerraria tambien el `<details>`.
+    cerraria tambien el `<details>`. Es el mismo boton que el del encabezado (`#i-info`).
+  - **La flecha de plegar la dibuja el CSS** (`.grupo > summary::before`, ▾ y ▸): con `display: flex`
+    en el `<summary>` el navegador deja de pintar su marcador, y la flecha tiene que ir **delante**
+    del titulo (paso: se perdio al meter el boton de informacion).
   - **`.subtitulo` es del SVG** (nombres de banda, letra de 4 px). El subtítulo de la página es
     `.bajada`; no reutilices la clase o la letra se queda diminuta (pasó).
   - **Escritorio = una pantalla:** con más de 900 px de ancho y 600 px de alto, una media query pone
@@ -421,7 +424,7 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    - **Butacas sueltas y formas:** agregar, mover, girar (una barra junto al borde), cambiar tamaño,
      zona y nombre, duplicar, guardar, y elegir una butaca suelta en Previsualizar.
    - **Herencia de zona:** una mesa o un bloque dentro de una banda toma su zona («Hereda: …» en
-     *Pieza seleccionada*); fijarle una propia y volver a heredar; en un mapa en blanco, agregar una
+     *Editar*); fijarle una propia y volver a heredar; en un mapa en blanco, agregar una
      pieza fuera de toda zona y ver el aviso; guardar, recargar y comprobar que lo heredado sigue
      siguiendo a su banda.
    - **Duplicar y nombres:** Duplicar y Ctrl+D en una mesa, un bloque, una banda, una vertical y una

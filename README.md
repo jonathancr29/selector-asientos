@@ -235,12 +235,12 @@ también pueden llevarla las zonas de mesas, los espacios y las bandas verticale
 De lo más concreto a lo más general, manda:
 
 1. la zona **pintada en esa butaca** (*Asignar zona*, más abajo);
-2. la zona **propia de esa mesa, bloque o butaca suelta**, si se la diste en *Pieza seleccionada*;
+2. la zona **propia de esa mesa, bloque o butaca suelta**, si se la diste en *Editar*;
 3. la zona de la **banda** que la contiene y, si hay bandas dentro de bandas, la más interna;
 4. si no cae dentro de ninguna banda con zona, el editor le escribe una y lo dice en el aviso: una
    pieza nunca se guarda sin precio.
 
-En *Pieza seleccionada*, el selector de zona empieza en **«Hereda: ⟨zona de la banda⟩»**; elegir una
+En *Editar*, el selector de zona empieza en **«Hereda: ⟨zona de la banda⟩»**; elegir una
 zona concreta la fija y volver a *Hereda* la suelta. Las piezas nuevas nacen heredando.
 
 **Asignar zona a cada asiento.** El botón **Asignar zona** del grupo *Sala* (como *Bloquear butacas*)
@@ -375,7 +375,7 @@ quita (el escenario nunca). Como siempre, si algo deja de caber, el cambio no se
 │ Tipo de sala     │                         │  editor)     │
 │ Mapa             │         PLANO           │              │
 │ Columnas       ⓘ │                         │ Agregar      │
-│ Zonas y precios ⓘ│                         │ Pieza        │
+│ Zonas y precios ⓘ│                         │ Editar       │
 │ Leyenda          ├─────────────────────────┤ Sala         │
 │                  │ Estado  Seleccionadas… ▲│              │
 └──────────────────┴─────────────────────────┴──────────────┘
@@ -385,8 +385,8 @@ quita (el escenario nunca). Como siempre, si algo deja de caber, el cambio no se
   con iconos); el **tipo de sala**, que se ve en los dos modos; y, solo en el editor, *Mapa*,
   *Columnas* y *Zonas y precios*. La *Leyenda* va al final. Los grupos *Columnas* y *Zonas y precios*
   llevan un botón de **información (ⓘ)** junto al título que abre y cierra su explicación.
-- **Lateral derecho (las piezas), solo en el editor:** *Agregar*, *Pieza seleccionada* (acciones,
-  zona, nombre y venta) y *Sala* (asignar zona, bloquear butacas, escenario, restablecer). Los iconos
+- **Lateral derecho (las piezas), solo en el editor:** *Agregar*, *Editar* (acciones, zona, nombre y
+  venta) y *Sala* (asignar zona, bloquear butacas, escenario, restablecer). Los iconos
   van en rejilla y su tooltip sale a la derecha.
 - **Lateral derecho (configuración), solo en el editor:** *Mapa* (nombre, guardar, exportar,
   importar), *Columnas* y *Zonas y precios*.
@@ -394,6 +394,9 @@ quita (el escenario nunca). Como siempre, si algo deja de caber, el cambio no se
   desplaza. Los laterales, el encabezado y el pie quedan fijos, y el plano llena el hueco que queda,
   así que la sala se ve completa. Lo único que se desplaza es el interior de un lateral cuando su
   contenido no cabe. Cada grupo se pliega haciendo clic en su título.
+- **Los grupos de los laterales se pliegan** con un clic en su título, que lleva la flecha delante
+  (▾ abierto, ▸ cerrado). Los de *Columnas* y *Zonas y precios* llevan además el botón de información,
+  el mismo del encabezado.
 - **Encabezado:** el título con un botón de **información (ⓘ)** y, debajo, el aforo.
 - **Hojas de información:** el botón ⓘ abre, **sobre el plano**, tres hojas que se recorren de una
   en una, como diapositivas: **Qué es**, **Cómo se usa** (las instrucciones, que cambian con el modo
@@ -446,7 +449,7 @@ ninguna otra mesa puede ocuparlas.
 
 El organizador decide cómo se vende cada mesa, y puede hacerlo de tres formas:
 
-- **Una mesa:** con la mesa seleccionada en el editor, el selector **Venta** de *Pieza seleccionada*
+- **Una mesa:** con la mesa seleccionada en el editor, el selector **Venta** de *Editar*
   elige entre *Venta por butacas* y *Venta por mesa*.
 - **Toda una zona de mesas:** el selector **Venta** de su fila, en *Bandas y precios*, cambia de golpe
   todas las mesas de esa banda. Si unas van por mesa y otras por butacas, muestra *Venta mixta*.
