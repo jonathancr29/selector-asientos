@@ -508,6 +508,26 @@ En una mesa de dos lados, 0° y 180° ocupan las mismas celdas; lo que cambia es
 
 ### Qué se puede hacer
 
+### Varias piezas a la vez
+
+- **Marquesina:** en el editor, arrastrar el fondo dibuja un rectángulo y selecciona lo que atrapa;
+  entra la pieza que quede con **la mitad o más** de su huella dentro, así que no hace falta rodearla
+  entera. Con **Ctrl** (o Cmd) se suman a las que ya estaban; sin él, reemplazan la selección.
+- **Ctrl+clic** en una pieza la mete o la saca de la selección.
+- **Un clic normal** en una pieza que ya está seleccionada no deshace el grupo: pasa a ser la
+  principal, que es la que se puede arrastrar para llevarse a todas.
+- **Mover:** arrastrando cualquiera de ellas, o con las flechas. Es **todo o nada**: si una sola no
+  cabe en su destino, no se mueve ninguna y el aviso dice cuál estorba. La sombra se pone roja en
+  cuanto una no cabe.
+- **Duplicar (Ctrl+D):** copia el grupo entero conservando las distancias entre sus piezas, a la
+  derecha de su caja o, si ahí no cabe, debajo. Las copias quedan seleccionadas.
+- **Eliminar (Supr):** quita todas.
+- Con varias seleccionadas, girar, alargar y las demás transformaciones de una sola pieza quedan
+  desactivadas; el panel dice cuántas hay y qué se puede hacer.
+- El **escenario** no entra en la marquesina ni en el grupo: es único y no se duplica ni se elimina.
+- El plano se mueve con la barra espaciadora, el botón central o dos dedos, como con las herramientas
+  de butacas: en el editor, arrastrar el fondo es de la marquesina.
+
 Al elegir una mesa (clic o Tab), **sus butacas se marcan con ella** —la mesa y sus lugares son una
 sola pieza: es lo que se mueve, gira, duplica o elimina— y se activan los botones de la barra del
 editor. Son iconos: el nombre
