@@ -3577,11 +3577,32 @@ function glifoButaca(x, y, mira = 0) {
   return glifo;
 }
 
+// La marca de estado de una butaca: la palomita de elegida, el aspa de ocupada o la raya
+// de bloqueada. Se pone encima del glifo, asi que va como ultimo hijo.
+function ponerMarca(b) {
+  if (b.nodo.querySelector('.marca')) return;
+  const libre = b.estado === 'libre';
+  const cual = libre ? 'elegida' : b.estado;
+  const marca = nodo('use', { class: 'marca marca-' + cual, href: '#marca-' + cual,
+    x: b.x * PASO + (PASO - GLIFO) / 2, y: b.y * PASO + (PASO - GLIFO) / 2,
+    width: GLIFO, height: GLIFO });
+  // El hueco del icono, donde va la marca, es horizontal con el asiento a 0 o
+  // 180 grados y vertical a 90 o 270. Solo en esos dos giros la marca gira con
+  // el asiento: derecha no cabe en el hueco y se pisa con respaldo y asiento.
+  if (b.mira % 180 === 90) {
+    marca.setAttribute('transform', `rotate(${b.mira} ${(b.x + 0.5) * PASO} ${(b.y + 0.5) * PASO})`);
+  }
+  b.nodo.appendChild(marca);
+}
+
 function dibujarButacas() {
   porId.clear();
   const bloqueando = modo === 'editor' && herramienta === 'bloquear';
   const pintando = modo === 'editor' && herramienta === 'zona';
   const pincel = document.getElementById('zona-pincel').value;
+  // Todo se arma en un fragmento y se injerta de una vez: con 18.000 butacas, injertar
+  // una a una hacia el arbol vivo cuesta bastante mas.
+  const trozo = document.createDocumentFragment();
   butacas.forEach((b, indice) => {
     const seleccionable = b.estado === 'libre';
     const elegida = elegidas.has(b.id);
@@ -3616,22 +3637,15 @@ function dibujarButacas() {
     g.appendChild(nodo('rect', { class: 'toque', x: b.x * PASO, y: b.y * PASO,
       width: PASO, height: PASO, rx: 2 }));
     g.appendChild(glifoButaca(b.x, b.y, b.mira));
-    // Libre lleva la palomita siempre, oculta por CSS hasta que se elige.
-    const marca = nodo('use', { class: 'marca marca-' + (seleccionable ? 'elegida' : b.estado),
-      href: '#marca-' + (seleccionable ? 'elegida' : b.estado),
-      x: b.x * PASO + (PASO - GLIFO) / 2, y: b.y * PASO + (PASO - GLIFO) / 2,
-      width: GLIFO, height: GLIFO });
-    // El hueco del icono, donde va la marca, es horizontal con el asiento a 0 o
-    // 180 grados y vertical a 90 o 270. Solo en esos dos giros la marca gira con
-    // el asiento: derecha no cabe en el hueco y se pisa con respaldo y asiento.
-    if (b.mira % 180 === 90) {
-      marca.setAttribute('transform', `rotate(${b.mira} ${(b.x + 0.5) * PASO} ${(b.y + 0.5) * PASO})`);
-    }
-    g.appendChild(marca);
-    capaButacas.appendChild(g);
+    trozo.appendChild(g);
     b.nodo = g;
     porId.set(b.id, b);
+    // La marca solo se crea si se va a ver. La de una butaca libre sin elegir estaba ahi
+    // igualmente, oculta por CSS: en un recinto grande son 18.000 nodos que nadie mira, la
+    // cuarta parte del plano. Al elegirla la pone 'alternar'.
+    if (!seleccionable || elegida || dePincel) ponerMarca(b);
   });
+  capaButacas.appendChild(trozo);
 }
 
 // Solo en el editor: una zona por pieza (mesa o bloque de filas) que cubre toda su
@@ -4697,6 +4711,8 @@ function alternar(elemento) {
   // sus lugares y el tablero.
   const afectadas = b.grupo && b.grupo.completa ? lugaresDeMesa(b.grupo.id, butacas).filter((x) => x.estado === 'libre') : [b];
   for (const x of afectadas) {
+    // La palomita de una butaca libre no existe hasta que se elige.
+    if (elegida) ponerMarca(x);
     x.nodo.classList.toggle('elegida', elegida);
     x.nodo.setAttribute('aria-checked', String(elegida));
   }
