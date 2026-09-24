@@ -32,6 +32,7 @@ const cargar = () => new Function(html.slice(inicio, fin) +
   ' zonas, editarZona, agregarZona, eliminarZona, leerPrecio, usosDeZona,' +
   ' zonaEnCelda, fijarZonasSueltas, zonaExclusivaDeBanda, zonaNuevaParaBanda, mesasDeBanda,' +
   ' marcarMesasDeBanda, areaDeCeldas, butacasEnArea, asignarZonaEnArea, bloquearEnArea,' +
+  ' tiradoresDeSala, redimensionarConTirador,' +
   ' geometriaMesaRedonda, cambiarLugaresRedonda, huellaDe,' +
   ' marcarMesaCompleta, marcarTodasLasMesas, alternarEleccion, completarMesasElegidas,' +
   ' asignarZonaAsiento };')();
@@ -2283,4 +2284,70 @@ test('bloquearEnArea bloquea y desbloquea el area, sin tocar las ocupadas', () =
   assert.deepEqual(conOcupadas.ocupadas, ['luneta-B5', 'luneta-B6']);
   assert.equal(conOcupadas.plano.bloqueadas.includes('luneta-B5'), false);
   assert.deepEqual(plano.bloqueadas.filter((id) => id.startsWith('luneta-')), []);   // no toca el de entrada
+});
+
+// --- Tiradores: redimensionar con el raton -------------------------------------------
+
+test('cada espacio o zona de mesas tiene su tirador, y cada borde entre verticales el suyo', () => {
+  const api = cargar();
+  const sala = api.generarPlano('mixta-ambos');
+  // En la sala solo hay una banda con alto propio: la zona de mesas, sin vertical.
+  assert.deepEqual(api.tiradoresDeSala(sala),
+    [{ tipo: 'esquina', banda: 'mesas', vertical: null, x: 15, y: 18 }]);
+
+  const { sala: conFranjaSala } = conFranja(api);
+  const tiradores = api.tiradoresDeSala(conFranjaSala);
+  assert.deepEqual(tiradores.map((t) => [t.tipo, t.banda, t.vertical]), [
+    ['esquina', 'mesas', null],      // la zona de mesas de la sala
+    ['borde', null, 'banda2'],       // el borde entre las dos verticales
+    ['esquina', 'banda3', 'banda2'], // dentro de la primera vertical: alto y ancho
+    // banda5 son filas (no tiene alto propio) y su vertical es la ultima: sin tirador
+  ]);
+  // Un espacio dentro de la ULTIMA vertical no puede ensancharse: su ancho es el resto.
+  const { sala: conEspacio } = conFranja(api, (p) => api.agregarBandaEnVertical(p, conFranjaSala, 'banda4', 'espacio'));
+  const dentro = api.tiradoresDeSala(conEspacio).find((x) => x.banda === 'banda6');
+  assert.deepEqual([dentro.tipo, dentro.vertical], ['esquina', null]);
+  // El borde va donde acaba la primera vertical y cubre todo el alto de la franja.
+  assert.deepEqual(tiradores[1], { tipo: 'borde', banda: null, vertical: 'banda2', x: 8, y: 20, alto: 4 });
+});
+
+test('el tirador cambia el alto de la banda y el ancho de su vertical de una vez', () => {
+  const api = cargar();
+  const { plano, sala } = conFranja(api);
+  // Solo el alto.
+  const masAlto = api.redimensionarConTirador(plano, sala, { banda: 'banda3', vertical: null, alto: 7 });
+  const salaAlta = api.generarPlano('mixta-ambos', masAlto);
+  assert.equal(api.ubicar(salaAlta.bandas, 'banda3').item.alto, 7);
+  // Alto y ancho en el mismo gesto: la ultima vertical absorbe el resto.
+  const ambos = api.redimensionarConTirador(plano, sala, { banda: 'banda3', vertical: 'banda2', alto: 6, ancho: 10 });
+  const salaAmbos = api.generarPlano('mixta-ambos', ambos);
+  const franja = api.ubicar(salaAmbos.bandas, 'banda1').item;
+  assert.deepEqual([franja.verticales[0].anchoOcupado, franja.verticales[1].anchoOcupado], [10, 4]);
+  assert.equal(api.ubicar(salaAmbos.bandas, 'banda3').item.alto, 6);
+  assert.equal(plano.bandas.at(-1).verticales[0].ancho, 7);   // no toca el plano de entrada
+});
+
+test('el tirador respeta los topes: alto de 1 a 40 y una columna para la ultima vertical', () => {
+  const api = cargar();
+  const { plano, sala } = conFranja(api);
+  assert.deepEqual(api.redimensionarConTirador(plano, sala, { banda: 'banda3', alto: 0 }), { motivo: 'ya tiene el mínimo' });
+  assert.deepEqual(api.redimensionarConTirador(plano, sala, { banda: 'banda3', alto: 41 }), { motivo: 'ya tiene el máximo (40)' });
+  assert.deepEqual(api.redimensionarConTirador(plano, sala, { banda: 'banda5', alto: 3 }),
+    { motivo: 'esa banda no tiene un alto propio' });   // es de filas: su alto son sus filas
+  assert.deepEqual(api.redimensionarConTirador(plano, sala, { vertical: 'banda2', ancho: 14 }),
+    { motivo: 'la última banda vertical se quedaría sin ancho' });
+  assert.equal(api.redimensionarConTirador(plano, sala, { vertical: 'banda2', ancho: 13 }).motivo, undefined);
+  assert.deepEqual(api.redimensionarConTirador(plano, sala, { vertical: 'banda4', ancho: 3 }),
+    { motivo: 'la última banda vertical ocupa el resto; cambia el ancho de las demás' });
+});
+
+test('al redimensionar con el tirador, las piezas de dentro viajan con su banda', () => {
+  const api = cargar();
+  // Una mesa en la zona de mesas de la sala (filas 5 a 17) y otra debajo, en la franja.
+  const { plano, sala } = conFranja(api, (p) => ({ ...p, mesas: [...p.mesas, mesa('M7', 1, 20)], siguiente: 8 }));
+  const masAlta = api.redimensionarConTirador(plano, sala, { banda: 'mesas', alto: 15 });
+  const nueva = api.generarPlano('mixta-ambos', masAlta);
+  // La zona de mesas crece 2 filas: la franja baja 2 y su mesa con ella.
+  assert.equal(nueva.bandas.at(-1).y, 22);
+  assert.equal(masAlta.mesas.find((m) => m.id === 'M7').y, 22);
 });

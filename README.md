@@ -173,6 +173,23 @@ importar y eliminar; en *Columnas*, aplicar (✓); en *Otras zonas*, eliminar y 
 - **Eliminar:** quita la banda y las piezas que empiezan dentro de ella; lo de debajo sube.
 - **Agregar banda de filas / zona de mesas / franja con bandas verticales:** al final de la sala.
 
+**Con el ratón, desde el plano.** En el editor, cada espacio y cada zona de mesas lleva un tirador en
+su **esquina inferior derecha**, y el borde entre dos bandas verticales, una franja de agarre a lo
+alto:
+
+- El tirador de la esquina cambia el **alto** de su banda y, si está dentro de una vertical que no es
+  la última, también el **ancho** de esa vertical: las dos medidas en el mismo gesto.
+- El agarre del borde cambia el ancho de la vertical de su izquierda; la última siempre ocupa el resto.
+- Va de celda en celda y **no aplica nada hasta soltar**: mientras arrastras se ve el tamaño que
+  tendría, con su medida. **Esc** cancela.
+- Los topes son los de siempre: de 1 a 40 filas de alto y al menos una columna para la última
+  vertical, así que el fantasma nunca enseña un tamaño imposible.
+- Un clic sin arrastrar en un tirador selecciona su banda.
+- **El ancho de una banda nunca es suyo**, es el de lo que la contiene: por eso un espacio al nivel de
+  la sala solo cambia de alto, y «ensanchar un espacio» dentro de una franja es ensanchar su vertical.
+- Los botones − / + del panel siguen ahí: son el camino con teclado, y el tirador la comodidad del
+  ratón.
+
 Al cambiar el alto de una banda, lo que queda debajo se desplaza con ella. Antes de aplicar
 cualquier cambio se comprueba que todas las mesas sigan cabiendo; si alguna no, no se aplica y se
 explica (*«No se pudo: Mesa 4 choca con la fila A de General»*). Las butacas elegidas u ocupadas

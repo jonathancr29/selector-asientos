@@ -72,6 +72,8 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    `agregarSubtitulos` (muebles `subtitulo`), `copiarBloqueadas` y `sitioParaCopia`.
    **Árbol de bandas:** `disponerBandas` (coloca el árbol y devuelve bandas colocadas, regiones y error),
    `hojasDe`, `ubicar`, `idsDentro`, `copiarBandas`, `columnasDeBanda` y `reanclarPiezas`.
+   **Tiradores:** `tiradoresDeSala` (donde va cada agarre) y `redimensionarConTirador` (aplica el
+   alto de la banda y el ancho de su vertical de una vez, o ninguno).
    **Areas:** `areaDeCeldas` (rectangulo con las esquinas en cualquier orden), `butacasEnArea`,
    `asignarZonaEnArea`, `bloquearEnArea` y `mesasConZonasMezcladas`.
    **Bloqueos y mapas:** `idsBloqueadosPorBandas`, `alternarBloqueada`, `mapaDesdePlano`,
@@ -118,6 +120,16 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - **Ninguna pieza con butacas se queda sin zona:** si no cae dentro de ninguna banda con zona,
   `fijarZonasSueltas` (que llama `regenerar`) le escribe la suya y el aviso lo dice. Si añades una
   forma de crear o mover piezas, no la saltes.
+- **El tirador no aplica nada hasta soltar:** `arrastreTirador` guarda el gesto, `medidasDeTirador`
+  traduce la celda bajo el puntero a medidas **ya topadas** (1…`ALTO_MAXIMO`, y dejando una columna a
+  la última vertical), `dibujarFantasma` las enseña y `terminarArrastreTirador` llama una sola vez a
+  `aplicarBandas`, que es quien revierte si algo deja de caber. Sin cambio de medidas, el gesto vale
+  como clic y selecciona su banda. Los dos ayudantes reciben el gesto por parámetro porque al terminar
+  `arrastreTirador` ya es `null` (pasó: se leía después de limpiarlo).
+- **Solo se agarra lo que tiene medida propia:** la esquina, en las bandas con alto propio
+  (`tieneAlto`); el ancho, solo si la banda está en una vertical **que no es la última** (la última
+  ocupa el resto, así que su ancho se deduce). Una banda de filas no lleva tirador: su alto son sus
+  filas.
 - **Las operaciones por area devuelven lo que pasó:** `asignarZonaEnArea` y `bloquearEnArea` dan
   `{ plano, cambiadas, ocupadas }` (y la primera, `mesas` con las mesas completas que quedan con dos
   zonas). Las **ocupadas nunca cambian**, ni de zona ni de bloqueo, y se devuelven para avisar. Pintar
@@ -365,6 +377,10 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    - **Duplicar y nombres:** Duplicar y Ctrl+D en una mesa, un bloque, una banda, una vertical y una
      franja; clic en el fondo para seleccionar bandas (y subir de nivel); renombrar en el panel y con
      doble clic en un subtítulo; que los subtítulos se lean en Previsualizar sin tapar clics.
+   - **Tiradores:** arrastrar la esquina de un espacio (alto), la de un espacio dentro de una vertical
+     (alto y ancho a la vez), y el borde entre verticales; que el fantasma se tope en los límites, que
+     Esc cancele, que un clic seco seleccione la banda, que no haya tiradores en Previsualizar ni con
+     las herramientas de butacas, y que un cambio que deja una mesa sin caber se revierta con su aviso.
    - **Por área:** con *Asignar zona* y con *Bloquear butacas*, arrastrar un rectángulo y aplicarlo,
      Alt para deshacerlo, Mayús+flechas y Enter con el teclado, Esc para cancelar, el conteo mientras
      se arrastra, que las ocupadas no cambien y se avisen, y que el plano siga moviéndose con la barra
