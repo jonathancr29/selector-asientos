@@ -34,6 +34,7 @@ const cargar = () => new Function(html.slice(inicio, fin) +
   ' marcarMesasDeBanda, areaDeCeldas, butacasEnArea, asignarZonaEnArea, bloquearEnArea,' +
   ' tiradoresDeSala, redimensionarConTirador,' +
   ' piezasEnMarco, cajaDePiezas, moverPiezas, duplicarPiezas, eliminarPiezas,' +
+  ' aplicarConfigs, cambiarZonaDePiezas, marcarVentaDeMesas,' +
   ' geometriaMesaRedonda, cambiarLugaresRedonda, huellaDe,' +
   ' marcarMesaCompleta, marcarTodasLasMesas, alternarEleccion, completarMesasElegidas,' +
   ' asignarZonaAsiento };')();
@@ -2432,4 +2433,61 @@ test('duplicar y eliminar varias copian y quitan tambien sus bloqueadas y zonas'
   assert.deepEqual(sinEllas.mesas.map((m) => m.id), ['M2']);
   assert.deepEqual(sinEllas.bloquesFilas.map((b) => b.id), ['F1']);
   assert.equal(plano.mesas.length, 1);   // no toca el plano de entrada
+});
+
+// --- Acciones de grupo: transformar, zona y venta ------------------------------------
+
+test('aplicarConfigs transforma varias piezas a la vez, o ninguna', () => {
+  const api = cargar();
+  // Dos mesas pegadas en un lienzo: M1 en las columnas 1-2 y M2 en las 3-4.
+  const { plano, sala } = conLienzo(api, (p) => ({ ...p,
+    mesas: [{ id: 'M1', x: 1, y: 1, largo: 2, cabeceras: false, unLado: false, giro: 0 },
+            { id: 'M2', x: 4, y: 1, largo: 2, cabeceras: false, unLado: false, giro: 0 }], siguiente: 3 }));
+  const girados = plano.mesas.map((m) => api.girarPieza(m));
+  // Girar una mesa de 2 × 3 sobre su centro la deja en la columna 0: el grupo entero se
+  // desplaza una columna para caber, asi que las distancias entre las dos no cambian.
+  const { plano: nuevo, dx, dy } = api.aplicarConfigs(plano, sala, girados);
+  assert.deepEqual(nuevo.mesas.map((m) => [m.giro, m.x]), [[90, 1], [90, 4]]);
+  assert.deepEqual([dx, dy], [1, 0]);
+  assert.deepEqual(plano.mesas.map((m) => m.giro), [0, 0]);   // no toca el plano de entrada
+  // Sin sitio ni desplazando el grupo, no se escribe nada y se dice cual estorba.
+  const ancha = { ...plano, mesas: [{ id: 'M1', x: 1, y: 1, largo: 8, cabeceras: true, unLado: false, giro: 0 }] };
+  const salaAncha = api.generarPlano('mapa-en-blanco', ancha);
+  const fallo = api.aplicarConfigs(ancha, salaAncha, [api.girarPieza(ancha.mesas[0])]);
+  assert.deepEqual(fallo, { motivo: 'Mesa 1 se sale de la sala' });   // girada mide 3 × 10 y la sala tiene 10 filas
+  // Las celdas del propio grupo no estorban: M1 crece hacia donde esta M2 si M2 se mueve
+  // en el mismo gesto.
+  const juntas = api.aplicarConfigs(plano, sala,
+    [api.cambiarLargo(plano.mesas[0], 1), { ...plano.mesas[1], x: 5 }]);
+  assert.equal(juntas.motivo, undefined);
+});
+
+test('la zona y la venta se pueden cambiar en varias piezas a la vez', () => {
+  const api = cargar();
+  const { plano } = conLienzo(api, (p) => ({ ...p,
+    mesas: [{ id: 'M1', x: 1, y: 1, largo: 2, cabeceras: false, unLado: false, giro: 0, zona: 'general' },
+            { id: 'M2', x: 4, y: 1, largo: 2, cabeceras: false, unLado: false, giro: 0, completa: true }],
+    bloquesFilas: [bloque('F1', 8, 1)],
+    formas: [{ id: 'P1', tipo: 'forma', forma: 'pista', x: 14, y: 1, ancho: 4, alto: 4 }],
+    siguiente: 3, siguienteBloque: 2, siguienteForma: 2 }));
+  // Una zona para las tres piezas con butacas; la forma se queda como esta.
+  const conZona = api.cambiarZonaDePiezas(plano, ['M1', 'M2', 'F1', 'P1'], 'luneta');
+  assert.deepEqual(conZona.mesas.map((m) => m.zona), ['luneta', 'luneta']);
+  assert.equal(conZona.bloquesFilas[0].zona, 'luneta');
+  assert.equal('zona' in conZona.formas[0], false);
+  assert.equal(plano.mesas[0].zona, 'general');   // no toca el plano de entrada
+  // Sin zona, vuelven a heredar la de su banda.
+  const heredan = api.cambiarZonaDePiezas(conZona, ['M1', 'F1'], '');
+  assert.equal('zona' in heredan.mesas[0], false);
+  assert.equal('zona' in heredan.bloquesFilas[0], false);
+  assert.equal(heredan.mesas[1].zona, 'luneta');
+  // Venta por mesa o por butacas, solo en las mesas indicadas: M2 ya se vende por mesa y
+  // M1 por butacas, asi que cada cambio tiene que dejar a la otra como estaba.
+  const porMesa = api.marcarVentaDeMesas(plano, ['M1'], true);
+  assert.deepEqual(porMesa.mesas.map((m) => Boolean(m.completa)), [true, true]);
+  assert.deepEqual(api.marcarVentaDeMesas(plano, ['M2'], true).mesas.map((m) => Boolean(m.completa)), [false, true]);
+  assert.deepEqual(api.marcarVentaDeMesas(plano, ['M1'], false).mesas.map((m) => Boolean(m.completa)), [false, true]);
+  const porButacas = api.marcarVentaDeMesas(plano, ['M2'], false);
+  assert.deepEqual(porButacas.mesas.map((m) => Boolean(m.completa)), [false, false]);
+  assert.equal(plano.mesas[1].completa, true);   // no toca el plano de entrada
 });

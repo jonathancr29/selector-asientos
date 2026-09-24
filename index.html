@@ -2933,6 +2933,67 @@ function duplicarPiezas(plano, sala, ids) {
   return { plano: nuevo, ids: [...copias.values()] };
 }
 
+// Los desplazamientos que se prueban para que un grupo transformado quepa, de menos a
+// mas: primero sin moverlo, luego una celda, luego dos.
+const DESPLAZAMIENTOS_DE_GRUPO = (() => {
+  const lista = [];
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) lista.push({ dx, dy });
+  return lista.sort((a, b) => Math.abs(a.dx) + Math.abs(a.dy) - (Math.abs(b.dx) + Math.abs(b.dy)));
+})();
+
+// Escribe configuraciones nuevas de varias piezas a la vez: todas o ninguna. Si el grupo
+// transformado no cabe donde esta, se prueba desplazarlo **entero** unas celdas, igual que
+// colocarCerca con una sola pieza, para que las distancias entre ellas no cambien.
+// Devuelve { plano, dx, dy } o { motivo } (el de quedarse en su sitio, que es el util).
+function aplicarConfigs(plano, sala, configs) {
+  const ocupadas = celdasOcupadas(new Set(configs.map((c) => c.id)));
+  const primerMotivo = (dx, dy) => {
+    for (const c of configs) {
+      const motivo = motivoNoCabe(sala, ocupadas, { ...c, x: c.x + dx, y: c.y + dy });
+      if (motivo) return nombreDeConfig(c) + ' ' + motivo;
+    }
+    return null;
+  };
+  let motivo = null;
+  for (const { dx, dy } of DESPLAZAMIENTOS_DE_GRUPO) {
+    const fallo = primerMotivo(dx, dy);
+    if (fallo) {
+      if (!dx && !dy) motivo = fallo;
+      continue;
+    }
+    const nuevo = copiarPlano(plano);
+    for (const c of configs) {
+      const lista = listaDeId(c.id).lista;
+      nuevo[lista] = nuevo[lista].map((p) => (p.id === c.id ? { ...c, x: c.x + dx, y: c.y + dy } : p));
+    }
+    return { plano: nuevo, dx, dy };
+  }
+  return { motivo };
+}
+
+// La zona propia de varias piezas: sin zona ('' o null) vuelven a heredar la de su banda.
+function cambiarZonaDePiezas(plano, ids, zona) {
+  const nuevo = copiarPlano(plano);
+  for (const id of ids) {
+    const config = configEnPlano(nuevo, id);
+    if (!config || esForma(config)) continue;   // una forma no tiene butacas ni zona
+    if (zona) config.zona = zona;
+    else delete config.zona;
+  }
+  return nuevo;
+}
+
+// Venta por mesa o por butacas en varias mesas a la vez.
+function marcarVentaDeMesas(plano, ids, completa) {
+  const nuevo = copiarPlano(plano);
+  for (const mesa of nuevo.mesas || []) {
+    if (!ids.includes(mesa.id)) continue;
+    if (completa) mesa.completa = true;
+    else delete mesa.completa;
+  }
+  return nuevo;
+}
+
 // Quita varias piezas del plano. El escenario no se elimina: se quita con su boton.
 function eliminarPiezas(plano, ids) {
   const nuevo = copiarPlano(plano);
@@ -3527,11 +3588,13 @@ const listaBandas = document.getElementById('lista-bandas');
 // 'heredada' es la zona que la pieza tomaria de su banda: con ella, la primera opcion
 // es heredarla, que es como nacen las piezas. Sin ella (una pieza fuera de toda banda
 // con zona) hay que elegir una: el plano nunca guarda una butaca sin precio.
-function llenarZonasDeFilas(select, actual, { heredada = null, conMesas = false } = {}) {
+function llenarZonasDeFilas(select, actual, { heredada = null, conMesas = false, mezcla = false } = {}) {
   select.textContent = '';
+  // Varias piezas con zonas distintas: se ve que no coinciden y elegir una las iguala.
+  if (mezcla) select.appendChild(new Option('— varias zonas —', 'mezcla', false, true));
   if (heredada && zonas[heredada]) {
     select.appendChild(new Option('Hereda: ' + zonas[heredada].nombre + ' · ' + dinero(zonas[heredada].precio),
-                                  '', false, !actual));
+                                  '', false, !actual && !mezcla));
   }
   for (const [id, { nombre, precio }] of Object.entries(zonas)) {
     if (id !== 'mesas' || conMesas) select.appendChild(new Option(nombre + ' · ' + dinero(precio), id, false, id === actual));
@@ -4755,6 +4818,12 @@ const aplica = (accion, p) => ACCIONES_DE[tipoDePieza(p)].has(accion);
 function actualizarControles() {
   const m = mesaActiva && piezaPorId(mesaActiva);
   const varias = piezasActivas.size > 1;
+  const todas = [...piezasActivas].map((id) => piezaPorId(id)).filter(Boolean);
+  // Lo que comparten todas: si no coinciden, el control lo dice con «—» o «mixta».
+  const comun = (valor) => {
+    const valores = new Set(todas.map(valor));
+    return valores.size === 1 ? [...valores][0] : undefined;
+  };
   document.getElementById('mesa-activa').textContent = varias
     ? plural(piezasActivas.size, 'pieza seleccionada', 'piezas seleccionadas') + ': mover, duplicar o eliminar'
     : m ? m.nombre + ' · ' + resumenDePieza(m) : 'Ninguna pieza seleccionada';
@@ -4769,9 +4838,9 @@ function actualizarControles() {
       : bloque ? ANCHO_BLOQUE_MAXIMO : redonda ? LUGARES_MAXIMOS_REDONDA : LARGO_MAXIMO;
     const filas = deEscenario || forma ? m.alto : m && m.filas;
     const filasMaximas = deEscenario ? ESCENARIO_ALTO_MAXIMO : forma ? FORMA_ALTO_MAXIMO : FILAS_MAXIMAS;
-    // Con varias seleccionadas solo valen las acciones de grupo.
+    // Con varias seleccionadas, una acción solo se ofrece si todas la admiten.
     boton.disabled = !m || !aplica(accion, m) ||
-      (varias && accion !== 'duplicar' && accion !== 'eliminar') ||
+      (varias && !todas.every((p) => aplica(accion, p))) ||
       (accion === 'alargar' && largo >= maximo) ||
       (accion === 'acortar' && largo <= minimo) ||
       (accion === 'masfilas' && filas >= filasMaximas) ||
@@ -4784,22 +4853,37 @@ function actualizarControles() {
   botonEscenario.setAttribute('aria-label', textoEscenario);
   botonEscenario.dataset.tooltip = textoEscenario;
   botonEscenario.querySelector('use').setAttribute('href', escenario.ausente ? '#i-escenario-agregar' : '#i-escenario-quitar');
-  // Venta por mesa o por butacas: solo para mesas.
+  // Venta por mesa o por butacas: solo para mesas. Con varias, «Venta mixta» cuando no
+  // coinciden; elegir una opción la aplica a todas.
   const venta = document.getElementById('venta-mesa');
-  const deMesa = Boolean(m) && esMesa(m) && !esEscenario(m);
+  const soloMesas = todas.length > 0 && todas.every((p) => esMesa(p) && !esEscenario(p));
+  const deMesa = varias ? soloMesas : Boolean(m) && esMesa(m) && !esEscenario(m);
   venta.disabled = !deMesa;
-  venta.value = deMesa && m.completa ? 'mesa' : 'butacas';
+  const mixta = varias && deMesa && comun((p) => Boolean(p.completa)) === undefined;
+  venta.querySelector('option[value="mixta"]')?.remove();
+  if (mixta) venta.insertBefore(new Option('Venta mixta', 'mixta'), venta.firstChild);
+  venta.value = mixta ? 'mixta' : (deMesa && (varias ? comun((p) => Boolean(p.completa)) : m.completa) ? 'mesa' : 'butacas');
   document.getElementById('completa-todas').disabled = !deMesa;
   // Zona: mesas, bloques y butacas sueltas (lo que tiene butacas). Nombre: bloques y
   // formas. No se pisa lo que se esta escribiendo.
   const zona = document.getElementById('zona-pieza');
   const nombre = document.getElementById('nombre-pieza');
-  const conButacas = Boolean(m) && (bloque || suelta || deMesa);
-  zona.disabled = !conButacas;
-  nombre.disabled = !(bloque || forma);
-  llenarZonasDeFilas(zona, conButacas ? m.zona : null,
-                     { heredada: conButacas ? zonaEnCelda(salaActual, m.x, m.y) : null, conMesas: deMesa });
-  if (document.activeElement !== nombre) nombre.value = bloque || forma ? m.nombrePropio || '' : '';
+  // Zona: con varias, la de todas si coinciden y «—» si no. El nombre es de cada pieza,
+  // así que con varias no se edita.
+  const conZona = varias
+    ? todas.length > 0 && todas.every((p) => !esForma(p) && !esEscenario(p))
+    : Boolean(m) && (bloque || suelta || deMesa);
+  zona.disabled = !conZona;
+  nombre.disabled = varias || !(bloque || forma);
+  const propia = varias ? comun((p) => p.zona || '') : conZona ? m.zona : null;
+  const heredada = varias ? comun((p) => zonaEnCelda(salaActual, p.x, p.y))
+    : conZona ? zonaEnCelda(salaActual, m.x, m.y) : null;
+  llenarZonasDeFilas(zona, propia || null, { heredada: heredada || null, conMesas: deMesa,
+                                             mezcla: propia === undefined });
+  if (document.activeElement !== nombre) {
+    nombre.value = !varias && (bloque || forma) ? m.nombrePropio || '' : '';
+    nombre.placeholder = varias ? 'El nombre es de cada pieza' : 'Ej.: Lateral izquierdo';
+  }
 }
 
 // Atenua la mesa original (tablero, rotulo y lugares) mientras se arrastra.
@@ -4865,6 +4949,12 @@ function terminarArrastreMesa(confirmar) {
   sombra.classList.add('oculta');
   svg.classList.remove('moviendo-mesa');
   levantar(null, false);
+  // Un clic seco (sin arrastrar) en una pieza del grupo deja seleccionada solo esa: es
+  // la forma de salir de la selección múltiple sin tener que ir al fondo.
+  if (confirmar && !a.destino && a.grupo.length > 1) {
+    marcarActiva(a.mesa.id);
+    anunciar(a.mesa.nombre + ' seleccionada, sola.');
+  }
   if (!confirmar || !a.destino) return;
   const { x, y, motivo } = a.destino;
   if (x === a.mesa.x && y === a.mesa.y) return;
@@ -5005,6 +5095,41 @@ const TRANSFORMACIONES = {
                hecho: (m) => (m.unLado ? 'con lugares en un solo lado' : 'con lugares en los dos lados') },
 };
 
+// Como queda el grupo, en femenino plural: «2 piezas giradas». Los textos de una sola
+// pieza concuerdan con ella («girada», «alargado»), asi que no sirven para varias.
+const HECHO_EN_GRUPO = {
+  girar: 'giradas 90°', alargar: 'alargadas', acortar: 'acortadas',
+  masfilas: 'con una fila más', menosfilas: 'con una fila menos',
+  cabeceras: 'con las cabeceras cambiadas', unlado: 'con los lados cambiados',
+};
+
+// Transforma todas las seleccionadas a la vez: cada una sobre su propio sitio (girar
+// sobre su centro, alargar desde su ancla), y todo o nada. Aquí ninguna se desplaza para
+// caber: mover una del grupo desbarataría su distancia con las demás.
+function transformarPiezasActivas(accion) {
+  const t = TRANSFORMACIONES[accion];
+  const piezas = [...piezasActivas].map((id) => piezaPorId(id)).filter(Boolean);
+  const configs = [];
+  for (const m of piezas) {
+    const nueva = t.calcular(configDePieza(m));
+    if (!nueva) {
+      anunciar(m.nombre + ' ya tiene ' + (typeof t.tope === 'function' ? t.tope(m) : t.tope) + '.');
+      return;
+    }
+    configs.push(nueva);
+  }
+  const resultado = aplicarConfigs(planoEditable(), salaActual, configs);
+  if (resultado.motivo) {
+    anunciar('No se pudo: ' + resultado.motivo + '.');
+    return;
+  }
+  planos[tipoActual] = resultado.plano;
+  regenerar(plural(configs.length, 'pieza', 'piezas') + ' ' + HECHO_EN_GRUPO[accion] + '.' +
+            (resultado.dx || resultado.dy ? ' El grupo se desplazó para caber.' : ''));
+  const destino = capaPiezas.querySelector('[data-pieza="' + mesaActiva + '"]');
+  if (destino) destino.focus();
+}
+
 function transformarMesa(id, accion) {
   const m = piezaPorId(id);
   const t = TRANSFORMACIONES[accion];
@@ -5037,7 +5162,7 @@ function agregarMesaNueva(estilo) {
   }
   plano.siguiente++;
   plano.mesas.push(sitio);
-  mesaActiva = id;
+  marcarActivas([id]);
   regenerar('Mesa ' + id.slice(1) + (estilo === 'redonda' ? ' (redonda, 8 lugares)' : '') +
             ' agregada en columna ' + sitio.x + ', fila ' + sitio.y + '.');
   const m = piezaPorId(id);
@@ -5062,7 +5187,7 @@ function agregarBloqueNuevo() {
   }
   plano.siguienteBloque++;
   plano.bloquesFilas.push(sitio);
-  mesaActiva = id;
+  marcarActivas([id]);
   regenerar('Bloque ' + id.slice(1) + ' agregado en columna ' + sitio.x + ', fila ' + sitio.y + '.');
   const b = piezaPorId(id);
   asegurarVisible({ x: b.x, y: b.y, w: b.geo.ancho, h: b.geo.alto });
@@ -5080,7 +5205,7 @@ function duplicarPiezaPorId(id) {
     return;
   }
   planos[tipoActual] = resultado;
-  mesaActiva = nuevoId;
+  marcarActivas([nuevoId]);
   regenerar('');
   const copia = piezaPorId(nuevoId);
   anunciar(m.nombre + ' duplicad' + genero(m) + ': ' + copia.nombre + ' en columna ' + copia.x + ', fila ' + copia.y + '.');
@@ -5099,7 +5224,7 @@ function agregarButacaNueva() {
   }
   nuevoIdDe(plano, tipoDeLista);
   plano.butacasSueltas = [...(plano.butacasSueltas || []), { ...sitio, giro: giroHaciaEscenario(sitio.x + 0.5, sitio.y + 0.5) }];
-  mesaActiva = id;
+  marcarActivas([id]);
   // La zona se dice despues de regenerar: es la que hereda de la banda donde cayo.
   regenerar('');
   anunciar('Butaca suelta ' + id.slice(1) + ' agregada en columna ' + sitio.x + ', fila ' + sitio.y +
@@ -5120,7 +5245,7 @@ function agregarFormaNueva(forma) {
   }
   nuevoIdDe(plano, tipoDeLista);
   plano.formas = [...(plano.formas || []), sitio];
-  mesaActiva = id;
+  marcarActivas([id]);
   regenerar(nombre + ' ' + id.slice(1) + ' agregada en columna ' + sitio.x + ', fila ' + sitio.y + '.');
   asegurarVisible({ x: sitio.x, y: sitio.y, w: ancho, h: alto });
 }
@@ -5190,13 +5315,13 @@ function eliminarMesa(id) {
 // piezas se editan sobre el plano guardado, asi que se copia antes.
 function conTopeDeAforo(cambio) {
   const previo = planos[tipoActual] && copiarPlano(planos[tipoActual]);
-  const activa = mesaActiva;
+  const activas = [...piezasActivas];
   cambio();
   const motivo = motivoDeAforo(butacas.length);
   if (!motivo) return;
   if (previo) planos[tipoActual] = previo;
   else delete planos[tipoActual];
-  mesaActiva = activa;   // la seleccion vuelve a la pieza de antes (no a una copia deshecha)
+  marcarActivas(activas);   // la seleccion vuelve a la de antes (no a una copia deshecha)
   regenerar('No se pudo: ' + motivo + '.');
 }
 
@@ -5204,9 +5329,12 @@ function ejecutarAccion(accion, id = mesaActiva) {
   const pieza = id && piezaPorId(id);
   if (!pieza) return;
   if (piezasActivas.size > 1 && piezasActivas.has(id)) {
+    // Una acción de grupo solo se ofrece si todas la admiten (lo comprueba el panel).
+    const todas = [...piezasActivas].map((x) => piezaPorId(x)).filter(Boolean);
     if (accion === 'eliminar') eliminarPiezasActivas();
     else if (accion === 'duplicar') conTopeDeAforo(duplicarPiezasActivas);
-    else anunciar('Con varias piezas seleccionadas solo se puede mover, duplicar o eliminar.');
+    else if (todas.every((p) => aplica(accion, p))) conTopeDeAforo(() => transformarPiezasActivas(accion));
+    else anunciar('Esa acción no la admiten todas las piezas seleccionadas.');
     return;
   }
   if (!aplica(accion, pieza)) {
@@ -5229,6 +5357,17 @@ function cambiarDatoDeBloque(cambio, mensaje) {
 }
 // La zona de una pieza con butacas. Vacia es heredar la de su banda: se quita la propia.
 document.getElementById('zona-pieza').addEventListener('change', (e) => {
+  if (e.target.value === 'mezcla') return;
+  if (piezasActivas.size > 1) {
+    const ids = [...piezasActivas];
+    planos[tipoActual] = cambiarZonaDePiezas(planoEditable(), ids, e.target.value);
+    regenerar('');
+    const zona = zonas[e.target.value];
+    anunciar(plural(ids.length, 'pieza', 'piezas') +
+             (zona ? ' a la zona ' + zona.nombre + ', ' + dinero(zona.precio) + '.'
+                   : ' heredan la zona de su banda.'));
+    return;
+  }
   const pieza = piezaPorId(mesaActiva);
   if (!pieza || esForma(pieza) || esEscenario(pieza)) return;
   const config = { ...configDePieza(pieza) };
@@ -5382,7 +5521,7 @@ function cambiarModo(nuevo) {
   document.getElementById('herramienta-zona').setAttribute('aria-pressed', 'false');
   document.getElementById('pincel-zona').hidden = true;
   actualizarAccesoButacas();
-  mesaActiva = null;
+  marcarActivas([]);
   bandaActiva = null;
   dibujarTodo();
   actualizarControles();
@@ -5414,7 +5553,7 @@ function cambiarHerramienta(nueva) {
   if (pintando) llenarPincel();
   document.getElementById('pista').textContent = PISTAS[bloqueando ? 'bloquear' : pintando ? 'zona' : modo];
   actualizarAccesoButacas();
-  mesaActiva = null;
+  marcarActivas([]);
   bandaActiva = null;
   dibujarTodo();
   actualizarControles();
@@ -5668,7 +5807,7 @@ document.getElementById('modo-vista').addEventListener('click', () => cambiarMod
 document.getElementById('modo-editor').addEventListener('click', () => cambiarModo('editor'));
 document.getElementById('restablecer').addEventListener('click', () => {
   delete planos[tipoActual];
-  mesaActiva = null;
+  marcarActivas([]);
   bandaActiva = null;
   regenerar('Sala restablecida: bandas y mesas como en su tipo.');
   calcularEncuadre();
@@ -5686,7 +5825,7 @@ document.getElementById('alternar-escenario').addEventListener('click', () => {
     return;
   }
   planos[tipoActual] = resultado;
-  mesaActiva = 'escenario';
+  marcarActivas(['escenario']);
   regenerar('');
   anunciar('Escenario agregado en columna ' + escenario.x + ', fila ' + escenario.y + ', de ' +
            escenario.ancho + ' × ' + escenario.alto + ' celdas. Arrástralo o cambia su tamaño.');
@@ -5696,6 +5835,14 @@ document.getElementById('agregar-lados').addEventListener('click', () => conTope
 document.getElementById('agregar-cruz').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('cruz')));
 document.getElementById('agregar-barra').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('barra')));
 document.getElementById('venta-mesa').addEventListener('change', (e) => {
+  if (e.target.value === 'mixta') return;
+  if (piezasActivas.size > 1) {
+    const ids = [...piezasActivas];
+    const completa = e.target.value === 'mesa';
+    planos[tipoActual] = marcarVentaDeMesas(planoEditable(), ids, completa);
+    regenerar(plural(ids.length, 'mesa', 'mesas') + (completa ? ' se venden por mesa.' : ' se venden por butacas.'));
+    return;
+  }
   const m = piezaPorId(mesaActiva);
   if (!m) return;
   const completa = e.target.value === 'mesa';
@@ -5779,7 +5926,7 @@ function actualizarAforo(sala) {
 function redibujar(tipo) {
   if (arrastreMesa) terminarArrastreMesa(false);
   tipoActual = tipo;
-  mesaActiva = null;
+  marcarActivas([]);
   bandaActiva = null;
   const esMapa = TIPOS_DE_SALA[tipo].grupo === GRUPO_MAPAS;
   document.getElementById('nombre-mapa').value = esMapa ? TIPOS_DE_SALA[tipo].nombre : '';

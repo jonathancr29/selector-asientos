@@ -522,8 +522,16 @@ En una mesa de dos lados, 0° y 180° ocupan las mismas celdas; lo que cambia es
 - **Duplicar (Ctrl+D):** copia el grupo entero conservando las distancias entre sus piezas, a la
   derecha de su caja o, si ahí no cabe, debajo. Las copias quedan seleccionadas.
 - **Eliminar (Supr):** quita todas.
-- Con varias seleccionadas, girar, alargar y las demás transformaciones de una sola pieza quedan
-  desactivadas; el panel dice cuántas hay y qué se puede hacer.
+- **Transformar:** girar, alargar, acortar, cabeceras y los lados también funcionan con el grupo, y
+  cada pieza cambia **sobre su propio sitio** (gira sobre su centro, se alarga desde su ancla). Es
+  todo o nada; si el grupo transformado no cabe donde está, se desplaza **entero** unas celdas para
+  caber —así las distancias entre sus piezas no cambian— y se avisa. Una acción solo se ofrece si
+  **todas** las seleccionadas la admiten: con una mesa y un bloque juntos, por ejemplo, girar sí y
+  cabeceras no.
+- **Zona y venta en grupo:** el selector de zona y el de venta por mesa aplican a todas. Cuando no
+  coinciden, lo dicen: *«— varias zonas —»* y *«Venta mixta»*; al elegir una opción, todas quedan
+  igual. El **nombre** es de cada pieza, así que con varias no se edita.
+- Un **clic seco** en una pieza del grupo deja seleccionada solo esa.
 - El **escenario** no entra en la marquesina ni en el grupo: es único y no se duplica ni se elimina.
 - El plano se mueve con la barra espaciadora, el botón central o dos dedos, como con las herramientas
   de butacas: en el editor, arrastrar el fondo es de la marquesina.
