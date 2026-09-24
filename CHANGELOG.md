@@ -4,9 +4,36 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Redimensionar espacios y verticales con el ratón
+## Sin publicar — Selección múltiple de piezas
 
-Rama `claude/tiradores-de-espacios`.
+Rama `claude/seleccion-multiple`.
+
+### Agregado
+
+- **Marquesina:** en el editor, arrastrar el fondo dibuja un rectángulo con el número de piezas que
+  abarca y selecciona lo que atrapa. Entra la pieza que quede con **la mitad o más** de su huella
+  dentro. Con **Ctrl** (o Cmd) se suman a las que ya estaban.
+- **Ctrl+clic** en una pieza la mete o la saca de la selección. Un clic normal en una que ya está
+  seleccionada no deshace el grupo: pasa a ser la principal.
+- **Mover el grupo** arrastrando cualquiera de sus piezas o con las flechas. Es **todo o nada**: si
+  una sola no cabe, no se mueve ninguna y el aviso dice cuál estorba; la sombra, que ahora muestra el
+  grupo entero, se pone roja en cuanto una no cabe.
+- **Duplicar (Ctrl+D)** el grupo conservando las distancias entre sus piezas, y **eliminar (Supr)**
+  todas. Las copias quedan seleccionadas.
+
+### Cambiado
+
+- Con varias piezas seleccionadas, las transformaciones de una sola (girar, alargar, cabeceras…)
+  quedan desactivadas y el panel dice cuántas hay.
+- En el editor, arrastrar el fondo ya no mueve el plano: el plano se mueve con la barra espaciadora,
+  el botón central o dos dedos, igual que con las herramientas de butacas. Un clic seco en el fondo
+  sigue seleccionando bandas.
+- El escenario no entra en la selección múltiple: es único y no se duplica ni se elimina.
+
+## 2026-09-23 — PR #29: redimensionar espacios y verticales con el ratón
+
+[PR #29](https://github.com/jonathancr29/selector-asientos/pull/29), fusionado en `main` con el
+commit `4e93390`.
 
 ### Agregado
 

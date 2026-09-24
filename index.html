@@ -1761,25 +1761,29 @@ const celda = (x, y) => x + ',' + y;
 
 // Celda -> quien la ocupa, en palabras para el aviso. 'excluir' es la pieza (mesa
 // o bloque) que se esta editando: sus propias celdas no le estorban.
+// 'excluir' es el id de la pieza que se esta editando o, al mover varias a la vez, un
+// Set con todas: las celdas del grupo no se estorban entre ellas porque viajan juntas.
+const excluida = (excluir, id) => (excluir instanceof Set ? excluir.has(id) : id === excluir);
+
 function celdasOcupadas(excluir) {
   const ocupadas = new Map();
   for (const b of butacas) {
-    if (b.grupo || (b.bloque && b.bloque === excluir) || (b.suelta && b.suelta === excluir)) continue;
+    if (b.grupo || (b.bloque && excluida(excluir, b.bloque)) || (b.suelta && excluida(excluir, b.suelta))) continue;
     ocupadas.set(celda(b.x, b.y), (b.suelta ? 'la butaca ' + b.fila + b.numero : 'la fila ' + b.fila) + ' de ' + b.seccion);
   }
   for (const m of mesas) {
-    if (m.id === excluir) continue;
+    if (excluida(excluir, m.id)) continue;
     for (let dy = 0; dy < m.geo.alto; dy++) {
       for (let dx = 0; dx < m.geo.ancho; dx++) ocupadas.set(celda(m.x + dx, m.y + dy), m.nombre);
     }
   }
   for (const f of formas) {
-    if (f.id === excluir) continue;
+    if (excluida(excluir, f.id)) continue;
     for (let dy = 0; dy < f.alto; dy++) {
       for (let dx = 0; dx < f.ancho; dx++) ocupadas.set(celda(f.x + dx, f.y + dy), f.nombre);
     }
   }
-  if (excluir !== 'escenario' && !escenario.ausente) {
+  if (!excluida(excluir, 'escenario') && !escenario.ausente) {
     for (let dy = 0; dy < escenario.alto; dy++) {
       for (let dx = 0; dx < escenario.ancho; dx++) ocupadas.set(celda(escenario.x + dx, escenario.y + dy), 'el escenario');
     }
@@ -2842,6 +2846,104 @@ function duplicarPieza(plano, sala, id) {
   return nuevo;
 }
 
+// ---------------------------------------------------------------------------
+// Varias piezas a la vez.
+//
+// El editor puede tener seleccionadas varias piezas (mesas, bloques, formas y
+// butacas sueltas; el escenario no entra: es unico y no se duplica ni se elimina).
+// Mover, duplicar y eliminar trabajan con la lista entera, y mover es **todo o
+// nada**: si una sola no cabe, no se mueve ninguna y se dice cual.
+// ---------------------------------------------------------------------------
+// Las piezas que atrapa un marco de seleccion: entra la que tiene la mitad o mas de
+// su huella dentro. Asi no hace falta rodear una mesa entera para llevarsela.
+function piezasEnMarco(piezas, marco) {
+  return piezas.filter((p) => {
+    const { ancho, alto } = huellaDe(p);
+    const dentroX = Math.min(marco.x2 + 1, p.x + ancho) - Math.max(marco.x1, p.x);
+    const dentroY = Math.min(marco.y2 + 1, p.y + alto) - Math.max(marco.y1, p.y);
+    if (dentroX <= 0 || dentroY <= 0) return false;
+    return dentroX * dentroY * 2 >= ancho * alto;
+  }).map((p) => p.id);
+}
+
+// La caja que ocupan varias piezas, en celdas.
+function cajaDePiezas(piezas) {
+  const cajas = piezas.map((p) => ({ p, geo: huellaDe(p) }));
+  const x = Math.min(...cajas.map((c) => c.p.x));
+  const y = Math.min(...cajas.map((c) => c.p.y));
+  return { x, y,
+    ancho: Math.max(...cajas.map((c) => c.p.x + c.geo.ancho)) - x,
+    alto: Math.max(...cajas.map((c) => c.p.y + c.geo.alto)) - y };
+}
+
+// El nombre de una pieza a partir de su configuracion: el mismo que le pone la sala al
+// generarse, para que los avisos digan «Mesa 3» y no «M3».
+const nombreDeConfig = (c) => c.nombre || (esBloqueFilas(c) ? 'Bloque ' + c.id.slice(1)
+  : esForma(c) ? FORMAS[c.forma].nombre + ' ' + c.id.slice(1)
+  : esButacaSuelta(c) ? 'Butaca suelta ' + c.id.slice(1) : 'Mesa ' + c.id.slice(1));
+
+// La configuracion guardada de una pieza dentro de un plano, por id.
+const configEnPlano = (plano, id) => {
+  const tipoDeLista = listaDeId(id);
+  const lista = tipoDeLista && plano[tipoDeLista.lista];
+  return (lista && lista.find((p) => p.id === id)) || null;
+};
+
+function moverPiezas(plano, sala, ids, dx, dy) {
+  if (ids.some((id) => id === 'escenario')) return { motivo: 'el escenario se mueve por su cuenta' };
+  const nuevo = copiarPlano(plano);
+  const ocupadas = celdasOcupadas(new Set(ids));
+  const destinos = [];
+  for (const id of ids) {
+    const config = configEnPlano(nuevo, id);
+    if (!config) return { motivo: 'esa pieza ya no existe' };
+    const destino = { ...config, x: config.x + dx, y: config.y + dy };
+    const motivo = motivoNoCabe(sala, ocupadas, destino);
+    if (motivo) return { motivo: nombreDeConfig(config) + ' ' + motivo };
+    destinos.push({ config, destino });
+  }
+  for (const { config, destino } of destinos) Object.assign(config, { x: destino.x, y: destino.y });
+  return nuevo;
+}
+
+// Duplica varias piezas conservando las distancias entre ellas: el grupo entero se
+// copia a la derecha de su caja y, si ahi no cabe entero, debajo.
+function duplicarPiezas(plano, sala, ids) {
+  if (ids.some((id) => id === 'escenario')) return { motivo: 'el escenario no se puede duplicar' };
+  const piezas = ids.map((id) => configEnPlano(plano, id)).filter(Boolean);
+  if (piezas.length !== ids.length) return { motivo: 'esa pieza ya no existe' };
+  const caja = cajaDePiezas(piezas);
+  const ocupadas = celdasOcupadas(null);
+  const desplazamiento = [[caja.ancho, 0], [0, caja.alto]].find(([dx, dy]) =>
+    piezas.every((p) => !motivoNoCabe(sala, ocupadas, { ...p, x: p.x + dx, y: p.y + dy })));
+  if (!desplazamiento) return { motivo: 'no hay sitio libre para las copias' };
+  const [dx, dy] = desplazamiento;
+  const nuevo = copiarPlano(plano);
+  const copias = new Map();
+  for (const id of ids) {
+    const tipoDeLista = listaDeId(id);
+    const original = configEnPlano(nuevo, id);
+    const copia = { ...original, id: nuevoIdDe(nuevo, tipoDeLista), x: original.x + dx, y: original.y + dy };
+    if (copia.nombre) copia.nombre = nombreDeCopia(copia.nombre);
+    nuevo[tipoDeLista.lista].push(copia);
+    copias.set(id, copia.id);
+  }
+  nuevo.bloqueadas = copiarBloqueadas(nuevo.bloqueadas, copias);
+  nuevo.zonasDeAsiento = copiarZonasDeAsiento(nuevo.zonasDeAsiento, copias);
+  return { plano: nuevo, ids: [...copias.values()] };
+}
+
+// Quita varias piezas del plano. El escenario no se elimina: se quita con su boton.
+function eliminarPiezas(plano, ids) {
+  const nuevo = copiarPlano(plano);
+  for (const id of ids) {
+    const tipoDeLista = listaDeId(id);
+    if (!tipoDeLista) continue;
+    nuevo[tipoDeLista.lista] = (nuevo[tipoDeLista.lista] || []).filter((p) => p.id !== id);
+  }
+  return nuevo;
+}
+
 function sitioParaCopia(sala, ocupadas, pieza) {
   const { ancho, alto } = huellaDe(pieza);
   const cabe = (x, y) => !motivoNoCabe(sala, ocupadas, { ...pieza, x, y });
@@ -3337,7 +3439,7 @@ function dibujarButacas() {
     else if (b.suelta) g.dataset.pieza = b.suelta;
     // Colocando piezas, las butacas de la seleccionada se marcan con ella: mesa y
     // lugares son una sola cosa, que es lo que se mueve, gira y elimina.
-    if (mesaActiva && g.dataset.pieza === mesaActiva && modo === 'editor' && !conButacas()) {
+    if (piezasActivas.has(g.dataset.pieza) && modo === 'editor' && !conButacas()) {
       g.classList.add('de-pieza-activa');
     }
     // El area sensible es la celda entera: contigua con sus vecinas y sin solaparlas.
@@ -3385,13 +3487,15 @@ function dibujarPiezas() {
   // Si la pieza activa ya no existe (se elimino), el punto de tabulacion va a la primera.
   const hayActiva = piezas.some((m) => m.id === mesaActiva);
   piezas.forEach((m, indice) => {
-    const activa = m.id === mesaActiva;
+    // Varias pueden estar seleccionadas; la principal es la que lleva el tabindex.
+    const activa = piezasActivas.has(m.id);
+    const principal = m.id === mesaActiva;
     const pieza = nodo('rect', {
       class: 'pieza' + (activa ? ' activa' : ''), x: m.x * PASO + 0.5, y: m.y * PASO + 0.5,
       width: m.geo.ancho * PASO - 1, height: m.geo.alto * PASO - 1, rx: 3,
       role: 'button', 'aria-label': etiquetaPieza(m), 'aria-describedby': 'pista',
       'aria-pressed': String(activa),
-      tabindex: (hayActiva ? activa : indice === 0) ? '0' : '-1',
+      tabindex: (hayActiva ? principal : indice === 0) ? '0' : '-1',
     });
     pieza.dataset.pieza = m.id;
     capaPiezas.appendChild(pieza);
@@ -4209,6 +4313,11 @@ svg.addEventListener('pointerdown', (e) => {
     }
     const pieza = modo === 'editor' && e.target.closest('.pieza');
     if (pieza) {
+      // Ctrl (o Cmd) mete o saca la pieza de la selección en vez de arrastrarla.
+      if (e.ctrlKey || e.metaKey) {
+        alternarPiezaActiva(pieza.dataset.pieza);
+        return;
+      }
       arrastreMesa = iniciarArrastreMesa(pieza, e);
       return;
     }
@@ -4217,6 +4326,10 @@ svg.addEventListener('pointerdown', (e) => {
       // Con la herramienta de zona o de bloqueo, arrastrar dibuja un rectangulo en vez
       // de mover el plano; Alt lo deshace (zona de siempre, o desbloquear).
       area: modo === 'editor' && conButacas() && !soloMover ? { desde: celdaBajo(e), alt: e.altKey } : null,
+      // Colocando piezas, arrastrar el fondo las selecciona; con Ctrl, se suman a las
+      // que ya estaban.
+      marco: modo === 'editor' && !conButacas() && !soloMover
+        ? { desde: celdaBajo(e), suma: e.ctrlKey || e.metaKey } : null,
       // La butaca se anota AQUI, no en pointerup: setPointerCapture retargetea al
       // <svg> todos los eventos de puntero siguientes, asi que al soltar el boton
       // e.target ya es el <svg> y closest('.butaca') devuelve null.
@@ -4262,6 +4375,12 @@ svg.addEventListener('pointermove', (e) => {
     dibujarArea(areaDeCeldas(arrastre.area.desde, arrastre.area.hasta), arrastre.area.alt);
     return;   // el plano se queda quieto: el gesto es del rectangulo
   }
+  if (arrastre.marco) {
+    arrastre.marco.hasta = celdaBajo(e);
+    const marco = areaDeCeldas(arrastre.marco.desde, arrastre.marco.hasta);
+    dibujarArea(marco, false, plural(piezasEnMarco(piezasDelPlano(), marco).length, 'pieza', 'piezas'));
+    return;
+  }
 
   const caja = svg.getBoundingClientRect();
   vista.x -= ((despues.x - antes.x) / caja.width) * vista.w;
@@ -4284,10 +4403,18 @@ function soltarPuntero(e, cancelado) {
   }
   if (punteros.size) return;   // queda un dedo: el gesto sigue
   svg.classList.remove('arrastrando');
-  if (arrastre && arrastre.area && arrastre.area.hasta) {
-    const area = areaDeCeldas(arrastre.area.desde, arrastre.area.hasta);
-    dibujarArea(null);
-    if (!cancelado && arrastre.movido > 4) aplicarArea(area, arrastre.area.alt);
+  // Un rectangulo solo cuenta si hubo arrastre de verdad: un temblor de la mano al
+  // hacer clic no puede comerse el clic (que selecciona la banda o toca la butaca).
+  const rectangulo = arrastre && arrastre.movido > 4 &&
+    ((arrastre.marco && arrastre.marco.hasta && 'marco') || (arrastre.area && arrastre.area.hasta && 'area'));
+  if (arrastre && (arrastre.marco || arrastre.area)) dibujarArea(null);
+  if (rectangulo) {
+    const gesto = arrastre[rectangulo];
+    const caja = areaDeCeldas(gesto.desde, gesto.hasta);
+    if (!cancelado) {
+      if (rectangulo === 'marco') aplicarMarco(caja, gesto.suma);
+      else aplicarArea(caja, gesto.alt);
+    }
     arrastre = null;
     return;
   }
@@ -4412,7 +4539,14 @@ svg.addEventListener('focusin', (e) => {
   // Durante un clic no se reencuadra: moveria el plano bajo el puntero y el
   // arrastre, que parte de la vista anterior, lo haria saltar.
   const esPieza = elemento.classList.contains('pieza');
-  if (esPieza) marcarActiva(elemento.dataset.pieza);
+  // Tocar una pieza que ya está en la selección no la deshace: pasa a ser la principal,
+  // que es lo que deja arrastrar el grupo desde cualquiera de las suyas.
+  if (esPieza && piezasActivas.has(elemento.dataset.pieza)) {
+    mesaActiva = elemento.dataset.pieza;
+    actualizarControles();
+  } else if (esPieza) {
+    marcarActiva(elemento.dataset.pieza);
+  }
   if (arrastre || arrastreMesa) return;
   const m = esPieza && piezaPorId(elemento.dataset.pieza);
   const caja = m ? { x: m.x, y: m.y, w: m.geo.ancho, h: m.geo.alto } : porNodo(elemento);
@@ -4507,6 +4641,9 @@ const FLECHAS = {
 let modo = 'vista';        // 'vista' (previsualizar, como quien compra) o 'editor'
 let arrastreMesa = null;
 let mesaActiva = null;     // id de la mesa sobre la que actuan los botones y atajos
+// Varias piezas a la vez: 'piezasActivas' las tiene todas y 'mesaActiva' es la principal
+// (la ultima que se toco), que es la que mandan los controles de una sola pieza.
+const piezasActivas = new Set();
 let herramienta = 'mesas'; // en el editor: 'mesas' (colocar), 'bloquear' o 'zona' (butacas)
 // Las herramientas que trabajan sobre butacas: las butacas responden y se recorren.
 const conButacas = () => herramienta === 'bloquear' || herramienta === 'zona';
@@ -4539,35 +4676,65 @@ const resumenDePieza = (p) => (esEscenario(p) || esForma(p) ? p.ancho + ' × ' +
 const sombra = nodo('g', { class: 'sombra oculta', 'aria-hidden': 'true' });
 svg.appendChild(sombra);
 
-function construirSombra({ ancho, alto, tablero, lugares, redonda }) {
+// La sombra del destino. Recibe una lista de { geo, dx, dy }: al arrastrar varias
+// piezas, cada una va en su sitio relativo a la que se agarró, así que el grupo entero
+// se ve donde va a caer.
+function construirSombra(piezas) {
   sombra.textContent = '';
-  sombra.appendChild(nodo('rect', { class: 'contorno', x: 0.5, y: 0.5,
-    width: ancho * PASO - 1, height: alto * PASO - 1, rx: 3 }));
-  if (redonda) {
-    sombra.appendChild(nodo('circle', { class: 'tablero', cx: (redonda.dx + redonda.diametro / 2) * PASO,
-      cy: (redonda.dy + redonda.diametro / 2) * PASO, r: (redonda.diametro * PASO) / 2 - 1 }));
+  for (const { geo, dx: cx = 0, dy: cy = 0 } of piezas) {
+    const { ancho, alto, tablero, lugares, redonda } = geo;
+    const g = nodo('g', { transform: 'translate(' + cx * PASO + ' ' + cy * PASO + ')' });
+    g.appendChild(nodo('rect', { class: 'contorno', x: 0.5, y: 0.5,
+      width: ancho * PASO - 1, height: alto * PASO - 1, rx: 3 }));
+    if (redonda) {
+      g.appendChild(nodo('circle', { class: 'tablero', cx: (redonda.dx + redonda.diametro / 2) * PASO,
+        cy: (redonda.dy + redonda.diametro / 2) * PASO, r: (redonda.diametro * PASO) / 2 - 1 }));
+    }
+    if (tablero) {   // los bloques de filas no tienen tablero
+      g.appendChild(nodo('rect', { class: 'tablero', x: tablero.dx * PASO + 1, y: tablero.dy * PASO + 1,
+        width: tablero.w * PASO - 2, height: tablero.h * PASO - 2, rx: 4 }));
+    }
+    for (const { dx, dy, mira } of lugares) g.appendChild(glifoButaca(dx, dy, mira));
+    sombra.appendChild(g);
   }
-  if (tablero) {   // los bloques de filas no tienen tablero
-    sombra.appendChild(nodo('rect', { class: 'tablero', x: tablero.dx * PASO + 1, y: tablero.dy * PASO + 1,
-      width: tablero.w * PASO - 2, height: tablero.h * PASO - 2, rx: 4 }));
-  }
-  for (const { dx, dy, mira } of lugares) sombra.appendChild(glifoButaca(dx, dy, mira));
 }
 
-// Marca la mesa activa sin redibujar: solo clases, aria-pressed y botones.
+// Marca la pieza activa sin redibujar: solo clases, aria-pressed y botones.
 function marcarActiva(id) {
-  mesaActiva = id;
-  if (id && bandaActiva) marcarBandaActiva(null);
+  marcarActivas(id ? [id] : []);
+}
+
+// Marca varias: la ultima de la lista es la principal.
+function marcarActivas(ids) {
+  piezasActivas.clear();
+  for (const id of ids) piezasActivas.add(id);
+  mesaActiva = ids.length ? ids[ids.length - 1] : null;
+  if (mesaActiva && bandaActiva) marcarBandaActiva(null);
+  pintarActivas();
+  actualizarControles();
+}
+
+// Ctrl (o Cmd) + clic: mete o saca una pieza de la seleccion sin tocar las demas.
+function alternarPiezaActiva(id) {
+  const ids = [...piezasActivas];
+  const fuera = ids.filter((x) => x !== id);
+  marcarActivas(piezasActivas.has(id) ? fuera : [...ids, id]);
+  const pieza = piezaPorId(id);
+  anunciar(pieza.nombre + (piezasActivas.has(id) ? ' añadida a la selección: ' : ' fuera de la selección: ') +
+           (piezasActivas.size ? plural(piezasActivas.size, 'pieza seleccionada', 'piezas seleccionadas') + '.'
+                               : 'ninguna pieza seleccionada.'));
+}
+
+function pintarActivas() {
   for (const p of capaPiezas.querySelectorAll('.pieza')) {
-    const activa = p.dataset.pieza === id;
+    const activa = piezasActivas.has(p.dataset.pieza);
     p.classList.toggle('activa', activa);
     p.setAttribute('aria-pressed', String(activa));
   }
   // Las butacas de la pieza se marcan con ella: una mesa y sus lugares son una sola cosa.
   for (const b of capaButacas.querySelectorAll('.butaca')) {
-    b.classList.toggle('de-pieza-activa', Boolean(id) && b.dataset.pieza === id);
+    b.classList.toggle('de-pieza-activa', piezasActivas.has(b.dataset.pieza));
   }
-  actualizarControles();
 }
 
 const botonesDeMesa = () => document.querySelectorAll('#herramientas-editor [data-accion]');
@@ -4587,9 +4754,10 @@ const aplica = (accion, p) => ACCIONES_DE[tipoDePieza(p)].has(accion);
 
 function actualizarControles() {
   const m = mesaActiva && piezaPorId(mesaActiva);
-  document.getElementById('mesa-activa').textContent = m
-    ? m.nombre + ' · ' + resumenDePieza(m)
-    : 'Ninguna pieza seleccionada';
+  const varias = piezasActivas.size > 1;
+  document.getElementById('mesa-activa').textContent = varias
+    ? plural(piezasActivas.size, 'pieza seleccionada', 'piezas seleccionadas') + ': mover, duplicar o eliminar'
+    : m ? m.nombre + ' · ' + resumenDePieza(m) : 'Ninguna pieza seleccionada';
   const bloque = esBloqueFilas(m), forma = esForma(m), suelta = esButacaSuelta(m), redonda = esMesaRedonda(m);
   for (const boton of botonesDeMesa()) {
     const accion = boton.dataset.accion;
@@ -4601,7 +4769,9 @@ function actualizarControles() {
       : bloque ? ANCHO_BLOQUE_MAXIMO : redonda ? LUGARES_MAXIMOS_REDONDA : LARGO_MAXIMO;
     const filas = deEscenario || forma ? m.alto : m && m.filas;
     const filasMaximas = deEscenario ? ESCENARIO_ALTO_MAXIMO : forma ? FORMA_ALTO_MAXIMO : FILAS_MAXIMAS;
+    // Con varias seleccionadas solo valen las acciones de grupo.
     boton.disabled = !m || !aplica(accion, m) ||
+      (varias && accion !== 'duplicar' && accion !== 'eliminar') ||
       (accion === 'alargar' && largo >= maximo) ||
       (accion === 'acortar' && largo <= minimo) ||
       (accion === 'masfilas' && filas >= filasMaximas) ||
@@ -4647,13 +4817,17 @@ const celdaBajo = (e) => {
 function iniciarArrastreMesa(pieza, e) {
   const mesa = piezaPorId(pieza.dataset.pieza);
   const agarrada = celdaBajo(e);
-  marcarActiva(mesa.id);
-  construirSombra(mesa.geo);
+  // Agarrar una pieza del grupo arrastra el grupo; agarrar otra empieza de cero.
+  const grupo = piezasActivas.size > 1 && piezasActivas.has(mesa.id)
+    ? [...piezasActivas].map((id) => piezaPorId(id)).filter(Boolean) : [mesa];
+  if (grupo.length === 1) marcarActiva(mesa.id);
+  construirSombra(grupo.map((p) => ({ geo: p.geo, dx: p.x - mesa.x, dy: p.y - mesa.y })));
+  for (const p of grupo) levantar(p.id, true);
   return {
-    mesa, pointerId: e.pointerId, x: e.clientX, y: e.clientY, movido: 0, destino: null,
+    mesa, grupo, pointerId: e.pointerId, x: e.clientX, y: e.clientY, movido: 0, destino: null,
     // En que celda de la mesa se agarro: asi no salta a la esquina del puntero.
     agarre: { dx: agarrada.x - mesa.x, dy: agarrada.y - mesa.y },
-    ocupadas: celdasOcupadas(mesa.id),
+    ocupadas: celdasOcupadas(new Set(grupo.map((p) => p.id))),
   };
 }
 
@@ -4667,7 +4841,17 @@ function moverSombra(e) {
   // guarda una posicion que no sea un numero.
   if (!Number.isFinite(x) || !Number.isFinite(y)) return;
   if (a.destino && a.destino.x === x && a.destino.y === y) return;
-  a.destino = { x, y, motivo: motivoNoCabe(salaActual, a.ocupadas, { ...configDePieza(a.mesa), x, y }) };
+  // Con varias, el destino solo vale si caben todas: la sombra se pone roja en cuanto
+  // una estorba, y el aviso dice cuál.
+  const dx = x - a.mesa.x, dy = y - a.mesa.y;
+  let motivo = null;
+  for (const p of a.grupo) {
+    const suyo = motivoNoCabe(salaActual, a.ocupadas, { ...configDePieza(p), x: p.x + dx, y: p.y + dy });
+    if (!suyo) continue;
+    motivo = a.grupo.length > 1 ? p.nombre + ' ' + suyo : suyo;
+    break;
+  }
+  a.destino = { x, y, motivo };
   sombra.setAttribute('transform', 'translate(' + x * PASO + ' ' + y * PASO + ')');
   sombra.classList.toggle('invalida', Boolean(a.destino.motivo));
   sombra.classList.remove('oculta');
@@ -4680,18 +4864,27 @@ function terminarArrastreMesa(confirmar) {
   arrastreMesa = null;
   sombra.classList.add('oculta');
   svg.classList.remove('moviendo-mesa');
-  levantar(a.mesa.id, false);
+  levantar(null, false);
   if (!confirmar || !a.destino) return;
   const { x, y, motivo } = a.destino;
   if (x === a.mesa.x && y === a.mesa.y) return;
   if (motivo) {
-    anunciar(a.mesa.nombre + ' no se movió: ' + motivo + '.');
+    anunciar((a.grupo.length > 1 ? 'No se movieron: ' : a.mesa.nombre + ' no se movió: ') + motivo + '.');
+    return;
+  }
+  if (a.grupo.length > 1) {
+    moverPiezasActivas({ dx: x - a.mesa.x, dy: y - a.mesa.y, hacia: 'donde se soltó' });
     return;
   }
   moverMesa(a.mesa.id, x, y);
 }
 
-function moverMesaConTeclado(id, { dx, dy, hacia }) {
+function moverMesaConTeclado(id, flecha) {
+  if (piezasActivas.size > 1 && piezasActivas.has(id)) {
+    moverPiezasActivas(flecha);
+    return;
+  }
+  const { dx, dy, hacia } = flecha;
   const m = piezaPorId(id);
   const hueco = buscarHueco(salaActual, celdasOcupadas(id), configDePieza(m), dx, dy);
   if (!hueco) {
@@ -4733,7 +4926,8 @@ function regenerar(mensaje, antes = fotoDeButacas()) {
   const completadas = completarMesasElegidas(elegidas, butacas);
   const ocupadasQuitadas = antes.filter((b) => b.estado === 'ocupada' && !existe.has(b.id))
                                 .map((b) => b.id);
-  if (!piezaPorId(mesaActiva)) mesaActiva = null;
+  for (const id of [...piezasActivas]) if (!piezaPorId(id)) piezasActivas.delete(id);
+  if (!piezaPorId(mesaActiva)) mesaActiva = [...piezasActivas].pop() || null;
   if (bandaActiva && !ubicar(salaActual.bandas, bandaActiva)) bandaActiva = null;
   dibujarTodo();
   actualizarResumen();
@@ -4931,6 +5125,59 @@ function agregarFormaNueva(forma) {
   asegurarVisible({ x: sitio.x, y: sitio.y, w: ancho, h: alto });
 }
 
+// Las piezas que puede atrapar la marquesina: todo menos el escenario, que es único y
+// ni se duplica ni se elimina.
+const piezasDelPlano = () => [...mesas, ...bloquesFilas, ...formas, ...butacasSueltas];
+
+// Aplica la marquesina: lo que atrapa pasa a estar seleccionado (o se suma a lo que ya
+// había, con Ctrl). Un marco vacío sin Ctrl deselecciona.
+function aplicarMarco(marco, suma) {
+  const dentro = piezasEnMarco(piezasDelPlano(), marco);
+  const ids = suma ? [...new Set([...piezasActivas, ...dentro])] : dentro;
+  marcarActivas(ids);
+  // El foco va a la principal: así las flechas mueven el grupo sin tener que tabular.
+  const destino = mesaActiva && capaPiezas.querySelector('[data-pieza="' + mesaActiva + '"]');
+  if (destino) destino.focus({ preventScroll: true });
+  anunciar(ids.length ? plural(ids.length, 'pieza seleccionada', 'piezas seleccionadas') + '.'
+                      : 'Ninguna pieza seleccionada.');
+}
+
+// Duplicar y eliminar el grupo entero. Las copias quedan seleccionadas, como al
+// duplicar una sola.
+function duplicarPiezasActivas() {
+  const ids = [...piezasActivas];
+  const resultado = duplicarPiezas(planoEditable(), salaActual, ids);
+  if (resultado.motivo) {
+    anunciar('No se pudo duplicar: ' + resultado.motivo + '.');
+    return;
+  }
+  planos[tipoActual] = resultado.plano;
+  regenerar('');
+  marcarActivas(resultado.ids);
+  anunciar(plural(ids.length, 'pieza duplicada', 'piezas duplicadas') + '. Las copias quedan seleccionadas.');
+}
+
+function eliminarPiezasActivas() {
+  const ids = [...piezasActivas];
+  planos[tipoActual] = eliminarPiezas(planoEditable(), ids);
+  marcarActivas([]);
+  regenerar(plural(ids.length, 'pieza eliminada', 'piezas eliminadas') + '.');
+}
+
+// Mueve el grupo una celda: todas o ninguna.
+function moverPiezasActivas({ dx, dy, hacia }) {
+  const ids = [...piezasActivas];
+  const resultado = moverPiezas(planoEditable(), salaActual, ids, dx, dy);
+  if (resultado.motivo) {
+    anunciar('No se movieron: ' + resultado.motivo + ' hacia ' + hacia + '.');
+    return;
+  }
+  planos[tipoActual] = resultado;
+  regenerar(plural(ids.length, 'pieza movida', 'piezas movidas') + ' hacia ' + hacia + '.');
+  const destino = capaPiezas.querySelector('[data-pieza="' + mesaActiva + '"]');
+  if (destino) destino.focus();
+}
+
 function eliminarMesa(id) {
   const m = piezaPorId(id);
   const plano = planoEditable();
@@ -4956,6 +5203,12 @@ function conTopeDeAforo(cambio) {
 function ejecutarAccion(accion, id = mesaActiva) {
   const pieza = id && piezaPorId(id);
   if (!pieza) return;
+  if (piezasActivas.size > 1 && piezasActivas.has(id)) {
+    if (accion === 'eliminar') eliminarPiezasActivas();
+    else if (accion === 'duplicar') conTopeDeAforo(duplicarPiezasActivas);
+    else anunciar('Con varias piezas seleccionadas solo se puede mover, duplicar o eliminar.');
+    return;
+  }
   if (!aplica(accion, pieza)) {
     anunciar(esEscenario(pieza) ? 'El escenario no admite esa acción.'
       : 'Esa acción no es para ' + { mesa: 'mesas', bloque: 'bloques de filas', forma: 'formas',
@@ -5102,7 +5355,8 @@ const PISTAS = {
           'quitan filas (o alto, en el escenario y las formas), C pone o quita cabeceras, U alterna uno o dos ' +
           'lados (en una mesa redonda, + y − quitan y ponen lugares), Ctrl+D la duplica, Supr la elimina · Esc cancela un arrastre · clic en el fondo ' +
           'selecciona una banda (otro clic, la que la contiene) y Ctrl+D la duplica · doble clic en ' +
-          'un subtítulo para renombrar su banda · arrastra el tirador de la esquina de un espacio o de ' +
+          'un subtítulo para renombrar su banda · arrastra el fondo para seleccionar varias piezas (Ctrl ' +
+          'para sumarlas) y Ctrl+clic para meter o sacar una · arrastra el tirador de la esquina de un espacio o de ' +
           'una zona de mesas para cambiar su alto (y su ancho, si está en una banda vertical), o el ' +
           'borde entre verticales para repartir las columnas',
 };
@@ -5345,20 +5599,23 @@ let areaTeclado = null;   // { desde, hasta } en celdas, mientras se extiende co
 // Las butacas de un area que la operacion puede tocar (las ocupadas nunca).
 const libresEnArea = (area) => butacasEnArea(butacas, area).filter((b) => b.estado !== 'ocupada');
 
-function dibujarArea(area, quitando = false) {
+// 'etiqueta' cambia el conteo: con las herramientas de butacas son las butacas que
+// abarca, y con la marquesina de piezas, las piezas.
+function dibujarArea(area, quitando = false, etiqueta = null) {
   capaArea.textContent = '';
   capaArea.classList.toggle('quitando', Boolean(quitando));
   if (!area) return;
   const ancho = (area.x2 - area.x1 + 1) * PASO, alto = (area.y2 - area.y1 + 1) * PASO;
   capaArea.appendChild(nodo('rect', { x: area.x1 * PASO, y: area.y1 * PASO, width: ancho, height: alto, rx: 2 }));
-  const cuantas = libresEnArea(area).length;
+  const cuantas = etiqueta || libresEnArea(area).length;
   if (!cuantas) return;
   // El conteo va debajo del rectangulo, y encima si el area llega al borde de la sala:
   // ahi abajo se saldria del plano.
   const y = area.y2 + 1 >= salaActual.alto ? area.y1 * PASO - 2 : area.y1 * PASO + alto + 4;
-  const etiqueta = texto('', area.x1 * PASO + ancho / 2, y, plural(cuantas, 'butaca', 'butacas'));
-  etiqueta.setAttribute('text-anchor', 'middle');
-  capaArea.appendChild(etiqueta);
+  const rotulo = texto('', area.x1 * PASO + ancho / 2, y,
+                       etiqueta || plural(cuantas, 'butaca', 'butacas'));
+  rotulo.setAttribute('text-anchor', 'middle');
+  capaArea.appendChild(rotulo);
 }
 
 // Aplica el area con la herramienta activa. 'devolver' es lo que hace Alt: la zona

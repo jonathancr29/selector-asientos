@@ -33,6 +33,7 @@ const cargar = () => new Function(html.slice(inicio, fin) +
   ' zonaEnCelda, fijarZonasSueltas, zonaExclusivaDeBanda, zonaNuevaParaBanda, mesasDeBanda,' +
   ' marcarMesasDeBanda, areaDeCeldas, butacasEnArea, asignarZonaEnArea, bloquearEnArea,' +
   ' tiradoresDeSala, redimensionarConTirador,' +
+  ' piezasEnMarco, cajaDePiezas, moverPiezas, duplicarPiezas, eliminarPiezas,' +
   ' geometriaMesaRedonda, cambiarLugaresRedonda, huellaDe,' +
   ' marcarMesaCompleta, marcarTodasLasMesas, alternarEleccion, completarMesasElegidas,' +
   ' asignarZonaAsiento };')();
@@ -2350,4 +2351,85 @@ test('al redimensionar con el tirador, las piezas de dentro viajan con su banda'
   // La zona de mesas crece 2 filas: la franja baja 2 y su mesa con ella.
   assert.equal(nueva.bandas.at(-1).y, 22);
   assert.equal(masAlta.mesas.find((m) => m.id === 'M7').y, 22);
+});
+
+// --- Varias piezas a la vez ---------------------------------------------------------
+
+test('el marco atrapa la pieza que tiene la mitad o mas de su huella dentro', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  api.generarPlano('mixta-ambos', plano);
+  // M1 es una mesa de 2 × 3 en la columna 2, fila 7.
+  const m1 = api.mesas.find((m) => m.id === 'M1');
+  assert.deepEqual([m1.x, m1.y, m1.geo.ancho, m1.geo.alto], [2, 7, 2, 3]);
+  const marco = (x1, y1, x2, y2) => api.piezasEnMarco(api.mesas, { x1, y1, x2, y2 });
+  // Entera dentro, y justo la mitad (una de sus dos columnas): entra.
+  assert.deepEqual(marco(1, 6, 4, 10), ['M1']);
+  assert.deepEqual(marco(1, 7, 2, 9), ['M1']);
+  // Dos columnas por una fila de tres es un tercio: se queda fuera.
+  assert.deepEqual(marco(2, 7, 3, 7), []);
+  // Dos de las tres filas pasan; una sola, no.
+  assert.deepEqual(marco(2, 7, 3, 8), ['M1']);
+  assert.deepEqual(marco(1, 9, 2, 9), []);
+  // Sin tocarla, nada.
+  assert.deepEqual(marco(20, 20, 25, 25), []);
+  assert.deepEqual(api.cajaDePiezas([m1]), { x: 2, y: 7, ancho: 2, alto: 3 });
+});
+
+test('mover varias piezas es todo o nada', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const sala = api.generarPlano('mixta-ambos', plano);
+  const movido = api.moverPiezas(plano, sala, ['M1', 'M4'], 1, 0);
+  assert.deepEqual(movido.mesas.filter((m) => ['M1', 'M4'].includes(m.id)).map((m) => m.x), [3, 3]);
+  assert.deepEqual(plano.mesas.find((m) => m.id === 'M1').x, 2);   // no toca el plano de entrada
+  // Si una sola no cabe, no se mueve ninguna y se dice cual.
+  const fuera = api.moverPiezas(plano, sala, ['M1', 'M4'], -2, 0);
+  assert.deepEqual(fuera, { motivo: 'Mesa 1 se sale de la sala' });
+  // Las celdas del grupo no se estorban entre ellas: en un lienzo con dos mesas pegadas,
+  // la primera cae donde estaba la segunda porque las dos se mueven a la vez.
+  const pegadas = conLienzo(api, (p) => ({ ...p,
+    mesas: [{ id: 'M1', x: 1, y: 1, largo: 2, cabeceras: false, unLado: false, giro: 0 },
+            { id: 'M2', x: 3, y: 1, largo: 2, cabeceras: false, unLado: false, giro: 0 }], siguiente: 3 }));
+  const juntas = api.moverPiezas(pegadas.plano, pegadas.sala, ['M1', 'M2'], 2, 0);
+  assert.deepEqual(juntas.mesas.map((m) => m.x), [3, 5]);
+  assert.deepEqual(api.moverPiezas(plano, sala, ['escenario'], 0, 1), { motivo: 'el escenario se mueve por su cuenta' });
+});
+
+test('duplicar varias conserva las distancias y da ids nuevos a todas', () => {
+  const api = cargar();
+  // En una sala con sitio: el mapa en blanco, con dos mesas juntas.
+  const { plano, sala } = conLienzo(api, (p) => ({ ...p,
+    mesas: [{ id: 'M1', x: 1, y: 1, largo: 2, cabeceras: false, unLado: false, giro: 0 },
+            { id: 'M2', x: 6, y: 1, largo: 2, cabeceras: false, unLado: false, giro: 0 }], siguiente: 3 }));
+  const resultado = api.duplicarPiezas(plano, sala, ['M1', 'M2']);
+  assert.deepEqual(resultado.ids, ['M3', 'M4']);
+  const copias = resultado.plano.mesas.filter((m) => ['M3', 'M4'].includes(m.id));
+  // El grupo se copia a la derecha de su caja (7 columnas de ancho): la distancia entre
+  // las dos copias es la misma que entre las originales.
+  assert.deepEqual(copias.map((m) => [m.x, m.y]), [[8, 1], [13, 1]]);
+  assert.equal(plano.mesas.length, 2);   // no toca el plano de entrada
+  // Sin sitio a la derecha ni debajo, no se duplica nada: una pista de 19 × 6 en un
+  // lienzo de 20 × 10 no cabe ni al lado ni abajo.
+  const lleno = { ...plano, mesas: [],
+    formas: [{ id: 'P1', tipo: 'forma', forma: 'pista', x: 1, y: 1, ancho: 19, alto: 6 }], siguienteForma: 2 };
+  const salaLlena = api.generarPlano('mapa-en-blanco', lleno);
+  assert.deepEqual(api.duplicarPiezas(lleno, salaLlena, ['P1']), { motivo: 'no hay sitio libre para las copias' });
+});
+
+test('duplicar y eliminar varias copian y quitan tambien sus bloqueadas y zonas', () => {
+  const api = cargar();
+  const { plano, sala } = conLienzo(api, (p) => ({ ...p,
+    mesas: [{ id: 'M1', x: 1, y: 1, largo: 2, cabeceras: false, unLado: false, giro: 0 }],
+    bloquesFilas: [bloque('F1', 6, 1, { zona: 'general' })],
+    bloqueadas: ['M1-N1'], zonasDeAsiento: { 'F1-1-1': 'luneta' }, siguiente: 2, siguienteBloque: 2 }));
+  const resultado = api.duplicarPiezas(plano, sala, ['M1', 'F1']);
+  assert.deepEqual(resultado.ids, ['M2', 'F2']);
+  assert.ok(resultado.plano.bloqueadas.includes('M2-N1'));
+  assert.equal(resultado.plano.zonasDeAsiento['F2-1-1'], 'luneta');
+  // Eliminar varias las quita de sus listas y deja el resto igual.
+  const sinEllas = api.eliminarPiezas(resultado.plano, ['M1', 'F2']);
+  assert.deepEqual(sinEllas.mesas.map((m) => m.id), ['M2']);
+  assert.deepEqual(sinEllas.bloquesFilas.map((b) => b.id), ['F1']);
+  assert.equal(plano.mesas.length, 1);   // no toca el plano de entrada
 });

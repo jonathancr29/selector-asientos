@@ -72,6 +72,8 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    `agregarSubtitulos` (muebles `subtitulo`), `copiarBloqueadas` y `sitioParaCopia`.
    **Árbol de bandas:** `disponerBandas` (coloca el árbol y devuelve bandas colocadas, regiones y error),
    `hojasDe`, `ubicar`, `idsDentro`, `copiarBandas`, `columnasDeBanda` y `reanclarPiezas`.
+   **Varias piezas:** `piezasEnMarco` (la regla de la mitad), `cajaDePiezas`, `moverPiezas` (todo o
+   nada), `duplicarPiezas` (conserva las distancias) y `eliminarPiezas`.
    **Tiradores:** `tiradoresDeSala` (donde va cada agarre) y `redimensionarConTirador` (aplica el
    alto de la banda y el ancho de su vertical de una vez, o ninguno).
    **Areas:** `areaDeCeldas` (rectangulo con las esquinas en cualquier orden), `butacasEnArea`,
@@ -193,8 +195,21 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   `siguiente`, `F` + `siguienteBloque`): el DOM lo usa para seleccionarla después.
 - **El nombre de una banda es solo un subtítulo:** la etiqueta de las butacas sigue saliendo de su
   zona. No uses `nombre` para numerar ni para etiquetar butacas.
-- **Una sola selección en el editor:** `bandaActiva` y `mesaActiva` se excluyen (`marcarBandaActiva`
-  y `marcarActiva` limpian la otra). Ambas se vacían al cambiar de modo, herramienta o sala.
+- **Varias piezas, una sola banda:** `piezasActivas` es el conjunto de piezas seleccionadas y
+  `mesaActiva` la **principal** (la última que se tocó), que es la que mandan los controles de una
+  sola pieza y la que lleva el `tabindex`. Todo lo que pinta la selección (`dibujarPiezas`,
+  `dibujarButacas`, `pintarActivas`) mira el conjunto, no `mesaActiva`. `marcarActivas` la reemplaza,
+  `alternarPiezaActiva` es el Ctrl+clic y `aplicarMarco` la marquesina. El **escenario** no entra en
+  el grupo (`piezasDelPlano` lo deja fuera): es único y no se duplica ni se elimina.
+- **`focusin` no deshace el grupo:** si la pieza que recibe el foco ya está en `piezasActivas`, solo
+  pasa a ser la principal. Si no, la selección se queda en ella (pasó: el foco del clic colapsaba lo
+  que Ctrl+clic acababa de sumar).
+- **Mover varias es todo o nada:** `moverPiezas` comprueba todas contra `celdasOcupadas(new Set(ids))`
+  —las celdas del propio grupo no estorban, porque viajan juntas— y si una falla no mueve ninguna.
+  `excluida` es lo que permite excluir un id o un conjunto.
+- **Una sola banda seleccionada:** `bandaActiva` y la selección de piezas se excluyen
+  (`marcarBandaActiva` y `marcarActivas` limpian la otra). Todo se vacía al cambiar de modo,
+  herramienta o sala.
 - **El escenario es una pieza, no una banda:** la banda `escenario` solo es la franja inicial. Todo lo
   que depende de «hacia dónde está el escenario» (mira de las filas de banda, qué bloques miran de
   frente, orden de las letras) se calcula desde `escenario` en `generarPlano` y `numerarFilas`.
@@ -377,6 +392,10 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    - **Duplicar y nombres:** Duplicar y Ctrl+D en una mesa, un bloque, una banda, una vertical y una
      franja; clic en el fondo para seleccionar bandas (y subir de nivel); renombrar en el panel y con
      doble clic en un subtítulo; que los subtítulos se lean en Previsualizar sin tapar clics.
+   - **Varias piezas:** marquesina en el fondo (y con Ctrl, sumando), Ctrl+clic, arrastrar el grupo,
+     flechas, Ctrl+D y Supr; que un destino imposible no mueva nada y diga cuál estorba; que con
+     varias seleccionadas las transformaciones de una sola queden desactivadas; y que un clic seco en
+     el fondo siga seleccionando bandas.
    - **Tiradores:** arrastrar la esquina de un espacio (alto), la de un espacio dentro de una vertical
      (alto y ancho a la vez), y el borde entre verticales; que el fantasma se tope en los límites, que
      Esc cancele, que un clic seco seleccione la banda, que no haya tiradores en Previsualizar ni con
