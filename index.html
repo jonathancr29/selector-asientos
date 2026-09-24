@@ -48,10 +48,21 @@
   .lateral .mesa-activa { margin: 0 0 8px; min-width: 0; }
   .lateral .leyenda { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; margin: 0; }
   #herramientas-mapa input[type="text"] { flex: 1 1 100%; min-width: 0; }
-  /* El boton de informacion vive en el titulo del grupo, a su derecha. */
-  .grupo > summary { display: flex; align-items: center; gap: 6px; }
-  .info-grupo { width: 22px; min-width: 22px; height: 22px; padding: 0; }
-  .info-grupo .ico { width: 14px; height: 14px; }
+  /* El titulo del grupo: la flecha de plegar delante y, si lo tiene, el boton de
+     informacion detras. La flecha la dibuja el CSS porque con 'display: flex' el
+     navegador deja de pintar el marcador de <summary> (paso: se perdio al meter el
+     boton de informacion). */
+  .grupo > summary { display: flex; align-items: center; gap: 6px; list-style: none; }
+  .grupo > summary::-webkit-details-marker { display: none; }
+  .grupo > summary::before { content: '▾'; width: 10px; font-size: 10px; color: #94a3b8; }
+  .grupo:not([open]) > summary::before { content: '▸'; }
+  /* El boton de informacion de un grupo es el mismo que el del encabezado. */
+  .info-grupo {
+    width: 24px; height: 24px; min-width: 24px; display: inline-flex; align-items: center;
+    justify-content: center; padding: 0; color: #cbd5e1; background: #2a2a33;
+    border: 1px solid #3a3a46; border-radius: 6px; cursor: pointer;
+  }
+  .info-grupo[aria-expanded="true"] { background: #1d4ed8; border-color: #3b82f6; color: #fff; }
   .lateral .bandas { margin: 0; padding: 0; background: none; border: 0; }
   .encabezado { margin: 0 0 10px; }
   .encabezado .pista { margin: 0 0 6px; }
@@ -654,7 +665,7 @@
         </div>
       </details>
       <details class="grupo" open>
-        <summary>Pieza seleccionada</summary>
+        <summary>Editar</summary>
         <p class="mesa-activa" id="mesa-activa" aria-live="polite">Ninguna pieza seleccionada</p>
         <div class="herramientas rejilla-iconos">
           <button type="button" class="icono" data-accion="girar" aria-keyshortcuts="R" aria-label="Girar 90°" data-tooltip="Girar 90° · R"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-girar"></use></svg></button>

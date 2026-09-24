@@ -4,9 +4,24 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — La zona es la banda, y el editor cambia de lado
+## Sin publicar — La flecha de plegar vuelve, y «Pieza seleccionada» pasa a «Editar»
 
-Rama `claude/zona-es-banda`.
+Rama `claude/plegables-y-editar`.
+
+### Cambiado
+
+- **Los grupos de los laterales vuelven a enseñar su flecha**, delante del título: ▾ abierto y ▸
+  cerrado. Seguían siendo plegables, pero el triángulo había desaparecido al poner el título en
+  `display: flex` para el botón de información; ahora lo dibuja el CSS, así que se ve igual en todos
+  los navegadores.
+- El grupo **«Pieza seleccionada» pasa a llamarse «Editar»**.
+- El **botón de información** de *Columnas* y *Zonas y precios* se ve como el del encabezado: mismo
+  icono, mismo recuadro y el mismo azul cuando está abierto.
+
+## 2026-09-24 — PR #32: la zona es la banda, y el editor cambia de lado
+
+[PR #32](https://github.com/jonathancr29/selector-asientos/pull/32), fusionado en `main` con el
+commit `81adf89`.
 
 ### Cambiado
 
