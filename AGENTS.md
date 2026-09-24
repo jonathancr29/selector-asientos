@@ -85,6 +85,10 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    `mesasConZonasMezcladas`.
    **Bloqueos y mapas:** `idsBloqueadosPorBandas`, `alternarBloqueada`, `mapaDesdePlano`,
    `validarMapa`, `definicionDeMapa`, `registrarMapa`, `claveDeMapa`, `nombreDeArchivo`.
+   **Validacion del mapa, por partes:** `motivoDeCabecera` (formato y version), `listaDeMapa` (el
+   recorrido con id y repetidos), `listaOpcionalDeMapa`, y una por seccion: `columnasDeMapa`,
+   `zonasDeMapa`, `bandasDeMapa`, `mesasDeMapa`, `bloquesDeMapa`, `formasDeMapa`,
+   `butacasSueltasDeMapa`, `escenarioDeMapa` y `zonasDeAsientoDeMapa`.
 6. **Selección sin DOM:** `elegidas` (un `Set` de ids) y `conciliarSeleccion`.
 7. **Marca `// === Fin de la parte sin DOM`.** `pruebas.mjs` evalúa en Node todo lo anterior a
    esta línea.
@@ -373,6 +377,14 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - **Nada de recorridos anidados sobre todas las butacas** en lo que corre al generar (`generarPlano`,
   `numerarFilas`): agrupa antes con un `Map`. Filtrar la lista dentro de otro recorrido llegó a tardar
   6 s con 100.000 butacas; hay una prueba de tiempo que lo detecta.
+- **La validacion va por partes y ninguna corta:** cada `...DeMapa` recibe la lista de `errores` y la
+  va llenando, para que un archivo malo diga de una vez todo lo que le pasa; `validarMapa` decide al
+  final con `if (errores.length) return { errores }`. **El orden en que se llaman es el orden en que
+  salen los errores**, asi que no las reordenes por gusto. Las que recorren una lista de piezas pasan
+  por `listaDeMapa`, que comprueba el id contra su patron y aparta los repetidos: mientras no hay id
+  de fiar la pieza se nombra por su sitio («mesa 2: id no válido») y a partir de ahi por su id («M2:
+  giro no válido»), salvo que se pase otra `etiqueta` (las zonas van siempre por su sitio, porque su
+  id no se ve). Con el id malo **no se sigue mirando la pieza**: un error por ella, no una cascada.
 - **Todo mapa que entra se valida** con `validarMapa`, venga de un archivo o de `localStorage`: se
   descartan los campos desconocidos y se comprueba que las mesas quepan. No se confía en el archivo.
 - **Las bloqueadas son una lista de ids** (`plano.bloqueadas`). `bloqueadasAlFinal` de las plantillas
