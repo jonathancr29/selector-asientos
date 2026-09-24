@@ -196,6 +196,18 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   de ±1 que valen dos sillas. Su huella es cuadrada, así que
   todo lo demás (caber, arrastrar, duplicar, bandas) funciona sin casos especiales. `configDeMesa`
   guarda la forma que toque.
+- **El ancho de la sala llega a 300 columnas:** `BLOQUES_MAXIMOS` (20), `BUTACAS_POR_BLOQUE` (60) y
+  `ANCHO_MAXIMO` (300), que es tambien el tope del escenario (`ESCENARIO_ANCHO_MAXIMO`), porque un
+  escenario tiene que poder cruzar la sala entera. Lo que **no** sube con ellos es lo que se coloca
+  como pieza: `ANCHO_BLOQUE_MAXIMO` (40) y `FORMA_ANCHO_MAXIMO` (40) son de un bloque o una forma
+  suelta, no de la sala. El ancho del lienzo lo topa `BUTACAS_POR_BLOQUE`, porque un lienzo es un
+  bloque unico. **El aforo sigue topado en `BUTACAS_MAXIMAS` (20.000)**: subir el ancho cambia la
+  forma del recinto, no cuanta gente cabe.
+- **El tope de acercamiento va en celdas, no en veces:** `VISTA_MINIMA` (`ANCHO_SALA * PASO`) es lo
+  mas cerca que deja llegar `escalar`, y se topa con el encuadre si el recinto entero cabe en menos.
+  **No lo ates a `vistaInicial`**: ese encuadre se estira a la proporcion del hueco del plano, asi
+  que en un recinto alto es enormemente ancho y un tope relativo acerca cada vez menos (paso: con
+  20.000 butacas el maximo dejaba 2,6 px por butaca, ilegible).
 - **Las columnas son de toda la sala:** `plano.distribucion` (o la del mapa, o la de la plantilla).
   Nunca por banda: es lo que mantiene las filas alineadas. Al cambiarlas, `cambiarDistribucion`
   recoloca las mesas y `aplicarBandas` rechaza el cambio si alguna no cabe.

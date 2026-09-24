@@ -24,7 +24,9 @@ bien en una maqueta y se rompe en cuanto la sala crece. Aquí el plano es **un �
   375 px sin desbordarse ni cortar butacas.
 - **Zoom y desplazamiento** moviendo el `viewBox`: rueda, pellizco, arrastre y botones. Un
   arrastre que empieza sobre una butaca mueve el plano y no la selecciona, y el plano no se puede
-  sacar de su encuadre. En el tope del zoom, la rueda vuelve a desplazar la página.
+  sacar de su encuadre. En el tope del zoom, la rueda vuelve a desplazar la página. Se puede acercar
+  hasta ver **el ancho de una sala clásica** (14 columnas, unos 40 px por butaca) **en cualquier
+  recinto**: el tope no sale del encuadre inicial, que en un recinto grande es enorme.
 - **El trazo se declara una vez** con `<symbol>` y se instancia con `<use>`. Una sala de 94 butacas
   tiene un `<path>`, no 94.
 - **Las áreas de clic son contiguas y no se solapan**: cada butaca es sensible en su celda entera,
@@ -106,9 +108,14 @@ En el editor, **Diseño de la sala → Columnas** tiene dos campos:
 - **Butacas por bloque:** `4, 6, 4`. Cada número es un bloque; entre bloques va un pasillo.
 - **Anchos de pasillo:** `1, 2`. Uno por cada pasillo. Si se deja vacío, todos miden 1 columna.
 
-Se aplica con **Aplicar** o Enter. Hay de 1 a 10 bloques, de 1 a 40 butacas por bloque, pasillos de
-1 a 10 columnas y un máximo de 60 columnas en total; si algo no vale, se explica (*«con 3 bloques
+Se aplica con **Aplicar** o Enter. Hay de 1 a 20 bloques, de 1 a 60 butacas por bloque, pasillos de
+1 a 10 columnas y un máximo de **300 columnas** en total; si algo no vale, se explica (*«con 3 bloques
 hacen falta 2 anchos de pasillo»*).
+
+Eso da para un recinto ancho de verdad: `60, 60, 60, 60` con pasillos `3, 3, 3` son **249 columnas
+y 240 butacas por fila**, la forma de una arena. Con el tope anterior de 60 columnas, un aforo grande
+solo cabía a lo largo: 20.000 lugares salían en una tira de 59 × 348, seis veces más alta que ancha.
+El aforo sigue topado en 20.000 lugares, que es lo que manda.
 
 Las columnas son **las mismas para toda la sala**: todas las bandas de filas las comparten, así que
 siguen alineadas. Al cambiarlas, las butacas se renumeran por fila (el número es su orden, no su
@@ -623,7 +630,8 @@ rectángulo de butacas que se agrega, arrastra, gira y redimensiona como una mes
 ```
 
 - **Datos:** `{ id: 'F1', tipo: 'filas', x, y, ancho, filas, giro, zona?, nombre? }`. Sin `zona` toma
-  la de su banda. `ancho` son las butacas por fila (1 a 40) y `filas`, las filas (1 a 26).
+  la de su banda. `ancho` son las butacas por fila (1 a 40) y `filas`, las filas (1 a 26). Es una
+  pieza que se coloca, no la sala: su ancho no sube con el de la sala.
 - **Pasillos:** los pone quien diseña, dejando espacio entre bloques. Un bloque puede ocupar columnas
   que en las bandas son pasillo; una mesa, no.
 - **Choques:** un bloque no puede pisar filas, mesas ni otros bloques. Si no cabe, se explica igual

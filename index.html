@@ -491,7 +491,7 @@
         <summary>Columnas<button type="button" class="icono info-grupo" id="info-columnas" aria-expanded="false" aria-controls="ayuda-de-columnas" aria-label="Qué son las columnas" data-tooltip="Información"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button></summary>
         <div id="ayuda-de-columnas" hidden>
           <p class="pista" id="ayuda-lienzo" hidden>
-            Columnas del lienzo, de 1 a 40. No hay pasillos fijos: el pasillo es el hueco que dejas entre
+            Columnas del lienzo, de 1 a 60. No hay pasillos fijos: el pasillo es el hueco que dejas entre
             piezas. El alto es la suma de las bandas: cambia el alto de cada espacio con − y +.
           </p>
           <p class="pista" id="ayuda-columnas">
@@ -791,10 +791,10 @@ const distribucionDeSala = (sala) => ({
   pasillos: sala.bloques.slice(1).map((b, i) => b[0] - sala.bloques[i].at(-1) - 1),
 });
 
-const BLOQUES_MAXIMOS = 10;
-const BUTACAS_POR_BLOQUE = 40;
+const BLOQUES_MAXIMOS = 20;
+const BUTACAS_POR_BLOQUE = 60;
 const PASILLO_MAXIMO = 10;
-const ANCHO_MAXIMO = 60;
+const ANCHO_MAXIMO = 300;
 const esEntero = (v, min, max) => Number.isInteger(v) && v >= min && v <= max;
 // Aforo maximo de un plano: mas butacas hacen lento el dibujo (varios nodos SVG por
 // butaca). Lo aplican validarMapa y el editor, asi que ningun mapa guardado lo supera.
@@ -1522,7 +1522,8 @@ function agregarBloqueFilas(config, zona = config.zona) {
 // como una mesa. Por defecto ocupa la franja de la banda «escenario» a todo el
 // ancho de la sala. Las filas miran hacia el y la numeracion se mide desde el.
 // ---------------------------------------------------------------------------
-const ESCENARIO_ANCHO_MAXIMO = 60;
+// Un escenario tiene que poder cruzar la sala entera, asi que va con ANCHO_MAXIMO.
+const ESCENARIO_ANCHO_MAXIMO = ANCHO_MAXIMO;
 const ESCENARIO_ALTO_MAXIMO = 10;
 // Es opcional: un plano con 'escenario: null' no lo tiene ('ausente'). Sin escenario,
 // su centro queda infinitamente arriba: las filas miran hacia arriba, la fila A es
@@ -4442,10 +4443,19 @@ function aplicarVista() {
   svg.setAttribute('viewBox', [vista.x, vista.y, vista.w, vista.h].join(' '));
 }
 
+// Lo mas cerca que se deja llegar. No puede salir del encuadre inicial: ese encuadre se
+// estira a la proporcion del hueco del plano, asi que cuanto mas alto es el recinto mas
+// ancho es, y «seis veces mas cerca» acerca cada vez menos. En un recinto de 20.000
+// butacas el tope dejaba 2,6 px por butaca, ilegible (paso). Topado en celdas, en
+// cualquier recinto se llega a ver el ancho de una sala clasica: unos 40 px por butaca.
+const VISTA_MINIMA = ANCHO_SALA * PASO;
+
 // Devuelve si la vista cambio, para que la rueda sepa si debe ceder el scroll
 // a la pagina.
 function escalar(factor, centro) {
-  const nuevoAncho = Math.min(vistaInicial.w, Math.max(vistaInicial.w / 6, vista.w * factor));
+  // Si el recinto entero cabe en menos que eso, el tope es el propio encuadre.
+  const minimo = Math.min(vistaInicial.w, VISTA_MINIMA);
+  const nuevoAncho = Math.min(vistaInicial.w, Math.max(minimo, vista.w * factor));
   const razon = nuevoAncho / vista.w;
   if (Math.abs(razon - 1) < 1e-9) return false;
   const c = centro || { x: vista.x + vista.w / 2, y: vista.y + vista.h / 2 };
