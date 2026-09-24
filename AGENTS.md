@@ -152,8 +152,11 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   `zonaOriginal`; `planoDesdeSala` extrae las que difieren. Asignar la zona original quita la entrada
   (`asignarZonaAsiento`). Cuenta en `usosDeZona` y se copia al duplicar (`copiarZonasDeAsiento`).
   La herramienta es `herramienta === 'zona'`; `conButacas()` agrupa las que trabajan sobre butacas.
-- **El panel de bandas es el de las zonas:** cada fila lleva el nombre, el precio y la zona de su
-  banda. Si la zona es suya en exclusiva (`zonaExclusivaDeBanda`), el campo de nombre **renombra la
+- **El panel de bandas es el de las zonas** («Zonas y precios»): cada fila lleva el color, el nombre,
+  el precio y la zona de su banda, y un **✓** que guarda nombre y precio de una vez. El ✓ lee los dos
+  campos **antes** de aplicar nada: el primer cambio rehace la lista y se llevaria por delante lo
+  escrito en el otro (paso). Al final de la lista, en `#lista-zonas`, van las zonas que no son de
+  ninguna banda. Si la zona es suya en exclusiva (`zonaExclusivaDeBanda`), el campo de nombre **renombra la
   zona** (`editarZona`) y no la banda: son lo mismo para quien edita. Si la comparte, vuelve a ser el
   nombre propio de la banda. `zonaNuevaParaBanda` es la opción «Zona nueva». El grupo *Otras zonas*
   (`dibujarZonas`) solo lista las zonas que no son de ninguna banda, para que sigan siendo editables:
@@ -271,10 +274,17 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
     `aria-label`, `data-tooltip` y el `href` del `<use>`, nunca `textContent` (borraría el icono).
     Un icono de Material Symbols nuevo se añade a `NOTICE`.
   - `tabindex` móvil: una sola parada de tabulación por capa, gestionada en `focusin`.
-  - **Disposición:** `<div class="app">` con `<aside class="lateral">` de herramientas, `<main>`
-    (encabezado, plano, `.barra-estado` y pie) y `<aside id="lateral-configuracion">`, que
-    `cambiarModo` muestra solo en el editor junto con la clase `editando` de `#app` (tercera columna
-    de la rejilla). Los controles se buscan por id: moverlos de grupo no rompe el script.
+  - **Disposición:** `<div class="app">` con el `<aside class="lateral">` de la **sala** a la izquierda
+    (Vista, tipo de sala, Mapa, Columnas, Zonas y precios, Leyenda), `<main>` (encabezado, plano,
+    `.barra-estado` y pie) y `<aside id="lateral-configuracion">` con las **piezas** a la derecha
+    (Agregar, Pieza seleccionada, Sala), que `cambiarModo` muestra solo en el editor junto con la clase
+    `editando` de `#app` (tercera columna de la rejilla). En el editor la columna ancha es la izquierda.
+    Del grupo *Mapa* (`#grupo-mapa`) y del panel de la sala (`#panel-bandas`) se encarga tambien
+    `cambiarModo`; el **tipo de sala** se ve en los dos modos, porque es como se cambia de recinto.
+    Los controles se buscan por id: moverlos de grupo no rompe el script.
+  - **Los textos de ayuda de un grupo van tras un boton de informacion** en su `<summary>`
+    (`#info-columnas`, `#info-zonas`): el clic hace `preventDefault` y `stopPropagation`, o abriria y
+    cerraria tambien el `<details>`.
   - **`.subtitulo` es del SVG** (nombres de banda, letra de 4 px). El subtítulo de la página es
     `.bajada`; no reutilices la clase o la letra se queda diminuta (pasó).
   - **Escritorio = una pantalla:** con más de 900 px de ancho y 600 px de alto, una media query pone
@@ -300,6 +310,15 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - **Un mapa guarda diseño, no venta:** pasillos, bandas, mesas, bloqueadas y contadores. Nunca la
   ocupación ni la selección. La ocupación de ejemplo vive en las plantillas (`ocupadas`,
   `mesasOcupadas`).
+- **Una zona es una banda:** `agregarBanda` y `agregarBandaEnVertical` pasan por `conZonaPropia`, que
+  le da a la banda nueva su zona (nombre a partir de la de partida, numerado, y precio 0). Los
+  **espacios y las franjas nacen sin zona** (un hueco no da precio a nada); al espacio se le da la
+  suya con el boton de la etiqueta, que crea espacio + zona. `eliminarBanda` se lleva la zona si no la
+  usa nadie mas (`usosDeZona`), nunca la de mesas ni la ultima. El nombre por defecto de una banda es
+  el de su zona (`nombreDe` en `disponerBandas`), asi que renombrar la zona renombra la banda.
+- **El color es de la zona:** `colorDeCapa` indexa la paleta por la zona de la banda, y solo cae al
+  orden del arbol (`capasDe`) para las que no tienen. Dos bandas que comparten zona se ven del mismo
+  color, en el panel y en el plano.
 - **Las zonas son del plano:** `plano.zonas` es una lista `[{ id, nombre, precio }]` (precio en
   centavos). `generarPlano` la vuelca en el índice `zonas` con `usarZonas` antes de disponer las
   bandas, así que `zonas[id]` siempre es de la sala actual. `validarMapa` también llama a
@@ -307,7 +326,7 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   valida contra la lista y usa `zonaParaFilas` para las filas nuevas. La zona `mesas` es la que toman
   las zonas de mesas que no llevan otra: siempre existe y no se asigna a filas. `usosDeZona` cuenta
   las bandas (por su zona efectiva) y las piezas con zona **propia**: lo que hereda no cuenta, porque
-  ya lo sujeta su banda.
+  ya lo sujeta su banda. El tope es `ZONAS_MAXIMAS` (40), porque cada banda trae la suya.
 - **Aforo máximo: `BUTACAS_MAXIMAS` (20.000).** `validarMapa` lo comprueba con `motivoDeAforo`;
   `aplicarBandas` lo trata como un error de bandas y revierte; los cambios de piezas (agregar,
   transformar, duplicar) pasan por `conTopeDeAforo`, que copia el plano antes y lo restaura si se
@@ -391,8 +410,10 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    - **Editar plano:** arrastrar una mesa a un sitio válido y a uno inválido (pasillo, otra mesa),
      Esc, flechas, girar, alargar y acortar, cabeceras, agregar Lados y Cruz, eliminar,
      «Restablecer sala», y que la selección se conserve.
-   - **Bandas y precios:** nombre, precio, zona («Zona nueva» y compartir con otra banda), venta de
-     las mesas de una zona de mesas, y que *Otras zonas* solo liste las que no son de ninguna banda.
+   - **Zonas y precios:** nombre, precio y el ✓ que guarda los dos; zona («Zona nueva» y compartir con
+     otra banda, que iguala el color); el boton de la etiqueta, que crea un espacio con su zona; venta
+     de las mesas de una zona de mesas; que al eliminar una banda se vaya su zona; que las zonas sin
+     banda queden al final de la lista; y los dos botones de informacion.
    - **Bandas:** − / +, zona, subir y bajar, eliminar, agregar; que no se aplique un cambio que deja
      una mesa sin caber, y que el foco vuelva al mismo control.
    - **Mapa en blanco:** elegirlo abre el editor; ancho del lienzo, agregar espacios y guías, agregar

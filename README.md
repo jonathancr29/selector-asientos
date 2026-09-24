@@ -197,23 +197,28 @@ que desaparecen se avisan igual que al acortar una mesa.
 
 Las bandas sin nombre propio toman el de su zona, numerado si se repite: *General*, *General 2*.
 
-### Zonas y precios: una zona por banda
+### Zonas y precios: la zona es la banda
 
-Cada sala o mapa tiene **sus propias zonas**: al empezar, *Luneta* ($350), *Mesas* ($500) y *General*
-($200). **Se editan en la fila de su banda**, en *Bandas y precios*: el nombre, el precio por lugar y
-con qué zona va. No hay dos listas que mantener: una zona es, normalmente, una banda.
+**Una zona y una banda son la misma cosa.** Cada fila del grupo *Zonas y precios* es una banda con su
+**color**, su **nombre** y su **precio por lugar**, y ese precio se lo da a todo lo que cae dentro.
+Al empezar, la sala mixta trae *Luneta* ($350), *Mesas* ($500) y *General* ($200).
 
-- **Nombre y precio** se aplican con Enter o al salir del campo (Esc deshace lo escrito). El precio es
-  por lugar, en pesos: `350`, `350.50` o `$1,200.00`, de 0 a 1,000,000. Los nombres no se repiten.
-- **Compartir:** dos bandas con la misma zona comparten precio y numeración (la *Luneta izquierda* y
-  la *derecha* de una franja son la misma zona). Mientras la comparten, el campo de nombre de cada
-  fila vuelve a ser su nombre propio, porque renombrar la zona desde ahí cambiaría el precio de la
-  otra.
-- **Otras zonas** es el grupo para las que no son de ninguna banda: la de una pieza con zona propia,
-  las que pintas con *Asignar zona* y las que aún no usa nadie. Ahí se agregan (hasta 20) y se
-  eliminan. Aparece vacío cuando todas las zonas son de una banda.
-- **Eliminar** solo se puede con una zona que no use ninguna banda ni ninguna pieza con zona propia.
-  La zona de mesas no se elimina, y siempre queda al menos una zona para filas.
+- **Cada banda nueva nace con su zona:** color propio, nombre a partir del tipo (*General 2*,
+  *Mesas 2*) y precio 0. Los **espacios** son la excepción: nacen sin zona, porque un hueco no da
+  precio a nada.
+- **Nombre y precio** se escriben en la fila y se guardan con **✓** (también con Enter o al salir del
+  campo; Esc deshace lo escrito). El precio es por lugar, en pesos, de 0 a 1,000,000, y se puede
+  escribir como 350, 350.50 o $1,200.00. Los nombres no se repiten. Hasta **40 zonas**.
+- **El botón de la etiqueta (🏷+) crea una zona nueva con su espacio:** le pones nombre y precio y
+  metes dentro mesas, bloques o butacas.
+- **Compartir:** el selector de cada fila apunta a otra zona, y entonces las dos bandas comparten
+  nombre, precio, color y numeración (la *Luneta izquierda* y la *derecha* de una franja son la misma
+  zona). *Zona nueva…* vuelve a darle una propia. Mientras comparten, el campo de nombre de cada fila
+  es su nombre propio, porque renombrar la zona cambiaría también el de la otra.
+- **Al eliminar una banda se va su zona**, salvo que la use otra banda, una pieza o alguna butaca
+  pintada. Las zonas que se quedan sin banda aparecen al final de la lista, con su nombre, su precio
+  y su botón de eliminar.
+- La zona de mesas no se elimina, y siempre queda al menos una zona para filas.
 
 Todo lo que muestra la zona usa sus valores actuales: la etiqueta de las butacas (*«VIP, fila A,
 butaca 1»*), el nombre por defecto de las bandas, los selectores y el resumen con su total. Las filas
@@ -363,25 +368,28 @@ quita (el escenario nunca). Como siempre, si algo deja de caber, el cambio no se
 ## Disposición de la página
 
 ```
-┌──────────────┬─────────────────────────────┬──────────────────┐
-│ Herramientas │ Selector de asientos  ⓘ     │ Configuración    │
-│ (sticky)     │ Sala de 14 columnas · …     │ (sticky, solo    │
-│              ├─────────────────────────────┤  en el editor)   │
-│ Tipo de sala │                             │                  │
-│ Vista        │           PLANO             │ Mapa             │
-│ Agregar      │                             │ Columnas         │
-│ Pieza        │                             │ Otras zonas      │
-│ Sala         ├─────────────────────────────┤ Bandas y precios │
-│ Leyenda      │ Estado      Seleccionadas… ▲│                  │
-└──────────────┴─────────────────────────────┴──────────────────┘
+┌──────────────────┬─────────────────────────┬──────────────┐
+│ Sala (sticky)    │ Selector de asientos  ⓘ │ Piezas       │
+│                  │ Sala de 14 columnas · … │ (sticky,     │
+│ Vista            ├─────────────────────────┤  solo en el  │
+│ Tipo de sala     │                         │  editor)     │
+│ Mapa             │         PLANO           │              │
+│ Columnas       ⓘ │                         │ Agregar      │
+│ Zonas y precios ⓘ│                         │ Pieza        │
+│ Leyenda          ├─────────────────────────┤ Sala         │
+│                  │ Estado  Seleccionadas… ▲│              │
+└──────────────────┴─────────────────────────┴──────────────┘
 ```
 
-- **Lateral izquierdo (herramientas), de arriba abajo:** el tipo de sala; *Vista* (Previsualizar /
-  Editar plano y zoom); en el editor, *Agregar*, *Pieza seleccionada* (acciones, zona, nombre y mesa
-  completa) y *Sala* (asignar zona, bloquear butacas, escenario, restablecer); y la *Leyenda*, al
-  final. Los iconos van en rejilla y su tooltip sale a la derecha.
+- **Lateral izquierdo (la sala), de arriba abajo:** *Vista* (Previsualizar, Editar plano y zoom, todo
+  con iconos); el **tipo de sala**, que se ve en los dos modos; y, solo en el editor, *Mapa*,
+  *Columnas* y *Zonas y precios*. La *Leyenda* va al final. Los grupos *Columnas* y *Zonas y precios*
+  llevan un botón de **información (ⓘ)** junto al título que abre y cierra su explicación.
+- **Lateral derecho (las piezas), solo en el editor:** *Agregar*, *Pieza seleccionada* (acciones,
+  zona, nombre y venta) y *Sala* (asignar zona, bloquear butacas, escenario, restablecer). Los iconos
+  van en rejilla y su tooltip sale a la derecha.
 - **Lateral derecho (configuración), solo en el editor:** *Mapa* (nombre, guardar, exportar,
-  importar), *Columnas*, *Otras zonas* y *Bandas y precios*.
+  importar), *Columnas* y *Zonas y precios*.
 - **En escritorio (más de 900 px de ancho y 600 px de alto), una sola pantalla:** la página no se
   desplaza. Los laterales, el encabezado y el pie quedan fijos, y el plano llena el hueco que queda,
   así que la sala se ve completa. Lo único que se desplaza es el interior de un lateral cuando su
