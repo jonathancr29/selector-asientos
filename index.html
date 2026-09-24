@@ -16,14 +16,36 @@
 <title>Selector de asientos</title>
 <style>
   * { box-sizing: border-box; }
+
+  /* La paleta de la interfaz en un solo sitio. Son los colores que se repiten tres
+     veces o mas, mas el fondo de la pagina: cambiar aqui cambia toda la aplicacion.
+     Los colores de una sola vez (estados de butaca, madera, guias) siguen escritos
+     donde se usan, y la paleta de las capas vive en el script (COLORES_DE_CAPA). */
+  :root {
+    --fondo: #1e1e24;
+    --fondo-panel: #23232b;
+    --fondo-control: #2a2a33;
+    --fondo-plano: #17171c;
+    --borde: #3a3a46;
+    --borde-suave: #2c2c36;
+    --texto: #fff;
+    --texto-claro: #e2e8f0;
+    --texto-tenue: #cbd5e1;
+    --texto-apagado: #94a3b8;
+    --acento: #3b82f6;
+    --acento-fuerte: #1d4ed8;
+    --realce: #93c5fd;
+    --realce-velo: rgba(147, 197, 253, .12);
+    --rojo: #ef4444;
+  }
   body {
     margin: 0; min-height: 100vh; padding: 0;
     font-family: system-ui, "Segoe UI", sans-serif;
-    background: #1e1e24; color: #fff;
+    background: var(--fondo); color: var(--texto);
   }
   h1 { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
   /* No «.subtitulo»: esa clase es la de los nombres de banda del SVG (letra de 4 px). */
-  .bajada { margin: 0 0 12px; font-size: 13px; color: #94a3b8; }
+  .bajada { margin: 0 0 12px; font-size: 13px; color: var(--texto-apagado); }
 
   /* --- Disposicion: lateral de herramientas, plano y lateral de configuracion ---
      Los laterales son sticky y tienen su propio scroll; en pantallas angostas se apilan. */
@@ -33,16 +55,15 @@
      derecha solo lleva iconos y tres campos. */
   .app.editando { grid-template-columns: 340px minmax(0, 1fr) 260px; }
   .lateral { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; scrollbar-width: thin;
-    padding: 10px 12px; background: #23232b; border: 1px solid #2c2c36; border-radius: 10px; }
+    padding: 10px 12px; background: var(--fondo-panel); border: 1px solid var(--borde-suave); border-radius: 10px; }
   .lateral[hidden] { display: none; }
-  .grupo { padding: 8px 0; border-top: 1px solid #2c2c36; }
+  .grupo { padding: 8px 0; border-top: 1px solid var(--borde-suave); }
   .grupo:first-of-type { border-top: 0; padding-top: 0; }
-  .grupo > summary { padding: 2px 0 8px; font-size: 12px; font-weight: 700; color: #cbd5e1; cursor: pointer; }
-  .grupo > summary:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; border-radius: 4px; }
+  .grupo > summary { padding: 2px 0 8px; font-size: 12px; font-weight: 700; color: var(--texto-tenue); cursor: pointer;
+    display: flex; align-items: center; gap: 6px; list-style: none; }
+  .grupo > summary:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; border-radius: 4px; }
   .lateral .herramientas { margin-bottom: 8px; }
   .rejilla-iconos.herramientas { display: grid; grid-template-columns: repeat(5, 32px); gap: 6px; }
-  .modos.herramientas { display: grid; grid-template-columns: 1fr; gap: 6px; }
-  .modos button { justify-content: flex-start; }
   .campo-ancho.herramientas { flex-wrap: nowrap; }
   .campo-ancho select, .campo-ancho input[type="text"] { flex: 1; min-width: 0; width: auto; }
   .lateral .mesa-activa { margin: 0 0 8px; min-width: 0; }
@@ -52,17 +73,16 @@
      informacion detras. La flecha la dibuja el CSS porque con 'display: flex' el
      navegador deja de pintar el marcador de <summary> (paso: se perdio al meter el
      boton de informacion). */
-  .grupo > summary { display: flex; align-items: center; gap: 6px; list-style: none; }
   .grupo > summary::-webkit-details-marker { display: none; }
-  .grupo > summary::before { content: '▾'; width: 10px; font-size: 10px; color: #94a3b8; }
+  .grupo > summary::before { content: '▾'; width: 10px; font-size: 10px; color: var(--texto-apagado); }
   .grupo:not([open]) > summary::before { content: '▸'; }
   /* El boton de informacion de un grupo es el mismo que el del encabezado. */
   .info-grupo {
     width: 24px; height: 24px; min-width: 24px; display: inline-flex; align-items: center;
-    justify-content: center; padding: 0; color: #cbd5e1; background: #2a2a33;
-    border: 1px solid #3a3a46; border-radius: 6px; cursor: pointer;
+    justify-content: center; padding: 0; color: var(--texto-tenue); background: var(--fondo-control);
+    border: 1px solid var(--borde); border-radius: 6px; cursor: pointer;
   }
-  .info-grupo[aria-expanded="true"] { background: #1d4ed8; border-color: #3b82f6; color: #fff; }
+  .info-grupo[aria-expanded="true"] { background: var(--acento-fuerte); border-color: var(--acento); color: var(--texto); }
   .lateral .bandas { margin: 0; padding: 0; background: none; border: 0; }
   .encabezado { margin: 0 0 10px; }
   .encabezado .pista { margin: 0 0 6px; }
@@ -71,27 +91,27 @@
   .titulo h1 { margin: 0; }
   .titulo .icono, .resumen-pie .icono, .hojas-controles .icono {
     width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; padding: 0;
-    color: #cbd5e1; background: #2a2a33; border: 1px solid #3a3a46; border-radius: 6px; cursor: pointer;
+    color: var(--texto-tenue); background: var(--fondo-control); border: 1px solid var(--borde); border-radius: 6px; cursor: pointer;
   }
-  .titulo .icono[aria-expanded="true"], .resumen-pie .icono[aria-expanded="true"] { background: #1d4ed8; border-color: #3b82f6; color: #fff; }
+  .titulo .icono[aria-expanded="true"], .resumen-pie .icono[aria-expanded="true"] { background: var(--acento-fuerte); border-color: var(--acento); color: var(--texto); }
   .titulo .icono:focus-visible, .resumen-pie .icono:focus-visible, .hojas-controles .icono:focus-visible,
-  .punto:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+  .punto:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
   .hojas-controles .icono:disabled { opacity: .45; cursor: default; }
   /* Paneles del encabezado (hojas) y del pie (detalle). */
-  .panel { padding: 10px 12px; background: #23232b; border: 1px solid #3a3a46; border-radius: 8px; }
+  .panel { padding: 10px 12px; background: var(--fondo-panel); border: 1px solid var(--borde); border-radius: 8px; }
   .panel[hidden] { display: none; }
-  .panel h2 { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: #e2e8f0; }
+  .panel h2 { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: var(--texto-claro); }
   .hoja .nota:first-of-type { margin-top: 0; }
-  .hoja .bajada, .hoja .pista { margin: 0; font-size: 13px; line-height: 1.6; color: #cbd5e1; }
+  .hoja .bajada, .hoja .pista { margin: 0; font-size: 13px; line-height: 1.6; color: var(--texto-tenue); }
   .hojas-controles { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
   .hojas-controles .cerrar { margin-left: auto; }
   .puntos { display: inline-flex; gap: 6px; }
-  .punto { width: 10px; height: 10px; padding: 0; border-radius: 50%; border: 1px solid #94a3b8; background: transparent; cursor: pointer; }
-  .punto[aria-current="true"] { background: #3b82f6; border-color: #3b82f6; }
+  .punto { width: 10px; height: 10px; padding: 0; border-radius: 50%; border: 1px solid var(--texto-apagado); background: transparent; cursor: pointer; }
+  .punto[aria-current="true"] { background: var(--acento); border-color: var(--acento); }
   #panel-detalle #detalle { margin: 0; }
   /* Linea de estado: fija al pie del plano mientras se hace scroll por el. */
   .barra-estado { position: sticky; bottom: 0; z-index: 5; min-height: 34px; margin-top: 8px; padding: 8px 10px;
-    background: #23232b; border: 1px solid #2c2c36; border-radius: 8px; }
+    background: var(--fondo-panel); border: 1px solid var(--borde-suave); border-radius: 8px; }
   .barra-estado { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 16px; }
   .barra-estado p, .barra-estado p:empty { margin: 0; }
   .barra-estado .mensajes { flex: 1 1 260px; min-width: 0; }
@@ -136,20 +156,19 @@
     .lateral-herramientas { margin-bottom: 12px; }
     .lateral-configuracion { margin: 12px 0 0; }
     .lateral .leyenda { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
-    .modos.herramientas { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
   }
 
   /* --- Leyenda --- */
   .leyenda { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 12px; padding: 0; list-style: none; }
-  .leyenda li { display: flex; align-items: center; gap: 7px; font-size: 12px; color: #94a3b8; }
+  .leyenda li { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--texto-apagado); }
   .muestra { width: 18px; height: 18px; flex: none; }
 
   /* --- Barra de herramientas --- */
   .herramientas { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
   .herramientas button, .herramientas select {
     height: 30px; padding: 0 9px;
-    font: inherit; font-size: 13px; color: #cbd5e1;
-    background: #2a2a33; border: 1px solid #3a3a46; border-radius: 6px; cursor: pointer;
+    font: inherit; font-size: 13px; color: var(--texto-tenue);
+    background: var(--fondo-control); border: 1px solid var(--borde); border-radius: 6px; cursor: pointer;
   }
   .herramientas button { min-width: 34px; }
   /* Botones de icono: 32 × 32 con un icono de 18. El nombre va en aria-label y, a la
@@ -158,86 +177,82 @@
   .ico { width: 18px; height: 18px; flex: none; fill: currentColor; }
   .herramientas button.icono { width: 32px; min-width: 32px; height: 32px; padding: 0;
     display: inline-flex; align-items: center; justify-content: center; }
-  .modos button { display: inline-flex; align-items: center; gap: 6px; }
   .solo-lector { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   /* Eliminar avisa de que es destructivo al pasar el raton, no solo por el color: el tooltip lo dice. */
-  .herramientas button[data-accion="eliminar"]:not(:disabled):hover { color: #fca5a5; border-color: #ef4444; }
+  .herramientas button[data-accion="eliminar"]:not(:disabled):hover { color: #fca5a5; border-color: var(--rojo); }
   .herramientas button:hover, .herramientas select:hover { background: #33333e; }
-  .herramientas button:focus-visible, .herramientas select:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
-  .campo { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #94a3b8; }
-  .separador { width: 1px; height: 22px; background: #3a3a46; margin: 0 4px; }
-  .pista { font-size: 11px; color: #94a3b8; }
-  .aforo { margin: 0 0 8px; font-size: 12px; color: #94a3b8; }
+  .herramientas button:focus-visible, .herramientas select:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
+  .campo { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--texto-apagado); }
+  .pista { font-size: 11px; color: var(--texto-apagado); }
+  .aforo { margin: 0 0 8px; font-size: 12px; color: var(--texto-apagado); }
   .aviso { margin: 8px 0 0; font-size: 12px; color: #fbbf24; }
   /* Sin display:none: una region viva oculta asi no siempre se anuncia al llenarse. */
   .aviso:empty { margin: 0; }
-  .estado { margin: 8px 0 0; font-size: 12px; color: #cbd5e1; }
+  .estado { margin: 8px 0 0; font-size: 12px; color: var(--texto-tenue); }
   .estado:empty { margin: 0; }
-  .modos { display: inline-flex; gap: 4px; }
-  .herramientas button[aria-pressed="true"] { background: #1d4ed8; border-color: #3b82f6; color: #fff; }
+  .herramientas button[aria-pressed="true"] { background: var(--acento-fuerte); border-color: var(--acento); color: var(--texto); }
   .herramientas button:disabled { opacity: .45; cursor: default; }
-  .herramientas button:disabled:hover { background: #2a2a33; }
+  .herramientas button:disabled:hover { background: var(--fondo-control); }
   /* display:flex de .herramientas pisaria el atributo hidden. */
   .herramientas[hidden] { display: none; }
 
   /* --- Panel de bandas (editor) --- */
-  .bandas { margin: 16px 0 0; padding: 10px 12px; background: #23232b; border: 1px solid #2c2c36; border-radius: 8px; }
+  .bandas { margin: 16px 0 0; padding: 10px 12px; background: var(--fondo-panel); border: 1px solid var(--borde-suave); border-radius: 8px; }
   .bandas[hidden] { display: none; }
-  .bandas h2 { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: #e2e8f0; }
-  .bandas h3 { margin: 12px 0 6px; font-size: 13px; font-weight: 700; color: #cbd5e1; }
+  .bandas h2 { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: var(--texto-claro); }
+  .bandas h3 { margin: 12px 0 6px; font-size: 13px; font-weight: 700; color: var(--texto-tenue); }
   /* Columnas: una fila por campo, con la etiqueta a la izquierda y el campo corto. */
   .columnas-sala { display: block; }
   .fila-campo { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-  .fila-campo label { flex: 0 0 118px; font-size: 12px; color: #94a3b8; }
+  .fila-campo label { flex: 0 0 118px; font-size: 12px; color: var(--texto-apagado); }
   .fila-campo input { flex: 0 0 110px; }
-  .columnas-sala label { font-size: 12px; color: #94a3b8; }
+  .columnas-sala label { font-size: 12px; color: var(--texto-apagado); }
   .columnas-sala[hidden], .bandas .pista[hidden] { display: none; }
   .columnas-sala input {
-    height: 28px; width: 130px; padding: 0 8px; font: inherit; font-size: 13px; color: #e2e8f0;
-    background: #17171c; border: 1px solid #3a3a46; border-radius: 6px;
+    height: 28px; width: 130px; padding: 0 8px; font: inherit; font-size: 13px; color: var(--texto-claro);
+    background: var(--fondo-plano); border: 1px solid var(--borde); border-radius: 6px;
   }
-  .columnas-sala input:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+  .columnas-sala input:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
   .columnas-sala button {
-    height: 28px; padding: 0 10px; font: inherit; font-size: 12px; color: #cbd5e1;
-    background: #2a2a33; border: 1px solid #3a3a46; border-radius: 6px; cursor: pointer;
+    height: 28px; padding: 0 10px; font: inherit; font-size: 12px; color: var(--texto-tenue);
+    background: var(--fondo-control); border: 1px solid var(--borde); border-radius: 6px; cursor: pointer;
   }
-  .columnas-sala button:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+  .columnas-sala button:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
   .bandas ol { margin: 0 0 8px; padding: 0; list-style: none; }
   /* Verticales y bandas dentro de una franja: sangradas, a lo ancho de su fila. */
-  .banda > ol { flex-basis: 100%; margin: 4px 0 0 14px; padding-left: 10px; border-left: 1px solid #3a3a46; }
+  .banda > ol { flex-basis: 100%; margin: 4px 0 0 14px; padding-left: 10px; border-left: 1px solid var(--borde); }
   .banda-vertical > .banda-nombre::before { content: '⇕ '; color: #64748b; }
-  .banda { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 6px 0; border-top: 1px solid #2c2c36; }
+  .banda { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 6px 0; border-top: 1px solid var(--borde-suave); }
   .banda:first-child { border-top: 0; }
-  .banda-nombre { flex: 1 1 100px; min-width: 80px; font-size: 13px; color: #e2e8f0; }
+  .banda-nombre { flex: 1 1 100px; min-width: 80px; font-size: 13px; color: var(--texto-claro); }
   .banda > .precio-zona {
     flex: 0 0 76px; width: 76px; height: 28px; padding: 0 8px; text-align: right;
-    font: inherit; font-size: 13px; color: #e2e8f0;
-    background: #17171c; border: 1px solid #3a3a46; border-radius: 6px;
+    font: inherit; font-size: 13px; color: var(--texto-claro);
+    background: var(--fondo-plano); border: 1px solid var(--borde); border-radius: 6px;
   }
-  .banda > .precio-zona:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
-  .banda-nombre input { width: 100%; }
-  .banda-detalle { flex: 0 1 auto; min-width: 0; font-size: 12px; color: #94a3b8; }
+  .banda > .precio-zona:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
+  .banda-detalle { flex: 0 1 auto; min-width: 0; font-size: 12px; color: var(--texto-apagado); }
   /* Los controles de cada banda, en su propia linea. */
   .banda-controles { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex-basis: 100%; }
   .banda button, .banda select {
-    height: 28px; min-width: 30px; padding: 0 8px; font: inherit; font-size: 12px; color: #cbd5e1;
-    background: #2a2a33; border: 1px solid #3a3a46; border-radius: 6px; cursor: pointer;
+    height: 28px; min-width: 30px; padding: 0 8px; font: inherit; font-size: 12px; color: var(--texto-tenue);
+    background: var(--fondo-control); border: 1px solid var(--borde); border-radius: 6px; cursor: pointer;
   }
   .banda button.icono { width: 28px; min-width: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
-  .banda button[aria-pressed="true"] { background: #1d4ed8; border-color: #3b82f6; color: #fff; }
+  .banda button[aria-pressed="true"] { background: var(--acento-fuerte); border-color: var(--acento); color: var(--texto); }
   /* Zonas: nombre, precio y papelera en una linea; los lugares, debajo. */
   .zonas .banda { display: grid; grid-template-columns: 1fr 92px 28px; gap: 6px; align-items: center; }
   .zonas .banda > .banda-detalle { grid-column: 1 / -1; }
   .banda button:hover { background: #33333e; }
   .banda button:disabled { opacity: .45; cursor: default; }
-  .banda button:focus-visible, .banda select:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+  .banda button:focus-visible, .banda select:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
   /* Limite entre bandas, solo en el editor. */
   .limite-banda { stroke: #3f4f6b; stroke-width: .5; stroke-dasharray: 2 2; }
   .limite-vertical { stroke: #56709a; stroke-width: .6; stroke-dasharray: 3 2; }
   /* Subtitulos: el nombre de cada banda, en el margen o en su borde superior. */
-  .subtitulo { fill: #94a3b8; font-size: 4px; text-anchor: end; dominant-baseline: middle; }
-  .subtitulo-borde rect { fill: #17171c; stroke: #3a3a46; stroke-width: .4; }
-  .subtitulo-borde text { fill: #cbd5e1; font-size: 3.2px; dominant-baseline: middle; }
+  .subtitulo { fill: var(--texto-apagado); font-size: 4px; text-anchor: end; dominant-baseline: middle; }
+  .subtitulo-borde rect { fill: var(--fondo-plano); stroke: var(--borde); stroke-width: .4; }
+  .subtitulo-borde text { fill: var(--texto-tenue); font-size: 3.2px; dominant-baseline: middle; }
   #plano.editando .subtitulo, #plano.editando .subtitulo-borde { cursor: pointer; }
   /* Van sobre las butacas para leerse; fuera del editor de piezas no capturan clics. */
   #plano:not(.editando) .subtitulo-borde, #plano.bloqueando .subtitulo-borde, #plano.pintando .subtitulo-borde { pointer-events: none; }
@@ -246,25 +261,25 @@
      borde inferior, sobre todo lo demas (piezas incluidas). */
   .contorno-banda { fill: var(--capa); fill-opacity: .07; stroke: var(--capa); stroke-width: 1.4; pointer-events: none; }
   #rotulo-seleccion { pointer-events: none; }
-  .rotulo-seleccion rect { fill: var(--capa); stroke: #17171c; stroke-width: .6; }
-  .rotulo-seleccion text { fill: #17171c; font-size: 4px; font-weight: 700; dominant-baseline: middle; }
+  .rotulo-seleccion rect { fill: var(--capa); stroke: var(--fondo-plano); stroke-width: .6; }
+  .rotulo-seleccion text { fill: var(--fondo-plano); font-size: 4px; font-weight: 700; dominant-baseline: middle; }
   .muestra-capa { width: 12px; height: 12px; flex: none; border-radius: 3px; background: var(--capa); }
   .banda-nombre input {
-    height: 28px; width: 150px; padding: 0 8px; font: inherit; font-size: 13px; color: #e2e8f0;
-    background: #17171c; border: 1px solid #3a3a46; border-radius: 6px;
+    height: 28px; width: 150px; padding: 0 8px; font: inherit; font-size: 13px; color: var(--texto-claro);
+    background: var(--fondo-plano); border: 1px solid var(--borde); border-radius: 6px;
   }
-  .banda-nombre input::placeholder { color: #94a3b8; }
-  .banda-nombre input:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+  .banda-nombre input::placeholder { color: var(--texto-apagado); }
+  .banda-nombre input:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
   .banda.activa > .banda-nombre input { border-color: var(--capa); border-width: 2px; font-weight: 700; }
   /* Zonas y precios: una fila por zona, con su nombre y su precio editables. */
   .zonas input {
-    height: 28px; padding: 0 8px; font: inherit; font-size: 13px; color: #e2e8f0;
-    background: #17171c; border: 1px solid #3a3a46; border-radius: 6px;
+    height: 28px; padding: 0 8px; font: inherit; font-size: 13px; color: var(--texto-claro);
+    background: var(--fondo-plano); border: 1px solid var(--borde); border-radius: 6px;
   }
-  .zonas input:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+  .zonas input:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
   .zonas .nombre-zona { width: 100%; }
   .zonas .precio-zona { width: 100%; text-align: right; }
-  .mesa-activa { font-size: 12px; color: #cbd5e1; min-width: 150px; }
+  .mesa-activa { font-size: 12px; color: var(--texto-tenue); min-width: 150px; }
   #nombre-pieza { min-width: 150px; width: 150px; }
   .herramientas select:disabled, .herramientas input:disabled { opacity: .45; }
 
@@ -273,7 +288,7 @@
      no da: escala con el ancho disponible, admite zoom y desplazamiento, y las
      butacas viven en un sistema de coordenadas. */
   .lienzo {
-    background: #17171c; border: 1px solid #2c2c36; border-radius: 10px;
+    background: var(--fondo-plano); border: 1px solid var(--borde-suave); border-radius: 10px;
     overflow: hidden; touch-action: none;
   }
   /* Sin seleccion de texto: al arrastrar el plano o una pieza, el navegador
@@ -289,8 +304,8 @@
   /* El hover solo aclara si NO esta seleccionada, para que la confirmacion
      visual no desaparezca bajo el cursor. */
   .butaca:not(.ocupada):not(.bloqueada):not(.elegida):hover { color: #b4b4c2; }
-  .elegida { color: #3b82f6; }
-  .ocupada { color: #ef4444; }
+  .elegida { color: var(--acento); }
+  .ocupada { color: var(--rojo); }
   .bloqueada { color: #646472; }
   .butaca.ocupada, .butaca.bloqueada { cursor: not-allowed; }
   /* Marcas en el hueco del respaldo: el estado no depende solo del color.
@@ -298,7 +313,7 @@
   .marca { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .butaca:not(.elegida) .marca-elegida { display: none; }
   .butaca:focus { outline: none; }
-  .butaca:focus-visible .toque { fill: none; stroke: #93c5fd; stroke-width: 1.2; }
+  .butaca:focus-visible .toque { fill: none; stroke: var(--realce); stroke-width: 1.2; }
 
   /* --- Modo editor ---
      Las butacas no responden: el clic atraviesa hasta la pieza o el fondo. */
@@ -306,72 +321,69 @@
   /* Con la herramienta de bloqueo, las butacas vuelven a responder. */
   #plano.editando.bloqueando .butaca, #plano.editando.pintando .butaca { pointer-events: auto; }
   .herramientas input[type="text"] {
-    height: 30px; min-width: 210px; padding: 0 9px; font: inherit; font-size: 13px; color: #e2e8f0;
-    background: #17171c; border: 1px solid #3a3a46; border-radius: 6px;
+    height: 30px; min-width: 210px; padding: 0 9px; font: inherit; font-size: 13px; color: var(--texto-claro);
+    background: var(--fondo-plano); border: 1px solid var(--borde); border-radius: 6px;
   }
-  .herramientas input[type="text"]:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
-  .pieza { fill: transparent; stroke: #93c5fd; stroke-width: .8; stroke-dasharray: 2 1.5; cursor: grab; }
+  .herramientas input[type="text"]:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
+  .pieza { fill: transparent; stroke: var(--realce); stroke-width: .8; stroke-dasharray: 2 1.5; cursor: grab; }
   .pieza:hover { fill: rgba(147, 197, 253, .1); }
   .pieza:focus { outline: none; }
   .pieza:focus-visible { stroke-dasharray: none; stroke-width: 1.4; }
   /* La activa: contorno continuo y relleno, distinto del foco (solo contorno mas grueso). */
   .pieza.activa { stroke-dasharray: none; fill: rgba(147, 197, 253, .14); }
   /* Las butacas de la pieza seleccionada, marcadas con ella. */
-  .butaca.de-pieza-activa { color: #93c5fd; }
+  .butaca.de-pieza-activa { color: var(--realce); }
   #plano.moviendo-mesa, #plano.moviendo-mesa .pieza { cursor: grabbing; }
   .levantada { opacity: .3; }
   /* La sombra marca el destino. Verde si cabe; si no, roja y con contorno
      discontinuo, para no depender solo del color. */
   /* Los agarres para redimensionar espacios y verticales, y el fantasma del tamano
      nuevo mientras se arrastra uno. */
-  .tirador { fill: #93c5fd; fill-opacity: .55; stroke: #17171c; stroke-width: .4; }
+  .tirador { fill: var(--realce); fill-opacity: .55; stroke: var(--fondo-plano); stroke-width: .4; }
   .tirador:hover { fill-opacity: 1; }
   .tirador.esquina { cursor: nwse-resize; }
   .tirador.esquina.solo-alto { cursor: ns-resize; }
   .tirador.borde { cursor: ew-resize; }
   .fantasma { pointer-events: none; }
-  .fantasma rect { fill: rgba(147, 197, 253, .12); stroke: #93c5fd; stroke-width: .8; stroke-dasharray: 2 1.5; }
-  .fantasma text { fill: #e2e8f0; font-size: 4px; font-weight: 700; paint-order: stroke; stroke: #17171c; stroke-width: 1.2; }
+  .fantasma rect { fill: var(--realce-velo); stroke: var(--realce); stroke-width: .8; stroke-dasharray: 2 1.5; }
+  .fantasma text { fill: var(--texto-claro); font-size: 4px; font-weight: 700; paint-order: stroke; stroke: var(--fondo-plano); stroke-width: 1.2; }
   /* El rectangulo de las herramientas por area, con su conteo. */
   .area { pointer-events: none; }
-  .area rect { fill: rgba(147, 197, 253, .12); stroke: #93c5fd; stroke-width: .8; stroke-dasharray: 2 1.5; }
-  .area.quitando rect { fill: rgba(248, 250, 252, .08); stroke: #cbd5e1; }
-  .area text { fill: #e2e8f0; font-size: 4px; font-weight: 700; paint-order: stroke; stroke: #17171c; stroke-width: 1.2; }
+  .area rect { fill: var(--realce-velo); stroke: var(--realce); stroke-width: .8; stroke-dasharray: 2 1.5; }
+  .area.quitando rect { fill: rgba(248, 250, 252, .08); stroke: var(--texto-tenue); }
+  .area text { fill: var(--texto-claro); font-size: 4px; font-weight: 700; paint-order: stroke; stroke: var(--fondo-plano); stroke-width: 1.2; }
   .sombra { color: #22c55e; fill: currentColor; pointer-events: none; }
-  .sombra.invalida { color: #ef4444; }
+  .sombra.invalida { color: var(--rojo); }
   .sombra .contorno { fill-opacity: .15; stroke: currentColor; stroke-width: 1; }
   .sombra.invalida .contorno { stroke-dasharray: 3 2; }
   .sombra .tablero { fill: none; stroke: currentColor; stroke-width: .8; }
   .oculta { display: none; }
 
-  .mueble { fill: #26262f; stroke: #3a3a46; stroke-width: .6; }
+  .mueble { fill: #26262f; stroke: var(--borde); stroke-width: .6; }
   /* Mesa completa elegida: el tablero se marca junto con sus lugares. */
-  .mueble.elegida { fill: rgba(59, 130, 246, .22); stroke: #3b82f6; stroke-width: 1.2; }
+  .mueble.elegida { fill: rgba(59, 130, 246, .22); stroke: var(--acento); stroke-width: 1.2; }
   .mueble.completa { cursor: pointer; }
-  .casilla { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #cbd5e1; margin: 0 0 8px; }
-  .casilla input { width: 16px; height: 16px; accent-color: #3b82f6; }
-  .casilla input:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
   .lateral .ancho-completo { width: 100%; margin-bottom: 8px; }
   /* Formas: la pista con cuadros suaves, la barra como un mostrador macizo. */
   .forma-pista { fill: url(#cuadros-pista); stroke: #8b7fc4; stroke-width: .6; }
   .forma-barra { fill: #4a3b2c; stroke: #a0805c; stroke-width: .8; }
-  .rotulo.forma-texto { fill: #e2e8f0; }
-  .rotulo { fill: #94a3b8; font-size: 4.2px; text-anchor: middle; dominant-baseline: middle; }
+  .rotulo.forma-texto { fill: var(--texto-claro); }
+  .rotulo { fill: var(--texto-apagado); font-size: 4.2px; text-anchor: middle; dominant-baseline: middle; }
   /* Guias de fila de un espacio: referencia, mas apagadas que un rotulo de butacas. */
   .rotulo.guia { fill: #64748b; }
   .escenario { fill: #f8fafc; }
-  .escenario-texto { fill: #1e1e24; font-size: 5px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; }
+  .escenario-texto { fill: var(--fondo); font-size: 5px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; }
 
   /* --- Resumen --- */
-  .resumen { margin: 8px 0 0; font-size: 14px; color: #cbd5e1; line-height: 1.7; }
-  .resumen strong { color: #3b82f6; }
+  .resumen { margin: 8px 0 0; font-size: 14px; color: var(--texto-tenue); line-height: 1.7; }
+  .resumen strong { color: var(--acento); }
   #detalle { margin: 8px 0 0; padding-left: 18px; }
-  #detalle li { font-size: 13px; color: #94a3b8; }
+  #detalle li { font-size: 13px; color: var(--texto-apagado); }
   .nota {
-    margin-top: 22px; padding: 12px 14px; font-size: 12px; line-height: 1.6; color: #94a3b8;
-    background: rgba(0,0,0,.25); border-left: 3px solid #3b82f6; border-radius: 4px;
+    margin-top: 22px; padding: 12px 14px; font-size: 12px; line-height: 1.6; color: var(--texto-apagado);
+    background: rgba(0,0,0,.25); border-left: 3px solid var(--acento); border-radius: 4px;
   }
-  .nota code { color: #cbd5e1; }
+  .nota code { color: var(--texto-tenue); }
   .nota + .nota { border-left-color: #fbbf24; }
 </style>
 </head>
@@ -2295,23 +2307,30 @@ function mesasConZonasMezcladas(plano, lista) {
 // Asigna una zona a todas las butacas libres de un area. Sin zona ('' o null) las
 // devuelve a la suya de siempre, que es lo que hace Alt. Una butaca que ya esta en
 // la zona de destino no cuenta como cambiada.
+// El recorrido que comparten las dos operaciones por area: las butacas libres del
+// rectangulo, una a una, apartando las ocupadas para poder avisar de ellas. 'aplicar'
+// devuelve si la butaca cambio de verdad; las ocupadas nunca se tocan.
+function recorrerArea(lista, area, aplicar) {
+  const cambiadas = [], ocupadas = [];
+  for (const b of butacasEnArea(lista, area)) {
+    if (b.estado === 'ocupada') ocupadas.push(b.id);
+    else if (aplicar(b)) cambiadas.push(b.id);
+  }
+  return { cambiadas, ocupadas };
+}
+
 function asignarZonaEnArea(plano, lista, area, zona) {
   const nuevo = copiarPlano(plano);
   nuevo.zonasDeAsiento = { ...(nuevo.zonasDeAsiento || {}) };
-  const cambiadas = [], ocupadas = [];
-  for (const b of butacasEnArea(lista, area)) {
-    if (b.estado === 'ocupada') {
-      ocupadas.push(b.id);
-      continue;
-    }
+  const { cambiadas, ocupadas } = recorrerArea(lista, area, (b) => {
     const destino = zona || b.zonaOriginal;
-    if (destino === b.zona) continue;
+    if (destino === b.zona) return false;
     // Solo se guarda lo que se aparta de su zona de siempre: asi el mapa no engorda
     // con lo que ya heredaba de su banda.
     if (destino === b.zonaOriginal) delete nuevo.zonasDeAsiento[b.id];
     else nuevo.zonasDeAsiento[b.id] = destino;
-    cambiadas.push(b.id);
-  }
+    return true;
+  });
   return { plano: nuevo, cambiadas, ocupadas, mesas: mesasConZonasMezcladas(nuevo, lista) };
 }
 
@@ -2319,17 +2338,12 @@ function asignarZonaEnArea(plano, lista, area, zona) {
 function bloquearEnArea(plano, lista, area, bloquear) {
   const nuevo = copiarPlano(plano);
   const bloqueadas = new Set(nuevo.bloqueadas || []);
-  const cambiadas = [], ocupadas = [];
-  for (const b of butacasEnArea(lista, area)) {
-    if (b.estado === 'ocupada') {
-      ocupadas.push(b.id);
-      continue;
-    }
-    if (bloquear === bloqueadas.has(b.id)) continue;
+  const { cambiadas, ocupadas } = recorrerArea(lista, area, (b) => {
+    if (bloquear === bloqueadas.has(b.id)) return false;
     if (bloquear) bloqueadas.add(b.id);
     else bloqueadas.delete(b.id);
-    cambiadas.push(b.id);
-  }
+    return true;
+  });
   nuevo.bloqueadas = [...bloqueadas];
   return { plano: nuevo, cambiadas, ocupadas };
 }
@@ -2763,21 +2777,29 @@ function zonaExclusivaDeBanda(plano, id) {
 
 // Le da a una banda una zona nueva, con su nombre y precio 0. El nombre de la banda
 // pasa a ser el de la zona: en el panel son lo mismo.
+// El hueco de una zona nueva: el primer id «zonaN» libre y un nombre que no choque,
+// numerado a partir del que se pida («General 2»). No toca el plano, lo devuelve, y es
+// el unico sitio donde se decide como se llama y que id lleva una zona recien nacida.
+function zonaNueva(lista, siguiente, nombreBase) {
+  const base = String(nombreBase || '').trim().slice(0, NOMBRE_MAXIMO) || 'Zona';
+  let nombre = base;
+  for (let n = 2; lista.some((z) => z.nombre.toLowerCase() === nombre.toLowerCase()); n++) nombre = base + ' ' + n;
+  let k = siguiente || 1;
+  while (lista.some((z) => z.id === 'zona' + k)) k++;
+  return { zona: { id: 'zona' + k, nombre, precio: 0 }, siguiente: k + 1 };
+}
+
 function zonaNuevaParaBanda(plano, id, nombre) {
   const nuevo = copiarPlano(plano);
   const u = ubicar(nuevo.bandas, id);
   if (!u) return { motivo: 'esa banda ya no existe' };
   const lista = copiarZonas(zonasDe(nuevo));
   if (lista.length >= ZONAS_MAXIMAS) return { motivo: 'ya hay el máximo de zonas (' + ZONAS_MAXIMAS + ')' };
-  const base = String(nombre || '').trim().slice(0, NOMBRE_MAXIMO) || 'Zona';
-  let propio = base;
-  for (let n = 2; lista.some((z) => z.nombre.toLowerCase() === propio.toLowerCase()); n++) propio = base + ' ' + n;
-  let k = nuevo.siguienteZona || 1;
-  while (lista.some((z) => z.id === 'zona' + k)) k++;
-  lista.push({ id: 'zona' + k, nombre: propio, precio: 0 });
+  const { zona, siguiente } = zonaNueva(lista, nuevo.siguienteZona, nombre);
+  lista.push(zona);
   nuevo.zonas = lista;
-  nuevo.siguienteZona = k + 1;
-  u.item.zona = 'zona' + k;
+  nuevo.siguienteZona = siguiente;
+  u.item.zona = zona.id;
   delete u.item.nombre;   // el nombre vive ahora en la zona
   return nuevo;
 }
@@ -2792,17 +2814,24 @@ function mesasDeBanda(sala, id, lista = mesas) {
                              m.y >= region.y && m.y < region.y + region.alto).map((m) => m.id);
 }
 
-// Pone o quita la venta por mesa en todas las mesas de una banda.
-function marcarMesasDeBanda(plano, sala, id, completa) {
-  const dentro = new Set(mesasDeBanda(sala, id, plano.mesas || []));
-  if (!dentro.size) return { motivo: 'esa banda no tiene mesas' };
+// El unico sitio donde se escribe 'completa'. Las cuatro formas de marcar la venta
+// (una mesa, varias, las de una banda o todas) solo cambian en que mesas eligen, asi
+// que lo unico que las separa es el filtro que reciben.
+function marcarVenta(plano, completa, quiere) {
   const nuevo = copiarPlano(plano);
-  for (const mesa of nuevo.mesas) {
-    if (!dentro.has(mesa.id)) continue;
+  for (const mesa of nuevo.mesas || []) {
+    if (!quiere(mesa)) continue;
     if (completa) mesa.completa = true;
     else delete mesa.completa;
   }
   return nuevo;
+}
+
+// Pone o quita la venta por mesa en todas las mesas de una banda.
+function marcarMesasDeBanda(plano, sala, id, completa) {
+  const dentro = new Set(mesasDeBanda(sala, id, plano.mesas || []));
+  if (!dentro.size) return { motivo: 'esa banda no tiene mesas' };
+  return marcarVenta(plano, completa, (m) => dentro.has(m.id));
 }
 
 // ---------------------------------------------------------------------------
@@ -3023,15 +3052,8 @@ function cambiarZonaDePiezas(plano, ids, zona) {
 }
 
 // Venta por mesa o por butacas en varias mesas a la vez.
-function marcarVentaDeMesas(plano, ids, completa) {
-  const nuevo = copiarPlano(plano);
-  for (const mesa of nuevo.mesas || []) {
-    if (!ids.includes(mesa.id)) continue;
-    if (completa) mesa.completa = true;
-    else delete mesa.completa;
-  }
-  return nuevo;
-}
+const marcarVentaDeMesas = (plano, ids, completa) =>
+  marcarVenta(plano, completa, (m) => ids.includes(m.id));
 
 // Quita varias piezas del plano. El escenario no se elimina: se quita con su boton.
 function eliminarPiezas(plano, ids) {
@@ -3141,16 +3163,16 @@ function usosDeZona(plano, id) {
   return bandas + piezas + asientos;
 }
 
-// Agrega una zona «Zona N» con precio 0 al final de la lista.
+// Agrega una zona suelta, «Zona» y las siguientes numeradas, con precio 0 al final de
+// la lista. No la ata a ninguna banda: para eso esta zonaNuevaParaBanda.
 function agregarZona(plano) {
   const nuevo = copiarPlano(plano);
   const lista = copiarZonas(zonasDe(nuevo));
   if (lista.length >= ZONAS_MAXIMAS) return { motivo: 'ya hay el máximo de zonas (' + ZONAS_MAXIMAS + ')' };
-  let n = nuevo.siguienteZona || 1;
-  while (lista.some((z) => z.id === 'zona' + n || z.nombre.toLowerCase() === ('zona ' + n))) n++;
-  lista.push({ id: 'zona' + n, nombre: 'Zona ' + n, precio: 0 });
+  const { zona, siguiente } = zonaNueva(lista, nuevo.siguienteZona, 'Zona');
+  lista.push(zona);
   nuevo.zonas = lista;
-  nuevo.siguienteZona = n + 1;
+  nuevo.siguienteZona = siguiente;
   return nuevo;
 }
 
@@ -3229,23 +3251,12 @@ function leerPrecio(texto) {
 // ---------------------------------------------------------------------------
 // Marca o desmarca una mesa como completa. Devuelve el plano nuevo o { motivo }.
 function marcarMesaCompleta(plano, id, completa) {
-  const nuevo = copiarPlano(plano);
-  const mesa = nuevo.mesas.find((m) => m.id === id);
-  if (!mesa) return { motivo: 'esa mesa ya no existe' };
-  if (completa) mesa.completa = true;
-  else delete mesa.completa;
-  return nuevo;
+  if (!(plano.mesas || []).some((m) => m.id === id)) return { motivo: 'esa mesa ya no existe' };
+  return marcarVenta(plano, completa, (m) => m.id === id);
 }
 
 // Lo mismo para todas las mesas del plano.
-function marcarTodasLasMesas(plano, completa) {
-  const nuevo = copiarPlano(plano);
-  for (const mesa of nuevo.mesas) {
-    if (completa) mesa.completa = true;
-    else delete mesa.completa;
-  }
-  return nuevo;
-}
+const marcarTodasLasMesas = (plano, completa) => marcarVenta(plano, completa, () => true);
 
 // Los lugares de una mesa, en orden.
 const lugaresDeMesa = (id, lista) => lista.filter((b) => b.grupo && b.grupo.id === id);
@@ -5430,13 +5441,6 @@ function ejecutarAccion(accion, id = mesaActiva) {
   else conTopeDeAforo(() => transformarMesa(id, accion));
 }
 
-// Zona de un bloque o butaca suelta, y nombre de un bloque o forma.
-function cambiarDatoDeBloque(cambio, mensaje) {
-  const b = piezaPorId(mesaActiva);
-  if (!esBloqueFilas(b) && !esButacaSuelta(b)) return;
-  reemplazarMesa({ ...configDePieza(b), ...cambio });
-  regenerar(mensaje(b));
-}
 // La zona de una pieza con butacas. Vacia es heredar la de su banda: se quita la propia.
 document.getElementById('zona-pieza').addEventListener('change', (e) => {
   if (e.target.value === 'mezcla') return;
@@ -5857,10 +5861,13 @@ function aplicarArea(area, devolver) {
   }
   planos[tipoActual] = resultado.plano;
   const zona = pintando && !devolver && zonas[pincel];
+  // El participio concuerda: «1 butaca bloqueada», no «1 butaca bloqueadas».
+  const una = cambiadas.length === 1;
   regenerar(!cambiadas.length ? 'Ninguna butaca del área cambió.'
     : plural(cambiadas.length, 'butaca', 'butacas') + (pintando
       ? (zona ? ' a la zona ' + zona.nombre + ', ' + dinero(zona.precio) + '.' : ' de vuelta a su zona de siempre.')
-      : (devolver ? ' desbloqueadas.' : ' bloqueadas.')));
+      : (devolver ? (una ? ' desbloqueada.' : ' desbloqueadas.')
+                  : (una ? ' bloqueada.' : ' bloqueadas.'))));
   const aviso = document.getElementById('aviso');
   aviso.textContent = [aviso.textContent,
     ocupadas.length ? plural(ocupadas.length, 'butaca ocupada', 'butacas ocupadas') + ' del área no cambiaron.' : '',

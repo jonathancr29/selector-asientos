@@ -805,6 +805,9 @@ mira cada silla, dónde caben, girar, alargar, cabeceras, un solo lado y sitio p
 evalúa la parte del script anterior a la marca *«Fin de la parte sin DOM»*, así que el proyecto
 sigue siendo un solo archivo. Requiere Node 18 o posterior.
 
+Se ejecutan solas en cada pull request y en cada empujón a `main`
+(`.github/workflows/pruebas.yml`).
+
 ## Qué no incluye
 
 Es la **capa visual**. No trae servidor, ni reserva, ni control de concurrencia, ni pasarela de
