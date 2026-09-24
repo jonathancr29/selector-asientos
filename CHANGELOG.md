@@ -4,10 +4,31 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — La validación del mapa, por partes
+## Sin publicar — Las pruebas ven toda la API sin tener que apuntarla
 
-Rama `claude/partir-validarmapa`. Tercer paso de la revisión (B1). No cambia lo que hace la
-aplicación: se comprobó comparando la salida con la versión anterior en 679 casos.
+Rama `claude/exportar-solo`. Cuarto paso de la revisión (B4). Solo toca `pruebas.mjs`: la
+aplicación no cambia en nada.
+
+### Cambiado
+
+- **La API que ven las pruebas se escanea del propio archivo.** `pruebas.mjs` busca las
+  declaraciones de la columna 0 de la parte sin DOM y las devuelve todas (227), en lugar de la lista
+  de **103 nombres escrita a mano** que había que acordarse de ampliar con cada función nueva. Los
+  tres refactors anteriores añadieron dieciséis funciones y ninguna estaba en esa lista.
+- **Si el escaneo se rompe, lo dice.** Un aviso salta si encuentra menos de 200 declaraciones (la
+  marca se movió, el patrón se rompió) y otro si alguna sentencia declara varios nombres
+  (`const a = 1, b = 2;`), que es la única forma de que se dejara algo en silencio.
+
+### Agregado
+
+- Prueba del propio arnés: que no haya nombres repetidos, que la API tenga tantas claves como
+  declaraciones encontradas y que una muestra de cada tramo del script esté presente.
+
+## 2026-09-24 — PR #36: la validación del mapa, por partes
+
+[PR #36](https://github.com/jonathancr29/selector-asientos/pull/36), fusionado en `main` con el
+commit `52e0592`. Tercer paso de la revisión (B1). No cambia lo que hace la aplicación: se
+comprobó comparando la salida con la versión anterior en 679 casos.
 
 ### Agregado
 

@@ -803,7 +803,8 @@ Cubren la rejilla, el reparto de mesas, el aforo de la tabla anterior, la concil
 selección al cambiar de sala, los tipos de sala y las bandas, y las reglas del editor: geometría de las mesas, hacia dónde
 mira cada silla, dónde caben, girar, alargar, cabeceras, un solo lado y sitio para mesas nuevas; también el mapa en blanco (lienzo, espacios, guías, escenario opcional y mapas versión 4), butacas sueltas y formas, duplicar piezas y bandas, renombrar bandas, subtítulos y selección de bandas por clic. No hay copia del código: `pruebas.mjs` lee `index.html` y
 evalúa la parte del script anterior a la marca *«Fin de la parte sin DOM»*, así que el proyecto
-sigue siendo un solo archivo. Requiere Node 18 o posterior.
+sigue siendo un solo archivo, y la API que ven las pruebas se escanea del propio archivo: una
+función nueva se prueba sin tocar el arnés. Requiere Node 18 o posterior.
 
 Se ejecutan solas en cada pull request y en cada empujón a `main`
 (`.github/workflows/pruebas.yml`).

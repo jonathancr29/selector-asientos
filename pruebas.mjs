@@ -15,29 +15,53 @@ const inicio = html.indexOf('<script>') + '<script>'.length;
 const fin = html.indexOf('// === Fin de la parte sin DOM');
 assert.ok(inicio > 0 && fin > inicio, 'no se encontro la parte sin DOM en index.html');
 
-const cargar = () => new Function(html.slice(inicio, fin) +
-  '\nreturn { ANCHO_SALA, LARGO_MAXIMO, ESTILOS, rejillaDeSala, repartirMesas, generarPlano, butacas,' +
-  ' muebles, mesas, conciliarSeleccion, geometriaMesa, celdasOcupadas, motivoNoCabe, buscarHueco,' +
-  ' colocarCerca, girarPieza, cambiarLargo, alternarCabeceras, alternarUnLado, buscarSitioLibre,' +
-  ' TIPOS_DE_SALA, primeraPiezaQueNoCabe, redimensionarBanda, moverBanda, eliminarBanda, agregarBanda,' +
-  ' cambiarZonaBanda, planoDesdeSala, alternarBloqueada, mapaDesdePlano, validarMapa, registrarMapa,' +
-  ' claveDeMapa, nombreDeArchivo, FORMATO_MAPA, rejillaDeBloques, distribucionDePasillos, distribucionDeSala,' +
-  ' leerDistribucion, cambiarDistribucion, geometriaBloqueFilas, bloquesFilas, cambiarAncho,' +
-  ' cambiarFilasBloque, letraDeFila, escenario, girarEscenario, cambiarTamanoEscenario,' +
-  ' giroHaciaEscenario, disponerBandas, hojasDe, ubicar, agregarVertical, cambiarAnchoVertical,' +
-  ' agregarBandaEnVertical, duplicarPieza, duplicarBanda, renombrarBanda, capasDe, bandaEnCelda,' +
-  ' alternarGuias, quitarEscenario, agregarEscenario, cambiarAnchoLienzo,' +
-  ' formas, butacasSueltas, cambiarTamanoForma,' +
-  ' FILAS_MAXIMAS, BUTACAS_MAXIMAS, motivoDeAforo,' +
-  ' zonas, editarZona, agregarZona, eliminarZona, leerPrecio, usosDeZona,' +
-  ' zonaEnCelda, fijarZonasSueltas, zonaExclusivaDeBanda, zonaNuevaParaBanda, mesasDeBanda,' +
-  ' marcarMesasDeBanda, areaDeCeldas, butacasEnArea, asignarZonaEnArea, bloquearEnArea,' +
-  ' tiradoresDeSala, redimensionarConTirador,' +
-  ' piezasEnMarco, cajaDePiezas, moverPiezas, duplicarPiezas, eliminarPiezas,' +
-  ' aplicarConfigs, cambiarZonaDePiezas, marcarVentaDeMesas,' +
-  ' geometriaMesaRedonda, cambiarLugaresRedonda, huellaDe,' +
-  ' marcarMesaCompleta, marcarTodasLasMesas, alternarEleccion, completarMesasElegidas,' +
-  ' asignarZonaAsiento };')();
+const fuente = html.slice(inicio, fin);
+// La API que ven las pruebas es todo lo que la parte sin DOM declara arriba del todo. Se
+// escanea en vez de escribirse: antes era una lista de 103 nombres a mano, y cada funcion
+// nueva que se quisiera probar habia que acordarse de añadirla ahi (paso varias veces).
+// La parte sin DOM solo declara «function x(» y «const/let x =» en la columna 0, sin
+// comas ni var, asi que un solo patron los coge todos.
+const declarados = [...fuente.matchAll(/^(?:function\s+|(?:const|let)\s+)([A-Za-z_$][A-Za-z0-9_$]*)/gm)]
+  .map((m) => m[1]);
+assert.ok(declarados.length > 200,
+  'el escaneo de la parte sin DOM solo encontro ' + declarados.length + ' declaraciones: ¿se movio la marca?');
+// Un «const a = 1, b = 2;» arriba del todo dejaria a 'b' fuera del escaneo y la prueba que
+// lo usara fallaria sin decir por que. La coma que separa dos nombres es la que queda fuera
+// de parentesis, corchetes, llaves y cadenas; las de dentro son de un objeto o una lista.
+const separaNombres = (linea) => {
+  let profundidad = 0, cadena = null;
+  for (let i = 0; i < linea.length; i++) {
+    const c = linea[i];
+    if (cadena) {
+      if (linea.charCodeAt(i) === 92) i++;
+      else if (c === cadena) cadena = null;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === '`') cadena = c;
+    else if ('([{'.includes(c)) profundidad++;
+    else if (')]}'.includes(c)) profundidad--;
+    else if (c === ',' && profundidad === 0) return true;
+    else if (c === '/' && linea[i + 1] === '/') break;
+  }
+  return false;
+};
+const conComa = fuente.split('\n').find((l) => /^(?:const|let)\s/.test(l) && separaNombres(l));
+assert.ok(!conComa, 'la parte sin DOM declara varios nombres en una sentencia:\n  ' +
+  String(conComa).trim() + '\nSepáralos, o el escaneo se deja todos menos el primero.');
+
+const cargar = () => new Function(fuente + '\nreturn { ' + declarados.join(', ') + ' };')();
+
+test('la API de las pruebas se escanea sola, sin lista que mantener', () => {
+  assert.equal(new Set(declarados).size, declarados.length, 'hay nombres repetidos en el escaneo');
+  const api = cargar();
+  assert.equal(Object.keys(api).length, declarados.length);
+  // Una muestra de cada tramo del script, para que un escaneo a medias no pase por bueno.
+  for (const nombre of ['rejillaDeBloques', 'generarPlano', 'geometriaMesa', 'disponerBandas',
+                        'validarMapa', 'listaDeMapa', 'marcarVenta', 'recorrerArea', 'zonaNueva',
+                        'conciliarSeleccion']) {
+    assert.equal(typeof api[nombre], 'function', nombre + ' no salio en el escaneo');
+  }
+});
 
 const DISPOSICIONES = ['ninguno', 'izquierda', 'derecha', 'ambos'];
 const rango = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);

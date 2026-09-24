@@ -115,6 +115,12 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   `elegidas` (ids) y las mesas editadas son `planos`: el DOM los refleja, no los contiene.
 - **Nada del DOM antes de la marca «Fin de la parte sin DOM».** Si una función de esa parte usa
   `document`, `svg` o similares, las pruebas fallan al evaluarla en Node.
+- **Las pruebas ven toda la parte sin DOM sin tener que apuntarla.** `pruebas.mjs` escanea las
+  declaraciones de la columna 0 y las devuelve todas, así que una función nueva se puede probar sin
+  tocar el arnés (antes había una lista de 103 nombres a mano y se olvidaba). A cambio, **una
+  sentencia declara un solo nombre**: con `const a = 1, b = 2;` en la columna 0 el escaneo se
+  quedaría con `a`, así que el arnés lo detecta y falla diciéndolo. Si mueves la marca o rompes el
+  patrón, salta un aviso con el número de declaraciones encontradas en vez de fallar todo a ciegas.
 - **Cada tipo de sala define sus pasillos y sus bandas.** Para una sala nueva, agrega una entrada a
   `TIPOS_DE_SALA`; el selector la muestra solo.
 - **Toda columna sale de `rejillaDeBloques`.** Una butaca de fila va a `columnas[numero - 1]`, nunca a
