@@ -73,7 +73,8 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    **Árbol de bandas:** `disponerBandas` (coloca el árbol y devuelve bandas colocadas, regiones y error),
    `hojasDe`, `ubicar`, `idsDentro`, `copiarBandas`, `columnasDeBanda` y `reanclarPiezas`.
    **Varias piezas:** `piezasEnMarco` (la regla de la mitad), `cajaDePiezas`, `moverPiezas` (todo o
-   nada), `duplicarPiezas` (conserva las distancias) y `eliminarPiezas`.
+   nada), `duplicarPiezas` (conserva las distancias), `eliminarPiezas`, `aplicarConfigs` (transformar
+   varias, con desplazamiento comun si hace falta), `cambiarZonaDePiezas` y `marcarVentaDeMesas`.
    **Tiradores:** `tiradoresDeSala` (donde va cada agarre) y `redimensionarConTirador` (aplica el
    alto de la banda y el ancho de su vertical de una vez, o ninguno).
    **Areas:** `areaDeCeldas` (rectangulo con las esquinas en cualquier orden), `butacasEnArea`,
@@ -207,6 +208,19 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - **Mover varias es todo o nada:** `moverPiezas` comprueba todas contra `celdasOcupadas(new Set(ids))`
   —las celdas del propio grupo no estorban, porque viajan juntas— y si una falla no mueve ninguna.
   `excluida` es lo que permite excluir un id o un conjunto.
+- **Transformar varias pasa por `aplicarConfigs`:** el que llama calcula las configuraciones nuevas
+  con las mismas funciones puras que una sola pieza (`TRANSFORMACIONES[accion].calcular`) y
+  `aplicarConfigs` las escribe si caben. Si no caben donde están, prueba desplazar el **grupo entero**
+  hasta dos celdas (`DESPLAZAMIENTOS_DE_GRUPO`, de menos a más) en vez de mover una sola, que
+  desbarataría las distancias. Devuelve `{ plano, dx, dy }` o `{ motivo }`, y el motivo es el de
+  quedarse en su sitio, que es el que explica algo.
+- **Una acción de grupo solo se ofrece si todas la admiten** (`aplica(accion, pieza)` para cada una);
+  el panel las desactiva y `ejecutarAccion` lo vuelve a comprobar.
+- **Los textos de grupo van en femenino plural** (`HECHO_EN_GRUPO`): los de una sola pieza concuerdan
+  con ella («girada», «alargado») y no sirven para varias.
+- **Estados mixtos del panel:** con varias seleccionadas, `comun(valor)` devuelve el valor compartido
+  o `undefined`; el selector de zona añade «— varias zonas —» (`mezcla`) y el de venta, «Venta
+  mixta». Elegir una opción la aplica a todas. El nombre no se edita con varias: es de cada pieza.
 - **Una sola banda seleccionada:** `bandaActiva` y la selección de piezas se excluyen
   (`marcarBandaActiva` y `marcarActivas` limpian la otra). Todo se vacía al cambiar de modo,
   herramienta o sala.
@@ -393,9 +407,11 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
      franja; clic en el fondo para seleccionar bandas (y subir de nivel); renombrar en el panel y con
      doble clic en un subtítulo; que los subtítulos se lean en Previsualizar sin tapar clics.
    - **Varias piezas:** marquesina en el fondo (y con Ctrl, sumando), Ctrl+clic, arrastrar el grupo,
-     flechas, Ctrl+D y Supr; que un destino imposible no mueva nada y diga cuál estorba; que con
-     varias seleccionadas las transformaciones de una sola queden desactivadas; y que un clic seco en
-     el fondo siga seleccionando bandas.
+     flechas, Ctrl+D y Supr; que un destino imposible no mueva nada y diga cuál estorba; girar y
+     alargar el grupo (y que se desplace entero si hace falta); zona y venta con estado mixto
+     («— varias zonas —», «Venta mixta»); que una acción que no admiten todas quede desactivada; que
+     un clic seco en una pieza del grupo deje solo esa; y que un clic seco en el fondo siga
+     seleccionando bandas.
    - **Tiradores:** arrastrar la esquina de un espacio (alto), la de un espacio dentro de una vertical
      (alto y ancho a la vez), y el borde entre verticales; que el fantasma se tope en los límites, que
      Esc cancele, que un clic seco seleccione la banda, que no haya tiradores en Previsualizar ni con

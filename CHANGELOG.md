@@ -4,9 +4,30 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Selección múltiple de piezas
+## Sin publicar — Transformar, zona y venta con varias piezas
 
-Rama `claude/seleccion-multiple`.
+Rama `claude/grupo-acciones`.
+
+### Agregado
+
+- **Girar, alargar, acortar, cabeceras y los lados funcionan con varias piezas a la vez.** Cada una
+  cambia sobre su propio sitio y es todo o nada; si el grupo transformado no cabe donde está, se
+  desplaza **entero** unas celdas para caber y se avisa.
+- Una acción de grupo solo se ofrece si **todas** las seleccionadas la admiten: con una mesa y un
+  bloque juntos, girar sí y cabeceras no.
+- **Zona y venta en grupo:** los dos selectores aplican a todas las seleccionadas. Cuando no
+  coinciden lo dicen —«— varias zonas —» y «Venta mixta»— y al elegir una opción todas quedan igual.
+- Un **clic seco** en una pieza del grupo deja seleccionada solo esa, para salir de la selección
+  múltiple sin ir al fondo.
+
+### Cambiado
+
+- El **nombre** no se edita con varias piezas seleccionadas: es de cada pieza, y el campo lo dice.
+
+## 2026-09-23 — PR #30: selección múltiple de piezas
+
+[PR #30](https://github.com/jonathancr29/selector-asientos/pull/30), fusionado en `main` con el
+commit `efa9758`.
 
 ### Agregado
 
