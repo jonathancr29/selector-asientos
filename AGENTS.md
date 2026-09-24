@@ -72,6 +72,8 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    `agregarSubtitulos` (muebles `subtitulo`), `copiarBloqueadas` y `sitioParaCopia`.
    **Árbol de bandas:** `disponerBandas` (coloca el árbol y devuelve bandas colocadas, regiones y error),
    `hojasDe`, `ubicar`, `idsDentro`, `copiarBandas`, `columnasDeBanda` y `reanclarPiezas`.
+   **Areas:** `areaDeCeldas` (rectangulo con las esquinas en cualquier orden), `butacasEnArea`,
+   `asignarZonaEnArea`, `bloquearEnArea` y `mesasConZonasMezcladas`.
    **Bloqueos y mapas:** `idsBloqueadosPorBandas`, `alternarBloqueada`, `mapaDesdePlano`,
    `validarMapa`, `definicionDeMapa`, `registrarMapa`, `claveDeMapa`, `nombreDeArchivo`.
 6. **Selección sin DOM:** `elegidas` (un `Set` de ids) y `conciliarSeleccion`.
@@ -116,6 +118,20 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - **Ninguna pieza con butacas se queda sin zona:** si no cae dentro de ninguna banda con zona,
   `fijarZonasSueltas` (que llama `regenerar`) le escribe la suya y el aviso lo dice. Si añades una
   forma de crear o mover piezas, no la saltes.
+- **Las operaciones por area devuelven lo que pasó:** `asignarZonaEnArea` y `bloquearEnArea` dan
+  `{ plano, cambiadas, ocupadas }` (y la primera, `mesas` con las mesas completas que quedan con dos
+  zonas). Las **ocupadas nunca cambian**, ni de zona ni de bloqueo, y se devuelven para avisar. Pintar
+  la zona que una butaca ya tiene no cuenta como cambio, y asignar la de siempre **borra** la entrada
+  de `zonasDeAsiento`: el mapa no guarda lo que ya se hereda.
+- **Con una herramienta de butacas, el arrastre es del rectángulo, no del plano:** `arrastre.area` lo
+  marca en `pointerdown`, `pointermove` lo dibuja y sale antes de mover la vista, y `pointerup` lo
+  aplica si hubo movimiento (si no, sigue siendo un clic sobre la butaca). El plano se mueve con la
+  barra espaciadora (`espacioPulsado`), el botón central (`e.button === 1`) o dos dedos, y un segundo
+  dedo cancela el área. Por eso, con estas herramientas la barra espaciadora **no** activa la butaca
+  enfocada: se reserva para desplazar, y Enter es lo que aplica.
+- **El área se borra al cambiar de modo o de herramienta** (`limpiarArea` en `cambiarModo` y
+  `cambiarHerramienta`) y al mover el foco sin Mayús. Vive en su propia capa, `#area`, que
+  `dibujarTodo` no toca.
 - **Zona por asiento (`plano.zonasDeAsiento`):** se aplica en `generarPlano` **después** de
   `numerarFilas`, así que cambia `zona` y `seccion` pero no `fila` ni `numero`. Cada butaca guarda
   `zonaOriginal`; `planoDesdeSala` extrae las que difieren. Asignar la zona original quita la entrada
@@ -349,6 +365,10 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    - **Duplicar y nombres:** Duplicar y Ctrl+D en una mesa, un bloque, una banda, una vertical y una
      franja; clic en el fondo para seleccionar bandas (y subir de nivel); renombrar en el panel y con
      doble clic en un subtítulo; que los subtítulos se lean en Previsualizar sin tapar clics.
+   - **Por área:** con *Asignar zona* y con *Bloquear butacas*, arrastrar un rectángulo y aplicarlo,
+     Alt para deshacerlo, Mayús+flechas y Enter con el teclado, Esc para cancelar, el conteo mientras
+     se arrastra, que las ocupadas no cambien y se avisen, y que el plano siga moviéndose con la barra
+     espaciadora, el botón central y dos dedos.
    - **Mapas:** bloquear y desbloquear butacas; guardar con nombre y recargar; exportar e importar;
      importar un archivo dañado; eliminar. `localStorage` no funciona en páginas `data:`: para
      probar el guardado, sirve la carpeta por HTTP.
@@ -362,4 +382,3 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - Decidir si una mesa con lugares ocupados se puede mover, acortar o eliminar (hoy sí, con aviso).
 - Más formas: escenario secundario, cabina de DJ, columna.
 - Comprobar que las piezas caben sin recalcular las celdas por cada pieza (cuadrático con muchas piezas).
-- Asignar zona por área (un rectángulo de butacas de una vez).

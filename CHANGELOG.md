@@ -4,9 +4,31 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Un solo panel: bandas con su precio
+## Sin publicar — Asignar zona y bloquear por área
 
-Rama `claude/panel-de-zonas`.
+Rama `claude/zona-por-area`.
+
+### Agregado
+
+- **Pintar un área en vez de butaca por butaca.** Con *Asignar zona* o *Bloquear butacas*, arrastrar
+  sobre el plano dibuja un rectángulo con el número de butacas que abarca y, al soltar, se aplica a
+  todas las libres de dentro. Con **Alt** se deshace: vuelven a su zona de siempre, o se desbloquean.
+- **Con el teclado:** Mayús + flechas extienden el área desde la butaca enfocada, Enter la aplica,
+  Alt+Enter la deshace y Esc la cancela.
+- Las **butacas ocupadas** del área no cambian y se dicen en el aviso; si una mesa que se vende
+  completa queda con lugares de dos zonas, también se avisa.
+
+### Cambiado
+
+- Con esas dos herramientas, **el arrastre es del rectángulo**: el plano se mueve con la barra
+  espaciadora, el botón central del ratón o dos dedos. Por lo mismo, la barra espaciadora ya no marca
+  la butaca enfocada mientras están activas; Enter es lo que aplica.
+- Las pistas de las dos herramientas explican el área y cómo desplazar el plano.
+
+## 2026-09-23 — PR #27: un solo panel, bandas con su precio
+
+[PR #27](https://github.com/jonathancr29/selector-asientos/pull/27), fusionado en `main` con el
+commit `cc22e7a`.
 
 ### Cambiado
 

@@ -236,6 +236,22 @@ asignársela; otro clic la devuelve a su zona de siempre.
   puede eliminar.
 - Se guarda en el mapa como `zonasDeAsiento` (asiento → zona) y se copia al duplicar piezas o bandas.
 
+**Por área, no de una en una.** Butaca por butaca vale para dos retoques, no para «las tres primeras
+filas del bloque central». Con *Asignar zona* o *Bloquear butacas* activadas:
+
+- **Arrastra sobre el plano:** sale un rectángulo con el número de butacas que abarca y, al soltar, se
+  aplica a todas las libres que quedan dentro. Con **Alt** hace lo contrario: las devuelve a su zona de
+  siempre, o las desbloquea.
+- **Con el teclado:** **Mayús + flechas** extienden el área desde la butaca enfocada, **Enter** la
+  aplica, **Alt+Enter** la deshace y **Esc** la cancela.
+- **El plano se mueve** con la barra espaciadora, el botón central del ratón o dos dedos: mientras
+  estas herramientas están activas, el arrastre es del rectángulo. Con ellas, la barra espaciadora ya
+  no marca la butaca enfocada; para eso está Enter.
+- Las **butacas ocupadas** del área no cambian y se dicen en el aviso. Si una mesa que se vende
+  completa queda con lugares de dos zonas, también se avisa: su precio deja de ser el de una sola zona.
+- Solo se guarda lo que se aparta de su zona de siempre, así que pintar un área y devolverla deja el
+  mapa como estaba.
+
 ### Nombres, capas y selección de bandas
 
 **Subtítulos.** El nombre de cada banda se dibuja en el plano, también en **Previsualizar**:
@@ -643,7 +659,8 @@ a todo el ancho de la sala (2 filas de alto), pero en el editor se agarra y se e
 ### Butacas bloqueadas
 
 Con **Bloquear butacas** activado, cada clic (o Enter) sobre una butaca la bloquea o desbloquea: por
-ejemplo, butacas sin visibilidad. Vale para butacas de fila y lugares de mesa; las ocupadas no se
+ejemplo, butacas sin visibilidad. **Arrastrando se bloquea un área entera** (con Alt, se desbloquea),
+igual que al asignar zona. Vale para butacas de fila y lugares de mesa; las ocupadas no se
 pueden bloquear. Si una butaca elegida queda bloqueada, se suelta con aviso. Las bloqueadas son
 parte del diseño del recinto y se guardan con el mapa.
 
@@ -718,7 +735,6 @@ seguir usando **Exportar JSON**.
 - **Comprobar que las piezas caben con menos recorridos:** hoy se recalculan las celdas ocupadas una
   vez por pieza, lo que con muchísimas mesas y bloques en una sala grande sería cuadrático. Con el
   aforo máximo actual no se nota.
-- **Asignar zona por área:** pintar un rectángulo de butacas de una vez, en lugar de una a una.
 - **Más formas:** escenario secundario, cabina de DJ, columna u otros obstáculos del recinto.
 
 ## Pruebas

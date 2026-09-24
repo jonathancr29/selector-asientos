@@ -31,7 +31,7 @@ const cargar = () => new Function(html.slice(inicio, fin) +
   ' FILAS_MAXIMAS, BUTACAS_MAXIMAS, motivoDeAforo,' +
   ' zonas, editarZona, agregarZona, eliminarZona, leerPrecio, usosDeZona,' +
   ' zonaEnCelda, fijarZonasSueltas, zonaExclusivaDeBanda, zonaNuevaParaBanda, mesasDeBanda,' +
-  ' marcarMesasDeBanda,' +
+  ' marcarMesasDeBanda, areaDeCeldas, butacasEnArea, asignarZonaEnArea, bloquearEnArea,' +
   ' geometriaMesaRedonda, cambiarLugaresRedonda, huellaDe,' +
   ' marcarMesaCompleta, marcarTodasLasMesas, alternarEleccion, completarMesasElegidas,' +
   ' asignarZonaAsiento };')();
@@ -2209,4 +2209,78 @@ test('la venta por mesa se puede poner y quitar en toda una zona de mesas', () =
   assert.equal(porButacas.mesas.some((m) => m.completa), false);
   assert.equal(plano.mesas.some((m) => m.completa), false);   // no toca el plano de entrada
   assert.deepEqual(api.marcarMesasDeBanda(plano, sala, 'luneta', true), { motivo: 'esa banda no tiene mesas' });
+});
+
+// --- Asignar zona y bloquear por area -----------------------------------------------
+
+// El area de la Luneta de «ambos»: filas 2 a 4, columnas 1 a 15 (con dos pasillos).
+const areaLuneta = { x1: 1, y1: 2, x2: 5, y2: 3 };
+
+test('un area es un rectangulo de celdas con las esquinas en cualquier orden', () => {
+  const api = cargar();
+  assert.deepEqual(api.areaDeCeldas({ x: 5, y: 9 }, { x: 2, y: 3 }), { x1: 2, y1: 3, x2: 5, y2: 9 });
+  assert.deepEqual(api.areaDeCeldas({ x: 2, y: 3 }, { x: 2, y: 3 }), { x1: 2, y1: 3, x2: 2, y2: 3 });
+  api.generarPlano('mixta-ambos');
+  const dentro = api.butacasEnArea(api.butacas, areaLuneta).map((b) => b.id);
+  // Dos filas de la Luneta, hasta la columna 5 (la 5 es pasillo, asi que son 4 butacas).
+  assert.deepEqual(dentro, ['luneta-A1', 'luneta-A2', 'luneta-A3', 'luneta-A4',
+                            'luneta-B1', 'luneta-B2', 'luneta-B3', 'luneta-B4']);
+});
+
+test('asignarZonaEnArea pinta las butacas libres del area y deja las ocupadas', () => {
+  const api = cargar();
+  const vip = conVip(api);
+  api.generarPlano('mixta-ambos', vip);
+  const { plano, cambiadas, ocupadas } = api.asignarZonaEnArea(vip, api.butacas, areaLuneta, 'zona1');
+  assert.equal(cambiadas.length, 8);
+  assert.deepEqual(ocupadas, []);
+  assert.equal(vip.zonasDeAsiento['luneta-A1'], undefined);   // no toca el plano de entrada
+  api.generarPlano('mixta-ambos', plano);
+  assert.equal(etiqueta(api, 'luneta-A1'), 'VIP A1');
+  // Las ocupadas (B5 y B6 de la plantilla) no cambian, y se devuelven para avisar.
+  const conOcupadas = api.asignarZonaEnArea(vip, api.butacas, { x1: 4, y1: 3, x2: 8, y2: 3 }, 'zona1');
+  assert.deepEqual(conOcupadas.ocupadas, ['luneta-B5', 'luneta-B6']);
+  assert.equal(conOcupadas.cambiadas.includes('luneta-B5'), false);
+  // Sin zona, vuelven a la suya de siempre: el mapa se queda sin entradas.
+  const vuelta = api.asignarZonaEnArea(plano, api.butacas, areaLuneta, '');
+  assert.deepEqual([vuelta.cambiadas.length, vuelta.plano.zonasDeAsiento], [8, {}]);
+  // Pintar lo que ya esta pintado no cuenta como cambio.
+  api.generarPlano('mixta-ambos', plano);
+  assert.deepEqual(api.asignarZonaEnArea(plano, api.butacas, areaLuneta, 'zona1').cambiadas, []);
+});
+
+test('pintar un area avisa de las mesas completas que quedan con dos zonas', () => {
+  const api = cargar();
+  const vip = api.marcarMesaCompleta(conVip(api), 'M1', true);
+  const sala = api.generarPlano('mixta-ambos', vip);
+  const mesa = api.mesas.find((m) => m.id === 'M1');
+  // Media mesa: solo su fila de arriba entra en el area.
+  const media = { x1: mesa.x, y1: mesa.y, x2: mesa.x + mesa.geo.ancho - 1, y2: mesa.y };
+  assert.deepEqual(api.asignarZonaEnArea(vip, api.butacas, media, 'zona1').mesas, ['Mesa 1']);
+  // Entera: todos sus lugares en la misma zona, nada que avisar.
+  const entera = { x1: mesa.x, y1: mesa.y, x2: mesa.x + mesa.geo.ancho - 1, y2: mesa.y + mesa.geo.alto - 1 };
+  assert.deepEqual(api.asignarZonaEnArea(vip, api.butacas, entera, 'zona1').mesas, []);
+  void sala;
+});
+
+test('bloquearEnArea bloquea y desbloquea el area, sin tocar las ocupadas', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  api.generarPlano('mixta-ambos', plano);
+  const { plano: bloqueado, cambiadas } = api.bloquearEnArea(plano, api.butacas, areaLuneta, true);
+  assert.equal(cambiadas.length, 8);
+  assert.equal(bloqueado.bloqueadas.filter((id) => id.startsWith('luneta-')).length, 8);
+  api.generarPlano('mixta-ambos', bloqueado);
+  assert.equal(api.butacas.find((b) => b.id === 'luneta-A1').estado, 'bloqueada');
+  // Volver a bloquear lo ya bloqueado no cambia nada; desbloquear lo devuelve.
+  assert.deepEqual(api.bloquearEnArea(bloqueado, api.butacas, areaLuneta, true).cambiadas, []);
+  const libre = api.bloquearEnArea(bloqueado, api.butacas, areaLuneta, false);
+  assert.deepEqual([libre.cambiadas.length, libre.plano.bloqueadas.filter((id) => id.startsWith('luneta-')).length],
+    [8, 0]);
+  // Una butaca ocupada no se bloquea.
+  api.generarPlano('mixta-ambos', plano);
+  const conOcupadas = api.bloquearEnArea(plano, api.butacas, { x1: 4, y1: 3, x2: 8, y2: 3 }, true);
+  assert.deepEqual(conOcupadas.ocupadas, ['luneta-B5', 'luneta-B6']);
+  assert.equal(conOcupadas.plano.bloqueadas.includes('luneta-B5'), false);
+  assert.deepEqual(plano.bloqueadas.filter((id) => id.startsWith('luneta-')), []);   // no toca el de entrada
 });
