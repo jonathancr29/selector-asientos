@@ -4,10 +4,36 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Recintos anchos: hasta 300 columnas
+## Sin publicar — Un cuarto de nodos menos en el plano
 
-Rama `claude/salas-anchas`. Sale de comprobar si cabía un recinto de 20.000 asistentes: cabía en
-aforo, pero no en forma.
+Rama `claude/render-mas-ligero`. La fase barata del render incremental (B2). No cambia nada de lo
+que se ve ni de lo que se puede hacer.
+
+### Cambiado
+
+- **La palomita de una butaca solo se crea cuando se ve.** Estaba en las 18.000 butacas libres de un
+  recinto grande, oculta por CSS hasta que se elegía: **la cuarta parte de los nodos del plano**. Ahora
+  la pone `ponerMarca` al elegir la butaca, y `dibujarButacas` solo la incluye en las ocupadas, las
+  bloqueadas y las que ya están marcadas. Con 18.720 butacas, el plano baja de **74.880 a 56.160
+  nodos**, exactamente un 25 % menos.
+- **Las butacas se injertan de una vez**, armadas en un `DocumentFragment`.
+
+### Medido
+
+Redibujar el plano bajó entre un **13 % y un 23 %** en las mediciones estables (18.720 butacas: 337 →
+292 ms; 12.480: 229 → 181 ms; 6.240: 107 → 82 ms). **Por debajo del 30-40 % que se había estimado**, y
+la razón está medida: lo que cuesta es *crear* los nodos y ponerles los atributos, no injertarlos, así
+que el fragmento aporta poco y la mejora es casi toda el nodo que se dejó de crear. Clonar un molde en
+vez de crear cada nodo se probó y daba solo un 12 % más, que no compensaba la complejidad.
+
+**Editar un recinto de 20.000 butacas sigue costando cientos de milisegundos por acción.** Lo único
+que cambia eso de orden de magnitud es no rehacer los nodos que no han cambiado, que es la fase cara.
+
+## 2026-09-24 — PR #38: recintos anchos, hasta 300 columnas
+
+[PR #38](https://github.com/jonathancr29/selector-asientos/pull/38), fusionado en `main` con el
+commit `05eba4e`. Salió de comprobar si cabía un recinto de 20.000 asistentes: cabía en aforo, pero
+no en forma.
 
 ### Cambiado
 

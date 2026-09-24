@@ -92,7 +92,8 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 6. **Selección sin DOM:** `elegidas` (un `Set` de ids) y `conciliarSeleccion`.
 7. **Marca `// === Fin de la parte sin DOM`.** `pruebas.mjs` evalúa en Node todo lo anterior a
    esta línea.
-8. **Render:** `dibujarMuebles` (con límites de banda en el editor), `dibujarButacas`, `dibujarPiezas`,
+8. **Render:** `dibujarMuebles` (con límites de banda en el editor), `dibujarButacas` (con
+   `ponerMarca`), `dibujarPiezas`,
    `dibujarTodo`, y el panel de bandas: `dibujarBandas`, `aplicarBandas`.
 9. **Zoom y desplazamiento:** mueven el `viewBox` (`vista`, `aplicarVista`, `escalar`), con rueda,
    punteros (arrastre y pellizco) y botones.
@@ -300,6 +301,18 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - **Nada desaparece en silencio.** Si se suelta una butaca elegida, el aviso la nombra y dice por
   qué. Si una mesa no cabe, se anuncia el motivo. Si acortar, quitar cabeceras o eliminar quita
   lugares ocupados, se avisa.
+- **La marca de una butaca solo existe si se ve.** `ponerMarca(b)` la crea y la cuelga de su `<g>`, y
+  no hace nada si ya esta. `dibujarButacas` la pone en las ocupadas y bloqueadas (que la ensenan
+  siempre) y en las elegidas o marcadas por el pincel; en una butaca libre sin elegir **no se crea**,
+  porque estaba ahi oculta por CSS y era la cuarta parte de los nodos del plano (74.880 a 56.160 con
+  18.720 butacas). Quien encienda la clase `elegida` a mano tiene que llamar antes a `ponerMarca`:
+  hoy solo lo hace `alternar`, porque el pincel y el bloqueo pasan por `regenerar`. Al soltar la
+  butaca la marca **se queda**, oculta por CSS: quitarla costaria mas que dejarla.
+- **Las butacas se injertan de una vez:** `dibujarButacas` arma los nodos en un `DocumentFragment` y
+  lo cuelga al final. Pero lo que de verdad cuesta es **crear** los nodos y ponerles los atributos, no
+  injertarlos, asi que no esperes milagros de mover el injerto: medido, clonar un molde en vez de
+  crear cada nodo daba solo un 12% y no valia la complejidad. Lo unico que cambia el orden de magnitud
+  es no rehacer los nodos que no cambian.
 - **Accesibilidad:**
   - Cada butaca es `role="checkbox"` con `aria-label`; cada mesa del editor, `role="button"` con
     `aria-pressed` si es la activa.
