@@ -2424,19 +2424,50 @@ function nombreDeArchivo(nombre) {
   return (base || 'mapa') + '.json';
 }
 
-// Devuelve { mapa } limpio y valido, o { errores: [...] } en palabras. Genera el
-// plano para comprobar que las mesas quepan: cambia butacas, muebles y mesas, asi
-// que quien la llame debe volver a generar su sala despues.
-function validarMapa(dato) {
-  if (!dato || typeof dato !== 'object' || Array.isArray(dato)) return { errores: ['el archivo no contiene un mapa'] };
-  if (dato.formato !== FORMATO_MAPA) return { errores: ['no es un mapa de este selector de asientos'] };
-  if (![1, 2, 3, VERSION_MAPA].includes(dato.version)) {
-    return { errores: ['versión de mapa no compatible (' + dato.version + ')'] };
-  }
-  const errores = [];
+// Validacion de un mapa, por partes.
+//
+// Cada parte recibe la lista de 'errores' y la va llenando; ninguna corta, para que un
+// archivo malo diga de una vez todo lo que le pasa. El orden en que validarMapa las llama
+// es el orden en que salen los errores.
 
-  const nombre = typeof dato.nombre === 'string' ? dato.nombre.trim() : '';
-  if (!nombre || nombre.length > 80) errores.push('el nombre debe tener entre 1 y 80 caracteres');
+// Lo que impide siquiera mirar el archivo. Devuelve el motivo, o null si se puede seguir.
+function motivoDeCabecera(dato) {
+  if (!dato || typeof dato !== 'object' || Array.isArray(dato)) return 'el archivo no contiene un mapa';
+  if (dato.formato !== FORMATO_MAPA) return 'no es un mapa de este selector de asientos';
+  if (![1, 2, 3, VERSION_MAPA].includes(dato.version)) return 'versión de mapa no compatible (' + dato.version + ')';
+  return null;
+}
+
+// Recorre una lista de piezas del mapa: comprueba el id contra su patron, aparta los
+// repetidos y deja que 'limpiar' valide lo demas y devuelva la pieza limpia. 'como' es
+// como se nombra la pieza mientras no hay id de fiar («mesa 2: id no válido»); pasado ese
+// punto, el id ya sirve de etiqueta («M2: giro no válido»), salvo que 'etiqueta' diga otra
+// cosa. Devuelve { limpias, ids }; las que fallan el id quedan como null, y para entonces
+// ya hay errores y el mapa no se llega a montar.
+function listaDeMapa(lista, { como, patron, errores, limpiar, etiqueta = (p) => p.id }) {
+  const ids = new Set();
+  const limpias = (Array.isArray(lista) ? lista : []).map((p, i) => {
+    if (!p || typeof p.id !== 'string' || !patron.test(p.id) || ids.has(p.id)) {
+      errores.push(como + ' ' + (i + 1) + ': id no válido o repetido');
+      return null;
+    }
+    ids.add(p.id);
+    return limpiar(p, (queja) => errores.push(etiqueta(p, i) + ': ' + queja));
+  });
+  return { limpias, ids };
+}
+
+// Una lista que los mapas anteriores no traian: sin ella, vacia; con algo que no es una
+// lista, un error y vacia.
+function listaOpcionalDeMapa(dato, campo, nombreLista, errores) {
+  if (dato[campo] === undefined) return [];
+  if (Array.isArray(dato[campo])) return dato[campo];
+  errores.push('la lista de ' + nombreLista + ' no es válida');
+  return [];
+}
+
+// Las columnas de toda la sala. La version 1 las guardaba como una disposicion con nombre.
+function columnasDeMapa(dato, errores) {
   let distribucion = null;
   if (dato.version === 1) {
     if (PASILLOS_VALIDOS.includes(dato.pasillos)) distribucion = distribucionDePasillos(dato.pasillos);
@@ -2447,43 +2478,40 @@ function validarMapa(dato) {
     if (motivo) errores.push('columnas: ' + motivo);
     else distribucion = { bloques: [...d.bloques], pasillos: [...d.pasillos] };
   }
-
   const lienzo = dato.lienzo === true;
   if (dato.lienzo !== undefined && typeof dato.lienzo !== 'boolean') errores.push('lienzo debe ser true o false');
   if (lienzo && distribucion && distribucion.bloques.length !== 1) errores.push('un lienzo no tiene pasillos');
-  // Zonas: opcionales (sin ellas, las de siempre). Van antes que las bandas, que las usan.
-  let zonasLimpias = copiarZonas(ZONAS_POR_DEFECTO);
-  if (dato.zonas !== undefined) {
-    const lista = Array.isArray(dato.zonas) ? dato.zonas : [];
-    if (!Array.isArray(dato.zonas) || !lista.length || lista.length > ZONAS_MAXIMAS) {
-      errores.push('debe haber de 1 a ' + ZONAS_MAXIMAS + ' zonas');
-    }
-    const ids = new Set(), nombres = new Set();
-    zonasLimpias = lista.map((z, i) => {
-      const donde = 'zona ' + (i + 1);
-      if (!z || typeof z.id !== 'string' || !/^[a-z][a-z0-9]{0,30}$/.test(z.id) || ids.has(z.id)) {
-        errores.push(donde + ': id no válido o repetido');
-        return null;
-      }
-      ids.add(z.id);
-      const nombreZona = typeof z.nombre === 'string' ? z.nombre.trim() : '';
-      if (!nombreZona || nombreZona.length > NOMBRE_MAXIMO) errores.push(donde + ': el nombre debe tener entre 1 y ' + NOMBRE_MAXIMO + ' caracteres');
-      else if (nombres.has(nombreZona.toLowerCase())) errores.push(donde + ': nombre repetido');
-      nombres.add(nombreZona.toLowerCase());
-      if (!esEntero(z.precio, 0, PRECIO_MAXIMO)) errores.push(donde + ': precio no válido');
-      return { id: z.id, nombre: nombreZona, precio: z.precio };
-    }).filter(Boolean);
-    if (Array.isArray(dato.zonas) && !ids.has('mesas')) errores.push('falta la zona de mesas');
-    if (Array.isArray(dato.zonas) && ![...ids].some((id) => id !== 'mesas')) errores.push('falta una zona para filas');
-  }
-  const idsZona = new Set(zonasLimpias.map((z) => z.id));
-  const zonaDeFilas = (zona) => zona !== 'mesas' && idsZona.has(zona);
-  // Desde la version 4, una mesa, un bloque, una butaca suelta o una banda que no es de
-  // filas pueden no traer zona: heredan la de la banda que las contiene. Si la traen,
-  // tiene que ser una zona del mapa.
-  const zonaHeredable = (zona) => zona === undefined || idsZona.has(zona);
-  usarZonas(zonasLimpias);   // disponerBandas toma de aqui los nombres por defecto
+  return { distribucion, lienzo };
+}
 
+// Zonas: opcionales (sin ellas, las de siempre). Van antes que las bandas, que las usan.
+function zonasDeMapa(dato, errores) {
+  if (dato.zonas === undefined) return copiarZonas(ZONAS_POR_DEFECTO);
+  const lista = Array.isArray(dato.zonas) ? dato.zonas : [];
+  if (!Array.isArray(dato.zonas) || !lista.length || lista.length > ZONAS_MAXIMAS) {
+    errores.push('debe haber de 1 a ' + ZONAS_MAXIMAS + ' zonas');
+  }
+  const nombres = new Set();
+  const { limpias, ids } = listaDeMapa(lista, {
+    como: 'zona', patron: /^[a-z][a-z0-9]{0,30}$/, errores,
+    // Una zona se nombra por su sitio en la lista, no por su id: el id no se ve.
+    etiqueta: (z, i) => 'zona ' + (i + 1),
+    limpiar: (z, queja) => {
+      const nombreZona = typeof z.nombre === 'string' ? z.nombre.trim() : '';
+      if (!nombreZona || nombreZona.length > NOMBRE_MAXIMO) queja('el nombre debe tener entre 1 y ' + NOMBRE_MAXIMO + ' caracteres');
+      else if (nombres.has(nombreZona.toLowerCase())) queja('nombre repetido');
+      nombres.add(nombreZona.toLowerCase());
+      if (!esEntero(z.precio, 0, PRECIO_MAXIMO)) queja('precio no válido');
+      return { id: z.id, nombre: nombreZona, precio: z.precio };
+    },
+  });
+  if (Array.isArray(dato.zonas) && !ids.has('mesas')) errores.push('falta la zona de mesas');
+  if (Array.isArray(dato.zonas) && ![...ids].some((id) => id !== 'mesas')) errores.push('falta una zona para filas');
+  return limpias.filter(Boolean);
+}
+
+// El arbol de bandas: franjas de la sala, con sus verticales y las bandas de dentro.
+function bandasDeMapa(dato, { errores, zonaDeFilas, zonaHeredable }) {
   const bandasDato = Array.isArray(dato.bandas) ? dato.bandas : [];
   // Hasta la version 2, el escenario era siempre la primera banda.
   if (dato.version < 3 && (!bandasDato.length || !bandasDato[0] || bandasDato[0].tipo !== 'escenario')) {
@@ -2491,15 +2519,15 @@ function validarMapa(dato) {
   } else if (!bandasDato.length) {
     errores.push('el mapa necesita al menos una banda');
   }
-  const idsBanda = new Set();
-  const idValido = (id) => typeof id === 'string' && /^[a-z][a-z0-9]{0,30}$/i.test(id) && !idsBanda.has(id);
+  const ids = new Set();
+  const idValido = (id) => typeof id === 'string' && /^[a-z][a-z0-9]{0,30}$/i.test(id) && !ids.has(id);
   // Una banda hoja (escenario, filas, mesas) o, en la sala, una franja dividida.
   const limpiarBanda = (b, donde, enVertical, indice) => {
     if (!b || !idValido(b.id)) {
       errores.push(donde + ': id no válido o repetido');
       return null;
     }
-    idsBanda.add(b.id);
+    ids.add(b.id);
     const limpia = { id: b.id, tipo: b.tipo };
     if (typeof b.nombre === 'string' && b.nombre.trim()) limpia.nombre = b.nombre.trim().slice(0, 40);
     if (b.tipo === 'escenario') {
@@ -2527,7 +2555,7 @@ function validarMapa(dato) {
           errores.push(dondeV + ': id no válido o repetido');
           return null;
         }
-        idsBanda.add(v.id);
+        ids.add(v.id);
         const limpiaV = { id: v.id };
         if (typeof v.nombre === 'string' && v.nombre.trim()) limpiaV.nombre = v.nombre.trim().slice(0, 40);
         if (!zonaHeredable(v.zona)) errores.push(dondeV + ': zona desconocida');
@@ -2552,139 +2580,165 @@ function validarMapa(dato) {
     }
     return limpia;
   };
-  const bandas = bandasDato.map((b, i) => limpiarBanda(b, 'banda ' + (i + 1), false, i));
+  return { bandas: bandasDato.map((b, i) => limpiarBanda(b, 'banda ' + (i + 1), false, i)), ids };
+}
+
+function mesasDeMapa(dato, { errores, zonaHeredable }) {
+  if (!Array.isArray(dato.mesas)) errores.push('falta la lista de mesas');
+  return listaDeMapa(dato.mesas, {
+    como: 'mesa', patron: /^M[1-9]\d{0,5}$/, errores,
+    limpiar: (m, queja) => {
+      if (!esEntero(m.x, 0, 999) || !esEntero(m.y, 0, 999)) queja('posición no válida');
+      if (![0, 90, 180, 270].includes(m.giro)) queja('giro no válido');
+      if (m.completa !== undefined && typeof m.completa !== 'boolean') queja('completa debe ser true o false');
+      const completa = m.completa === true ? { completa: true } : {};
+      // Sin zona propia, los lugares de la mesa heredan la de su banda.
+      if (!zonaHeredable(m.zona)) queja('zona desconocida');
+      const zonaPropia = zonaHeredable(m.zona) && m.zona !== undefined ? { zona: m.zona } : {};
+      // Mesa redonda: solo lugares. Las rectangulares no llevan 'tipo' (mapas anteriores).
+      if (m.tipo === 'redonda') {
+        if (!esEntero(m.lugares, LUGARES_MINIMOS_REDONDA, LUGARES_MAXIMOS_REDONDA) || m.lugares % 2) {
+          queja('los lugares de una mesa redonda deben ser un número par de ' +
+                LUGARES_MINIMOS_REDONDA + ' a ' + LUGARES_MAXIMOS_REDONDA);
+        }
+        return { id: m.id, tipo: 'redonda', x: m.x, y: m.y, lugares: m.lugares, giro: m.giro, ...completa, ...zonaPropia };
+      }
+      if (m.tipo !== undefined) queja('tipo de mesa desconocido');
+      if (!esEntero(m.largo, 1, LARGO_MAXIMO)) queja('largo fuera de rango');
+      if (typeof m.cabeceras !== 'boolean' || typeof m.unLado !== 'boolean') {
+        queja('cabeceras y unLado deben ser true o false');
+      }
+      return { id: m.id, x: m.x, y: m.y, largo: m.largo, cabeceras: m.cabeceras, unLado: m.unLado, giro: m.giro, ...completa, ...zonaPropia };
+    },
+  });
+}
+
+// Bloques de filas: opcionales (los mapas anteriores no los tienen).
+function bloquesDeMapa(dato, { errores, zonaDeFilas }) {
+  return listaDeMapa(listaOpcionalDeMapa(dato, 'bloquesFilas', 'bloques de filas', errores), {
+    como: 'bloque', patron: /^F[1-9]\d{0,5}$/, errores,
+    limpiar: (b, queja) => {
+      if (!esEntero(b.x, 0, 999) || !esEntero(b.y, 0, 999)) queja('posición no válida');
+      if (!esEntero(b.ancho, 1, ANCHO_BLOQUE_MAXIMO)) queja('butacas por fila fuera de rango');
+      if (!esEntero(b.filas, 1, FILAS_MAXIMAS)) queja('número de filas fuera de rango');
+      if (b.zona !== undefined && !zonaDeFilas(b.zona)) queja('zona desconocida');
+      if (![0, 90, 180, 270].includes(b.giro)) queja('giro no válido');
+      const limpio = { id: b.id, tipo: 'filas', x: b.x, y: b.y, ancho: b.ancho, filas: b.filas, giro: b.giro,
+                       ...(b.zona !== undefined ? { zona: b.zona } : {}) };
+      if (typeof b.nombre === 'string' && b.nombre.trim()) limpio.nombre = b.nombre.trim().slice(0, 40);
+      return limpio;
+    },
+  });
+}
+
+// Formas y butacas sueltas: opcionales (los mapas anteriores no las tienen).
+function formasDeMapa(dato, { errores }) {
+  return listaDeMapa(listaOpcionalDeMapa(dato, 'formas', 'formas', errores), {
+    como: 'forma', patron: /^P[1-9]\d{0,5}$/, errores,
+    limpiar: (f, queja) => {
+      if (!esFormaConocida(f.forma)) queja('forma desconocida');
+      if (!esEntero(f.x, 0, 999) || !esEntero(f.y, 0, 999)) queja('posición no válida');
+      if (!esEntero(f.ancho, 1, FORMA_ANCHO_MAXIMO) || !esEntero(f.alto, 1, FORMA_ALTO_MAXIMO)) {
+        queja('tamaño fuera de rango');
+      }
+      const limpia = { id: f.id, tipo: 'forma', forma: f.forma, x: f.x, y: f.y, ancho: f.ancho, alto: f.alto };
+      if (typeof f.nombre === 'string' && f.nombre.trim()) limpia.nombre = f.nombre.trim().slice(0, NOMBRE_MAXIMO);
+      return limpia;
+    },
+  });
+}
+
+function butacasSueltasDeMapa(dato, { errores, zonaDeFilas }) {
+  return listaDeMapa(listaOpcionalDeMapa(dato, 'butacasSueltas', 'butacas sueltas', errores), {
+    como: 'butaca suelta', patron: /^B[1-9]\d{0,5}$/, errores,
+    limpiar: (b, queja) => {
+      if (!esEntero(b.x, 0, 999) || !esEntero(b.y, 0, 999)) queja('posición no válida');
+      if (b.zona !== undefined && !zonaDeFilas(b.zona)) queja('zona desconocida');
+      if (![0, 90, 180, 270].includes(b.giro)) queja('giro no válido');
+      return { id: b.id, tipo: 'butaca', x: b.x, y: b.y, giro: b.giro, ...(b.zona !== undefined ? { zona: b.zona } : {}) };
+    },
+  });
+}
+
+// Escenario: opcional (sin el, la franja de la banda «escenario» a todo el ancho; con
+// null, desde la version 3, no hay escenario). Devuelve undefined si el mapa no lo trae,
+// que no es lo mismo que null.
+function escenarioDeMapa(dato, errores) {
+  if (dato.escenario === null && dato.version >= 3) return null;
+  if (dato.escenario === undefined) return undefined;
+  const e = dato.escenario;
+  if (!e || !esEntero(e.x, 0, 999) || !esEntero(e.y, 0, 999) ||
+      !esEntero(e.ancho, 1, ESCENARIO_ANCHO_MAXIMO) || !esEntero(e.alto, 1, ESCENARIO_ALTO_MAXIMO)) {
+    errores.push('el escenario no es válido');
+    return undefined;
+  }
+  return { x: e.x, y: e.y, ancho: e.ancho, alto: e.alto };
+}
+
+// Zonas asignadas a asientos: opcional. Cada una debe ser una zona del mapa.
+function zonasDeAsientoDeMapa(dato, errores, idsZona) {
+  const limpias = {};
+  if (dato.zonasDeAsiento === undefined) return limpias;
+  const dz = dato.zonasDeAsiento;
+  if (!dz || typeof dz !== 'object' || Array.isArray(dz)) {
+    errores.push('las zonas de los asientos no son válidas');
+    return limpias;
+  }
+  for (const [id, zona] of Object.entries(dz)) {
+    if (id.length > 60 || typeof zona !== 'string' || !idsZona.has(zona)) {
+      errores.push('asiento ' + id.slice(0, 60) + ': zona desconocida');
+    } else {
+      limpias[id] = zona;
+    }
+  }
+  return limpias;
+}
+
+// Devuelve { mapa } limpio y valido, o { errores: [...] } en palabras. Genera el
+// plano para comprobar que las mesas quepan: cambia butacas, muebles y mesas, asi
+// que quien la llame debe volver a generar su sala despues.
+function validarMapa(dato) {
+  const cabecera = motivoDeCabecera(dato);
+  if (cabecera) return { errores: [cabecera] };
+  const errores = [];
+
+  const nombre = typeof dato.nombre === 'string' ? dato.nombre.trim() : '';
+  if (!nombre || nombre.length > 80) errores.push('el nombre debe tener entre 1 y 80 caracteres');
+  const { distribucion, lienzo } = columnasDeMapa(dato, errores);
+  const zonasLimpias = zonasDeMapa(dato, errores);
+  const idsZona = new Set(zonasLimpias.map((z) => z.id));
+  // Desde la version 4, una mesa, un bloque, una butaca suelta o una banda que no es de
+  // filas pueden no traer zona: heredan la de la banda que las contiene. Si la traen,
+  // tiene que ser una zona del mapa.
+  const con = {
+    errores,
+    zonaDeFilas: (zona) => zona !== 'mesas' && idsZona.has(zona),
+    zonaHeredable: (zona) => zona === undefined || idsZona.has(zona),
+  };
+  usarZonas(zonasLimpias);   // disponerBandas toma de aqui los nombres por defecto
+
+  const { bandas, ids: idsBanda } = bandasDeMapa(dato, con);
   if (!errores.length && distribucion) {
     const { error } = disponerBandas(bandas, rejillaDeBloques(distribucion).ancho);
     if (error) errores.push(error);
   }
-
-  if (!Array.isArray(dato.mesas)) errores.push('falta la lista de mesas');
-  const idsMesa = new Set();
-  const mesasLimpias = (Array.isArray(dato.mesas) ? dato.mesas : []).map((m, i) => {
-    if (!m || typeof m.id !== 'string' || !/^M[1-9]\d{0,5}$/.test(m.id) || idsMesa.has(m.id)) {
-      errores.push('mesa ' + (i + 1) + ': id no válido o repetido');
-      return null;
-    }
-    idsMesa.add(m.id);
-    if (!esEntero(m.x, 0, 999) || !esEntero(m.y, 0, 999)) errores.push(m.id + ': posición no válida');
-    if (![0, 90, 180, 270].includes(m.giro)) errores.push(m.id + ': giro no válido');
-    if (m.completa !== undefined && typeof m.completa !== 'boolean') errores.push(m.id + ': completa debe ser true o false');
-    const completa = m.completa === true ? { completa: true } : {};
-    // Sin zona propia, los lugares de la mesa heredan la de su banda.
-    if (!zonaHeredable(m.zona)) errores.push(m.id + ': zona desconocida');
-    const zonaPropia = zonaHeredable(m.zona) && m.zona !== undefined ? { zona: m.zona } : {};
-    // Mesa redonda: solo lugares. Las rectangulares no llevan 'tipo' (mapas anteriores).
-    if (m.tipo === 'redonda') {
-      if (!esEntero(m.lugares, LUGARES_MINIMOS_REDONDA, LUGARES_MAXIMOS_REDONDA) || m.lugares % 2) {
-        errores.push(m.id + ': los lugares de una mesa redonda deben ser un número par de ' +
-                     LUGARES_MINIMOS_REDONDA + ' a ' + LUGARES_MAXIMOS_REDONDA);
-      }
-      return { id: m.id, tipo: 'redonda', x: m.x, y: m.y, lugares: m.lugares, giro: m.giro, ...completa, ...zonaPropia };
-    }
-    if (m.tipo !== undefined) errores.push(m.id + ': tipo de mesa desconocido');
-    if (!esEntero(m.largo, 1, LARGO_MAXIMO)) errores.push(m.id + ': largo fuera de rango');
-    if (typeof m.cabeceras !== 'boolean' || typeof m.unLado !== 'boolean') {
-      errores.push(m.id + ': cabeceras y unLado deben ser true o false');
-    }
-    return { id: m.id, x: m.x, y: m.y, largo: m.largo, cabeceras: m.cabeceras, unLado: m.unLado, giro: m.giro, ...completa, ...zonaPropia };
-  });
-
-  // Bloques de filas: opcionales (los mapas anteriores no los tienen).
-  const bloquesDato = dato.bloquesFilas === undefined ? [] : dato.bloquesFilas;
-  if (!Array.isArray(bloquesDato)) errores.push('la lista de bloques de filas no es válida');
-  const idsBloque = new Set();
-  const bloquesLimpios = (Array.isArray(bloquesDato) ? bloquesDato : []).map((b, i) => {
-    if (!b || typeof b.id !== 'string' || !/^F[1-9]\d{0,5}$/.test(b.id) || idsBloque.has(b.id)) {
-      errores.push('bloque ' + (i + 1) + ': id no válido o repetido');
-      return null;
-    }
-    idsBloque.add(b.id);
-    if (!esEntero(b.x, 0, 999) || !esEntero(b.y, 0, 999)) errores.push(b.id + ': posición no válida');
-    if (!esEntero(b.ancho, 1, ANCHO_BLOQUE_MAXIMO)) errores.push(b.id + ': butacas por fila fuera de rango');
-    if (!esEntero(b.filas, 1, FILAS_MAXIMAS)) errores.push(b.id + ': número de filas fuera de rango');
-    if (b.zona !== undefined && !zonaDeFilas(b.zona)) errores.push(b.id + ': zona desconocida');
-    if (![0, 90, 180, 270].includes(b.giro)) errores.push(b.id + ': giro no válido');
-    const limpio = { id: b.id, tipo: 'filas', x: b.x, y: b.y, ancho: b.ancho, filas: b.filas, giro: b.giro,
-                     ...(b.zona !== undefined ? { zona: b.zona } : {}) };
-    if (typeof b.nombre === 'string' && b.nombre.trim()) limpio.nombre = b.nombre.trim().slice(0, 40);
-    return limpio;
-  });
-
-  // Formas y butacas sueltas: opcionales (los mapas anteriores no las tienen).
-  const listaOpcional = (campo, nombreLista) => {
-    if (dato[campo] === undefined) return [];
-    if (Array.isArray(dato[campo])) return dato[campo];
-    errores.push('la lista de ' + nombreLista + ' no es válida');
-    return [];
-  };
-  const idsForma = new Set();
-  const formasLimpias = listaOpcional('formas', 'formas').map((f, i) => {
-    if (!f || typeof f.id !== 'string' || !/^P[1-9]\d{0,5}$/.test(f.id) || idsForma.has(f.id)) {
-      errores.push('forma ' + (i + 1) + ': id no válido o repetido');
-      return null;
-    }
-    idsForma.add(f.id);
-    if (!esFormaConocida(f.forma)) errores.push(f.id + ': forma desconocida');
-    if (!esEntero(f.x, 0, 999) || !esEntero(f.y, 0, 999)) errores.push(f.id + ': posición no válida');
-    if (!esEntero(f.ancho, 1, FORMA_ANCHO_MAXIMO) || !esEntero(f.alto, 1, FORMA_ALTO_MAXIMO)) {
-      errores.push(f.id + ': tamaño fuera de rango');
-    }
-    const limpia = { id: f.id, tipo: 'forma', forma: f.forma, x: f.x, y: f.y, ancho: f.ancho, alto: f.alto };
-    if (typeof f.nombre === 'string' && f.nombre.trim()) limpia.nombre = f.nombre.trim().slice(0, NOMBRE_MAXIMO);
-    return limpia;
-  });
-  const idsButaca = new Set();
-  const butacasLimpias = listaOpcional('butacasSueltas', 'butacas sueltas').map((b, i) => {
-    if (!b || typeof b.id !== 'string' || !/^B[1-9]\d{0,5}$/.test(b.id) || idsButaca.has(b.id)) {
-      errores.push('butaca suelta ' + (i + 1) + ': id no válido o repetido');
-      return null;
-    }
-    idsButaca.add(b.id);
-    if (!esEntero(b.x, 0, 999) || !esEntero(b.y, 0, 999)) errores.push(b.id + ': posición no válida');
-    if (b.zona !== undefined && !zonaDeFilas(b.zona)) errores.push(b.id + ': zona desconocida');
-    if (![0, 90, 180, 270].includes(b.giro)) errores.push(b.id + ': giro no válido');
-    return { id: b.id, tipo: 'butaca', x: b.x, y: b.y, giro: b.giro, ...(b.zona !== undefined ? { zona: b.zona } : {}) };
-  });
-
-  // Escenario: opcional (sin el, la franja de la banda «escenario» a todo el ancho;
-  // con null, desde la version 3, no hay escenario).
-  let escenarioLimpio;
-  if (dato.escenario === null && dato.version >= 3) {
-    escenarioLimpio = null;
-  } else if (dato.escenario !== undefined) {
-    const e = dato.escenario;
-    if (!e || !esEntero(e.x, 0, 999) || !esEntero(e.y, 0, 999) ||
-        !esEntero(e.ancho, 1, ESCENARIO_ANCHO_MAXIMO) || !esEntero(e.alto, 1, ESCENARIO_ALTO_MAXIMO)) {
-      errores.push('el escenario no es válido');
-    } else {
-      escenarioLimpio = { x: e.x, y: e.y, ancho: e.ancho, alto: e.alto };
-    }
-  }
+  const { limpias: mesasLimpias, ids: idsMesa } = mesasDeMapa(dato, con);
+  const { limpias: bloquesLimpios, ids: idsBloque } = bloquesDeMapa(dato, con);
+  const { limpias: formasLimpias, ids: idsForma } = formasDeMapa(dato, con);
+  const { limpias: butacasLimpias, ids: idsButaca } = butacasSueltasDeMapa(dato, con);
+  const escenarioLimpio = escenarioDeMapa(dato, errores);
 
   const bloqueadas = dato.bloqueadas === undefined ? [] : dato.bloqueadas;
   if (!Array.isArray(bloqueadas) || !bloqueadas.every((id) => typeof id === 'string' && id.length <= 60)) {
     errores.push('la lista de butacas bloqueadas no es válida');
   }
-  // Zonas asignadas a asientos: opcional. Cada una debe ser una zona del mapa.
-  const zonasDeAsiento = {};
-  if (dato.zonasDeAsiento !== undefined) {
-    const dz = dato.zonasDeAsiento;
-    if (!dz || typeof dz !== 'object' || Array.isArray(dz)) {
-      errores.push('las zonas de los asientos no son válidas');
-    } else {
-      for (const [id, zona] of Object.entries(dz)) {
-        if (id.length > 60 || typeof zona !== 'string' || !idsZona.has(zona)) {
-          errores.push('asiento ' + id.slice(0, 60) + ': zona desconocida');
-        } else {
-          zonasDeAsiento[id] = zona;
-        }
-      }
-    }
-  }
+  const zonasDeAsiento = zonasDeAsientoDeMapa(dato, errores, idsZona);
   if (errores.length) return { errores };
 
   // Los contadores nunca por debajo de lo que ya existe: un id no se reutiliza.
   const maximo = (ids, patron) => Math.max(0, ...[...ids].map((id) => Number((id.match(patron) || [])[1]) || 0));
+  const contador = (valor, ids, patron) =>
+    Math.max(esEntero(valor, 1, 1e6) ? valor : 1, maximo(ids, patron) + 1);
   const mapa = {
     formato: FORMATO_MAPA, version: VERSION_MAPA, nombre,
     guardado: typeof dato.guardado === 'string' ? dato.guardado.slice(0, 40) : null,
@@ -2694,18 +2748,13 @@ function validarMapa(dato) {
     ...(escenarioLimpio !== undefined ? { escenario: escenarioLimpio } : {}),
     bloqueadas: [...new Set(bloqueadas)],
     zonasDeAsiento,
-    siguiente: Math.max(esEntero(dato.siguiente, 1, 1e6) ? dato.siguiente : 1, maximo(idsMesa, /^M(\d+)$/) + 1),
-    siguienteBanda: Math.max(esEntero(dato.siguienteBanda, 1, 1e6) ? dato.siguienteBanda : 1,
-                             maximo(idsBanda, /^banda(\d+)$/) + 1),
-    siguienteBloque: Math.max(esEntero(dato.siguienteBloque, 1, 1e6) ? dato.siguienteBloque : 1,
-                              maximo(idsBloque, /^F(\d+)$/) + 1),
-    siguienteForma: Math.max(esEntero(dato.siguienteForma, 1, 1e6) ? dato.siguienteForma : 1,
-                             maximo(idsForma, /^P(\d+)$/) + 1),
+    siguiente: contador(dato.siguiente, idsMesa, /^M(\d+)$/),
+    siguienteBanda: contador(dato.siguienteBanda, idsBanda, /^banda(\d+)$/),
+    siguienteBloque: contador(dato.siguienteBloque, idsBloque, /^F(\d+)$/),
+    siguienteForma: contador(dato.siguienteForma, idsForma, /^P(\d+)$/),
     zonas: zonasLimpias,
-    siguienteZona: Math.max(esEntero(dato.siguienteZona, 1, 1e6) ? dato.siguienteZona : 1,
-                            maximo(idsZona, /^zona(\d+)$/) + 1),
-    siguienteButaca: Math.max(esEntero(dato.siguienteButaca, 1, 1e6) ? dato.siguienteButaca : 1,
-                              maximo(idsButaca, /^B(\d+)$/) + 1),
+    siguienteZona: contador(dato.siguienteZona, idsZona, /^zona(\d+)$/),
+    siguienteButaca: contador(dato.siguienteButaca, idsButaca, /^B(\d+)$/),
   };
   const sala = generarPlano(definicionDeMapa(mapa));
   const aforo = motivoDeAforo(butacas.length);

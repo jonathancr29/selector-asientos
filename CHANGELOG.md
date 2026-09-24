@@ -4,9 +4,34 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Una sola forma de agregar una pieza
+## Sin publicar — La validación del mapa, por partes
 
-Rama `claude/agregar-pieza`. Segundo paso de la revisión (A4). No cambia lo que hace la aplicación.
+Rama `claude/partir-validarmapa`. Tercer paso de la revisión (B1). No cambia lo que hace la
+aplicación: se comprobó comparando la salida con la versión anterior en 679 casos.
+
+### Agregado
+
+- Tres pruebas que cubrían huecos que ya existían: que falte la lista de mesas, que `escenario: null`
+  no valga en los mapas anteriores a la versión 3, y que una pieza con el id malo dé **un** error y no
+  una cascada.
+
+### Cambiado
+
+- **`validarMapa` pasa de 287 líneas a 66**, y ya no hay ninguna función de más de 100 líneas en el
+  archivo. El trabajo se reparte en una función por sección del mapa (`columnasDeMapa`,
+  `zonasDeMapa`, `bandasDeMapa`, `mesasDeMapa`, `bloquesDeMapa`, `formasDeMapa`,
+  `butacasSueltasDeMapa`, `escenarioDeMapa`, `zonasDeAsientoDeMapa`), más `motivoDeCabecera` para el
+  formato y la versión.
+- **Un solo recorrido para las cinco listas.** `listaDeMapa` comprueba el id contra su patrón, aparta
+  los repetidos y deja que cada sección valide lo suyo. Mesas, bloques, formas, butacas sueltas y
+  zonas repetían ese mismo bloque de seis líneas, cada una con su propio `Set` de ids.
+- **Un solo cálculo de contador.** Los siete `Math.max(esEntero(...) ? ... : 1, maximo(...) + 1)` del
+  montaje del mapa pasan a ser `contador(valor, ids, patron)`.
+
+## 2026-09-24 — PR #35: una sola forma de agregar una pieza
+
+[PR #35](https://github.com/jonathancr29/selector-asientos/pull/35), fusionado en `main` con el
+commit `4d7bb7b`. Segundo paso de la revisión (A4). No cambia lo que hace la aplicación.
 
 ### Cambiado
 

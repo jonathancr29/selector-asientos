@@ -620,6 +620,12 @@ test('validarMapa rechaza archivos que no son mapas o traen datos no validos', (
   assert.ok(con((m) => { m.bandas[1].zona = 'vip'; }).includes('banda 2: zona desconocida'));
   assert.ok(con((m) => { m.bandas[2].id = 'luneta'; }).includes('banda 3: id no válido o repetido'));
   assert.ok(con((m) => { m.mesas[1].id = 'M1'; }).includes('mesa 2: id no válido o repetido'));
+  // Con el id malo no se sigue mirando la pieza: un error por ella, no una cascada.
+  assert.deepEqual(con((m) => { m.mesas[0].id = 'X1'; m.mesas[0].giro = 45; }),
+                   ['mesa 1: id no válido o repetido']);
+  assert.ok(con((m) => { delete m.mesas; }).includes('falta la lista de mesas'));
+  // «escenario: null» (no hay escenario) solo existe desde la version 3.
+  assert.ok(con((m) => { m.version = 2; m.escenario = null; }).includes('el escenario no es válido'));
   assert.ok(con((m) => { m.mesas[0].giro = 45; }).includes('M1: giro no válido'));
   assert.ok(con((m) => { m.mesas[0].cabeceras = 'si'; }).includes('M1: cabeceras y unLado deben ser true o false'));
   assert.ok(con((m) => { m.bloqueadas = 'todas'; }).includes('la lista de butacas bloqueadas no es válida'));
