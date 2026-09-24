@@ -1,0 +1,22 @@
+# Las pruebas de la parte sin DOM, en cada empujon y en cada pull request.
+#
+# Es lo unico que corre: el proyecto no tiene package.json, ni dependencias, ni
+# build. `node --test pruebas.mjs` lee index.html, evalua el <script> hasta la
+# marca «Fin de la parte sin DOM» y lo prueba, asi que se prueba lo que se sirve.
+name: Pruebas
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # 18 es la version minima que pide el README: node:test sin bandera.
+          node-version: '20'
+      - run: node --test pruebas.mjs

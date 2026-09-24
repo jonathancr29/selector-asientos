@@ -4,9 +4,48 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — La flecha de plegar vuelve, y «Pieza seleccionada» pasa a «Editar»
+## Sin publicar — Integración continua y limpieza del código
 
-Rama `claude/plegables-y-editar`.
+Rama `claude/limpieza-y-ci`. Sale de una revisión completa del proyecto: no cambia lo que hace la
+aplicación, solo quita repeticiones y código que ya no pintaba nada.
+
+### Agregado
+
+- **Las pruebas se ejecutan solas** en cada pull request y en cada empujón a `main`
+  (`.github/workflows/pruebas.yml`, con `node --test pruebas.mjs`). Ya no depende de acordarse.
+- Prueba nueva: el id de una zona nueva **salta los que ya existen** aunque el contador del plano se
+  haya quedado corto.
+
+### Cambiado
+
+- **Un solo sitio escribe la venta por mesa.** `marcarVenta` recibe el filtro de qué mesas tocar, y
+  `marcarMesaCompleta`, `marcarVentaDeMesas`, `marcarMesasDeBanda` y `marcarTodasLasMesas` pasan a ser
+  una línea cada una. Antes el mismo bucle estaba copiado cuatro veces en tres sitios del archivo.
+- **Un solo recorrido por área.** `recorrerArea` hace el camino que compartían *Asignar zona* y
+  *Bloquear butacas*: butacas del rectángulo, ocupadas apartadas y las que cambiaron de verdad.
+- **Una sola forma de estrenar zona.** `zonaNueva` decide el id y el nombre, y la usan tanto
+  `agregarZona` como `zonaNuevaParaBanda`, que antes lo resolvían cada una por su cuenta.
+- **La paleta de la interfaz vive en `:root`:** 15 variables CSS sustituyen 128 colores escritos a
+  mano. Cambiar un color de la aplicación pasa a ser cambiar una línea. Los colores de una sola vez
+  (estados de butaca, madera, guías) se quedan donde estaban.
+
+### Corregido
+
+- **«1 butaca bloqueadas.»**: el participio del aviso de las operaciones por área estaba fijo en
+  plural. Ahora concuerda, también al desbloquear.
+
+### Quitado
+
+- `cambiarDatoDeBloque`, que no se llamaba desde ningún sitio desde que su trabajo se movió a los
+  manejadores del panel.
+- Las reglas CSS de `.modos`, `.casilla` y `.separador`: clases que ya no existen en la página desde
+  que los modos pasaron a ser iconos. Y un `width: 100%` en el nombre de banda que otra regla
+  posterior pisaba, así que nunca llegó a aplicarse.
+
+## 2026-09-24 — PR #33: la flecha de plegar vuelve, y «Pieza seleccionada» pasa a «Editar»
+
+[PR #33](https://github.com/jonathancr29/selector-asientos/pull/33), fusionado en `main` con el
+commit `1fcb8dd`.
 
 ### Cambiado
 

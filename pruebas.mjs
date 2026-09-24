@@ -1722,6 +1722,10 @@ test('agregar y eliminar zonas: las nuevas sirven para filas, las usadas no se e
   const { plano, sala } = planoDe(api, 'mixta-ambos');
   const conVip = api.editarZona(api.agregarZona(plano), 'zona1', { nombre: 'VIP', precio: 90000 });
   assert.deepEqual([conVip.zonas.at(-1), conVip.siguienteZona], [{ id: 'zona1', nombre: 'VIP', precio: 90000 }, 2]);
+  // El contador puede quedarse corto (un plano escrito a mano, o una zona eliminada y
+  // vuelta a crear): el id salta los que ya existen en vez de repetir uno vivo.
+  const atrasado = api.agregarZona({ ...conVip, siguienteZona: 1 });
+  assert.deepEqual(atrasado.zonas.map((z) => z.id).filter((id) => id.startsWith('zona')), ['zona1', 'zona2']);
   const vip = api.cambiarZonaBanda(conVip, 'luneta', 'zona1');
   api.generarPlano('mixta-ambos', vip);
   assert.deepEqual([etiqueta(api, 'luneta-C12'), api.zonas[api.butacas.find((b) => b.id === 'luneta-C12').zona].precio], ['VIP C12', 90000]);

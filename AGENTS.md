@@ -30,6 +30,9 @@ La carpeta `.claude/` (si existe) es de trabajo de Claude Code y no forma parte 
 
 - **Abrir:** `index.html` directamente en el navegador. Opcional: `python -m http.server 8000`.
 - **Pruebas:** `node --test pruebas.mjs` (Node 18 o posterior). Deben pasar todas antes de hacer commit.
+- **Integración continua:** `.github/workflows/pruebas.yml` corre esas mismas pruebas en cada pull
+  request y en cada empujón a `main`. Es lo único que corre: si añades otra comprobación, que no
+  necesite dependencias.
 - **No hay** `package.json`, linter ni build. No los añadas sin que se pida.
 
 ## Cómo está organizado el script
@@ -61,7 +64,7 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    devuelven configuraciones de pieza (mesa `{ id, x, y, largo, cabeceras, unLado, giro }` o bloque
    `{ id, tipo: 'filas', x, y, ancho, filas, zona, giro, nombre? }`); nunca modifican la actual.
    **Bandas y columnas:** `planoDesdeSala`, `cambiarDistribucion`, `redimensionarBanda`, `moverBanda`, `eliminarBanda`, `agregarBanda`,
-   `cambiarZonaBanda`, `zonaExclusivaDeBanda`, `zonaNuevaParaBanda`, `agregarZona`, `editarZona`, `eliminarZona`, `usosDeZona`, `leerPrecio`, `agregarVertical`, `cambiarAnchoVertical`, `agregarBandaEnVertical`,
+   `cambiarZonaBanda`, `zonaExclusivaDeBanda`, `zonaNueva`, `zonaNuevaParaBanda`, `agregarZona`, `editarZona`, `eliminarZona`, `usosDeZona`, `leerPrecio`, `agregarVertical`, `cambiarAnchoVertical`, `agregarBandaEnVertical`,
    `renombrarBanda`, `duplicarBanda` y `duplicarPieza`. Devuelven un plano nuevo o `{ motivo }`.
    **Butacas sueltas y formas:** `agregarButacaSuelta`, `configDeButaca`, `agregarForma`,
    `configDeForma`, `cambiarTamanoForma` y `FORMAS`. `LISTAS_DE_PIEZAS` (lista, prefijo y contador de
@@ -78,7 +81,8 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
    **Tiradores:** `tiradoresDeSala` (donde va cada agarre) y `redimensionarConTirador` (aplica el
    alto de la banda y el ancho de su vertical de una vez, o ninguno).
    **Areas:** `areaDeCeldas` (rectangulo con las esquinas en cualquier orden), `butacasEnArea`,
-   `asignarZonaEnArea`, `bloquearEnArea` y `mesasConZonasMezcladas`.
+   `recorrerArea` (el recorrido comun), `asignarZonaEnArea`, `bloquearEnArea` y
+   `mesasConZonasMezcladas`.
    **Bloqueos y mapas:** `idsBloqueadosPorBandas`, `alternarBloqueada`, `mapaDesdePlano`,
    `validarMapa`, `definicionDeMapa`, `registrarMapa`, `claveDeMapa`, `nombreDeArchivo`.
 6. **Selección sin DOM:** `elegidas` (un `Set` de ids) y `conciliarSeleccion`.
@@ -133,6 +137,10 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   (`tieneAlto`); el ancho, solo si la banda está en una vertical **que no es la última** (la última
   ocupa el resto, así que su ancho se deduce). Una banda de filas no lleva tirador: su alto son sus
   filas.
+- **Las dos operaciones por area comparten el recorrido:** `recorrerArea(lista, area, aplicar)` va
+  butaca a butaca por el rectangulo, aparta las ocupadas y se queda con las que `aplicar` dice que
+  cambiaron de verdad (devolviendo `true`). Lo demas es de cada una: el mapa de zonas o el conjunto
+  de bloqueadas.
 - **Las operaciones por area devuelven lo que pasó:** `asignarZonaEnArea` y `bloquearEnArea` dan
   `{ plano, cambiadas, ocupadas }` (y la primera, `mesas` con las mesas completas que quedan con dos
   zonas). Las **ocupadas nunca cambian**, ni de zona ni de bloqueo, y se devuelven para avisar. Pintar
@@ -161,9 +169,12 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   nombre propio de la banda. `zonaNuevaParaBanda` es la opción «Zona nueva». El grupo *Otras zonas*
   (`dibujarZonas`) solo lista las zonas que no son de ninguna banda, para que sigan siendo editables:
   las de una pieza con zona propia, las pintadas y las que no usa nadie.
-- **Venta por mesa o por butacas:** `marcarMesaCompleta` (una), `marcarMesasDeBanda` (las de una
-  banda, con `mesasDeBanda`) y `marcarTodasLasMesas` (todas). En la interfaz son el selector
-  `#venta-mesa` de la pieza, el selector de la fila de la banda y «Aplicar a todas las mesas».
+- **Venta por mesa o por butacas:** `marcarVenta(plano, completa, quiere)` es **el unico sitio donde
+  se escribe `completa`**; las cuatro formas de pedirlo solo cambian en el filtro que le pasan:
+  `marcarMesaCompleta` (una), `marcarVentaDeMesas` (varias), `marcarMesasDeBanda` (las de una banda,
+  con `mesasDeBanda`) y `marcarTodasLasMesas` (todas). Si añades otra forma, pasa por ahi. En la
+  interfaz son el selector `#venta-mesa` de la pieza, el selector de la fila de la banda y «Aplicar
+  a todas las mesas».
 - **Mesa completa (`completa: true`)**: sus lugares llevan `grupo.completa`. Elegir pasa siempre por
   `alternarEleccion` (todos sus lugares libres a la vez), y `completarMesasElegidas` corrige las
   selecciones parciales al regenerar. El precio no se guarda: es la suma de los lugares libres, cada
@@ -288,6 +299,16 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   - **La flecha de plegar la dibuja el CSS** (`.grupo > summary::before`, ▾ y ▸): con `display: flex`
     en el `<summary>` el navegador deja de pintar su marcador, y la flecha tiene que ir **delante**
     del titulo (paso: se perdio al meter el boton de informacion).
+  - **La paleta va en `:root`:** los colores que se repiten tres veces o mas son variables CSS
+    (`--fondo`, `--fondo-panel`, `--fondo-control`, `--fondo-plano`, `--borde`, `--borde-suave`,
+    `--texto`, `--texto-claro`, `--texto-tenue`, `--texto-apagado`, `--acento`, `--acento-fuerte`,
+    `--realce`, `--realce-velo`, `--rojo`). Los de una sola vez (estados de butaca, madera, guias)
+    siguen escritos donde se usan, y la paleta de las capas es del script (`COLORES_DE_CAPA`), no del
+    CSS. Un color nuevo que aparezca por tercera vez se sube a `:root`.
+  - **Una regla, un sitio:** no declares dos veces el mismo selector fuera de las media queries. Si
+    una clase deja de usarse en el HTML y en el script, su regla se va con ella (se fueron `.modos`,
+    `.casilla` y `.separador`); ojo con las que se componen a mano, como `.forma-<nombre>`, que si
+    estan vivas aunque no aparezcan escritas enteras.
   - **`.subtitulo` es del SVG** (nombres de banda, letra de 4 px). El subtítulo de la página es
     `.bajada`; no reutilices la clase o la letra se queda diminuta (pasó).
   - **Escritorio = una pantalla:** con más de 900 px de ancho y 600 px de alto, una media query pone
@@ -313,6 +334,10 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - **Un mapa guarda diseño, no venta:** pasillos, bandas, mesas, bloqueadas y contadores. Nunca la
   ocupación ni la selección. La ocupación de ejemplo vive en las plantillas (`ocupadas`,
   `mesasOcupadas`).
+- **Una zona nueva se estrena en un solo sitio:** `zonaNueva(lista, siguiente, nombreBase)` decide el
+  id (`zonaN`, saltando los que ya existen aunque el contador se haya quedado corto) y el nombre
+  (numerado si choca: «General 2»), y no toca el plano. Lo usan `agregarZona` (una zona suelta) y
+  `zonaNuevaParaBanda` (la que nace atada a una banda).
 - **Una zona es una banda:** `agregarBanda` y `agregarBandaEnVertical` pasan por `conZonaPropia`, que
   le da a la banda nueva su zona (nombre a partir de la de partida, numerado, y precio 0). Los
   **espacios y las franjas nacen sin zona** (un hueco no da precio a nada); al espacio se le da la
