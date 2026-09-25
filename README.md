@@ -589,6 +589,8 @@ cabe, roja y con contorno discontinuo si no. Esc cancela un arrastre.
   pasillos; sigue siendo imposible partir una mesa con un pasillo. Si una acción no cabe, la mesa no
   cambia y un aviso dice por qué (*«cae sobre un pasillo»*, *«choca con Mesa 3»*, *«choca con la
   fila A de General»*).
+- **Varias piezas:** al girar o cambiar el tamaño de un grupo, las nuevas huellas tampoco pueden
+  chocar entre sí. Si ocurre, no cambia ninguna pieza y el aviso nombra el choque.
 - **Sitio cercano:** al girar, alargar, poner cabeceras o volver a dos lados, si la mesa no cabe
   en su sitio se prueba a una celda de distancia, y el aviso dice a dónde se desplazó.
 - **El tablero no se mueve** al alargar, acortar, cambiar cabeceras o pasar a uno o dos lados: lo
@@ -790,7 +792,9 @@ cuáles.
 `localStorage` es de cada navegador y de cada equipo, y se pierde si se borran los datos de
 navegación: para conservar un mapa, expórtalo. Algunos navegadores no permiten guardar en páginas
 abiertas de ciertas formas (por ejemplo, vistas previas); en ese caso la página lo avisa y se puede
-seguir usando **Exportar JSON**.
+seguir usando **Exportar JSON**. Si falla la escritura al eliminar un mapa, este permanece en la
+lista y se muestra el error. Los nombres de mapa, incluido `__proto__`, se guardan como claves
+propias y se recuperan al recargar.
 
 ### Posibles mejoras
 

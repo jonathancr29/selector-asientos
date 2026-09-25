@@ -3066,9 +3066,15 @@ const DESPLAZAMIENTOS_DE_GRUPO = (() => {
 function aplicarConfigs(plano, sala, configs) {
   const ocupadas = celdasOcupadas(new Set(configs.map((c) => c.id)));
   const primerMotivo = (dx, dy) => {
+    const destinoOcupado = new Map();
     for (const c of configs) {
-      const motivo = motivoNoCabe(sala, ocupadas, { ...c, x: c.x + dx, y: c.y + dy });
+      const destino = { ...c, x: c.x + dx, y: c.y + dy };
+      const motivo = motivoNoCabe(sala, ocupadas, destino) || motivoNoCabe(sala, destinoOcupado, destino);
       if (motivo) return nombreDeConfig(c) + ' ' + motivo;
+      const { ancho, alto } = huellaDe(destino);
+      for (let y = 0; y < alto; y++) for (let x = 0; x < ancho; x++) {
+        destinoOcupado.set(celda(destino.x + x, destino.y + y), nombreDeConfig(c));
+      }
     }
     return null;
   };
@@ -6131,7 +6137,8 @@ function leerAlmacen() {
   try {
     const texto = localStorage.getItem(CLAVE_ALMACEN);
     const datos = texto ? JSON.parse(texto) : {};
-    return datos && typeof datos === 'object' && !Array.isArray(datos) ? datos : {};
+    return datos && typeof datos === 'object' && !Array.isArray(datos)
+      ? Object.assign(Object.create(null), datos) : Object.create(null);
   } catch {
     return null;
   }
@@ -6251,9 +6258,14 @@ function eliminarMapa() {
   const { nombre } = TIPOS_DE_SALA[tipoActual];
   if (!confirm('¿Eliminar el mapa «' + nombre + '» de este navegador? No se puede deshacer.')) return;
   const almacen = leerAlmacen();
-  if (almacen) {
-    delete almacen[nombre];
-    escribirAlmacen(almacen);
+  if (!almacen) {
+    anunciar('No se pudo eliminar el mapa: no se puede acceder al almacenamiento del navegador.');
+    return;
+  }
+  delete almacen[nombre];
+  if (!escribirAlmacen(almacen)) {
+    anunciar('No se pudo eliminar el mapa: el almacenamiento del navegador está lleno o bloqueado.');
+    return;
   }
   delete TIPOS_DE_SALA[tipoActual];
   delete planos[tipoActual];

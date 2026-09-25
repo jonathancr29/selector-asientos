@@ -2538,6 +2538,20 @@ test('aplicarConfigs transforma varias piezas a la vez, o ninguna', () => {
   assert.equal(juntas.motivo, undefined);
 });
 
+test('transformar un grupo rechaza las colisiones entre sus propias piezas', () => {
+  const api = cargar();
+  const { plano, sala } = conLienzo(api, (p) => ({ ...p,
+    mesas: [{ id: 'M1', x: 1, y: 1, largo: 2, cabeceras: false, unLado: false, giro: 0 },
+            { id: 'M2', x: 4, y: 1, largo: 2, cabeceras: false, unLado: false, giro: 0 }], siguiente: 3 }));
+  const primera = api.aplicarConfigs(plano, sala, plano.mesas.map((m) => api.cambiarLargo(m, 1)));
+  assert.ok(primera.plano, 'ambas mesas deben poder crecer una vez');
+  const salaPrimera = api.generarPlano('mapa-en-blanco', primera.plano);
+  const segunda = api.aplicarConfigs(primera.plano, salaPrimera,
+    primera.plano.mesas.map((m) => api.cambiarLargo(m, 1)));
+  assert.match(segunda.motivo, /choca con Mesa 1/);
+  assert.deepEqual(primera.plano.mesas.map((m) => m.largo), [3, 3]);
+});
+
 test('la zona y la venta se pueden cambiar en varias piezas a la vez', () => {
   const api = cargar();
   const { plano } = conLienzo(api, (p) => ({ ...p,
@@ -2617,6 +2631,72 @@ test('eliminar una banda se lleva su zona, salvo que alguien más la use', () =>
   assert.ok(api.eliminarBanda(plano, sala, 'mesas').zonas.some((z) => z.id === 'mesas'));
 });
 
+// --- Persistencia: se prueban las funciones reales del tramo con DOM con dobles
+// de almacenamiento y de interfaz, sin abrir un navegador. --------------------
+
+const tramoDeScript = (desde, hasta) => {
+  const inicio = html.indexOf(desde, fin);
+  const final = html.indexOf(hasta, inicio + desde.length);
+  assert.ok(inicio >= fin && final > inicio, 'no se encontro el tramo ' + desde);
+  return html.slice(inicio, final);
+};
+
+test('un mapa llamado __proto__ se guarda como clave propia y sobrevive al JSON', () => {
+  const contenido = new Map();
+  const localStorage = {
+    getItem: (clave) => contenido.get(clave) || null,
+    setItem: (clave, valor) => contenido.set(clave, valor),
+  };
+  const fuenteAlmacen = tramoDeScript('function leerAlmacen()', '// Las opciones salen de TIPOS_DE_SALA');
+  const { leerAlmacen, escribirAlmacen } = new Function('localStorage', 'CLAVE_ALMACEN',
+    fuenteAlmacen + '\nreturn { leerAlmacen, escribirAlmacen };')(localStorage, 'selector-asientos:mapas');
+  const mapas = leerAlmacen();
+  mapas.__proto__ = { nombre: '__proto__' };
+  assert.equal(escribirAlmacen(mapas), true);
+  const guardados = JSON.parse(contenido.get('selector-asientos:mapas'));
+  assert.equal(Object.hasOwn(guardados, '__proto__'), true);
+  assert.equal(guardados.__proto__.nombre, '__proto__');
+  assert.equal(Object.hasOwn(leerAlmacen(), '__proto__'), true);
+});
+
+test('si falla guardar la eliminacion, el mapa sigue disponible y se avisa', () => {
+  const fuenteEliminar = tramoDeScript('function eliminarMapa()', "document.getElementById('guardar-mapa')");
+  const tipos = { 'mapa:Prueba': { nombre: 'Prueba' } };
+  const planos = { 'mapa:Prueba': { mesas: [] } };
+  const mensajes = [];
+  let redibujos = 0;
+  const eliminarMapa = new Function('confirm', 'TIPOS_DE_SALA', 'tipoActual', 'leerAlmacen',
+    'escribirAlmacen', 'planos', 'construirSelector', 'redibujar', 'anunciar',
+    fuenteEliminar + '\nreturn eliminarMapa;')(
+    () => true, tipos, 'mapa:Prueba', () => ({ Prueba: {} }), () => false, planos,
+    () => {}, () => { redibujos++; }, (texto) => mensajes.push(texto));
+  eliminarMapa();
+  assert.ok(tipos['mapa:Prueba']);
+  assert.ok(planos['mapa:Prueba']);
+  assert.equal(redibujos, 0);
+  assert.match(mensajes.at(-1), /No se pudo eliminar/);
+});
+
+test('al guardar la eliminacion, el mapa desaparece de la sesion y del almacen', () => {
+  const fuenteEliminar = tramoDeScript('function eliminarMapa()', "document.getElementById('guardar-mapa')");
+  const tipos = { 'mapa:Prueba': { nombre: 'Prueba' } };
+  const planos = { 'mapa:Prueba': { mesas: [] } };
+  const almacen = { Prueba: { nombre: 'Prueba' } };
+  let guardados = null, seleccionado = null, redibujado = null;
+  const eliminarMapa = new Function('confirm', 'TIPOS_DE_SALA', 'tipoActual', 'leerAlmacen',
+    'escribirAlmacen', 'planos', 'construirSelector', 'redibujar', 'anunciar',
+    fuenteEliminar + '\nreturn eliminarMapa;')(
+    () => true, tipos, 'mapa:Prueba', () => almacen,
+    (mapas) => { guardados = { ...mapas }; return true; }, planos,
+    (valor) => { seleccionado = valor; }, (valor) => { redibujado = valor; }, () => {});
+  eliminarMapa();
+  assert.deepEqual(guardados, {});
+  assert.equal(tipos['mapa:Prueba'], undefined);
+  assert.equal(planos['mapa:Prueba'], undefined);
+  assert.equal(seleccionado, 'mixta-ambos');
+  assert.equal(redibujado, 'mixta-ambos');
+});
+
 // ---------------------------------------------------------------------------
 // Los documentos, contra el codigo. Sin esto, README.md y AGENTS.md se quedan
 // describiendo una version anterior y nadie se entera hasta que estorba.
@@ -2661,7 +2741,7 @@ test('los documentos no citan codigo que ya no existe', () => {
     'formas muebles regiones colocadas cambiadas limpias ids siguiente formato version guardado ' +
     'texto forma grupo subtitulo mira geo tablero profundidad item columnas ver data node npm ' +
     'bash js json html css mjs yml sh markdown Enter Esc Tab Supr Alt Ctrl Shift WHERE ' +
-    'heredoc return spread ' +
+    'heredoc return spread __proto__ ' +
     // Estos aparecen en los documentos precisamente porque el proyecto NO los usa.
     'innerHTML insertAdjacentHTML outerHTML eval onclick unsafe-inline').split(' '));
   const huerfanos = [];
