@@ -328,7 +328,9 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   `aplicarConfigs` las escribe si caben. Si no caben donde están, prueba desplazar el **grupo entero**
   hasta dos celdas (`DESPLAZAMIENTOS_DE_GRUPO`, de menos a más) en vez de mover una sola, que
   desbarataría las distancias. Devuelve `{ plano, dx, dy }` o `{ motivo }`, y el motivo es el de
-  quedarse en su sitio, que es el que explica algo.
+  quedarse en su sitio, que es el que explica algo. **Cada intento usa un mapa nuevo de celdas y
+  añade la huella de cada pieza transformada antes de comprobar la siguiente**: excluir las huellas
+  antiguas de todo el grupo sin añadir las nuevas permitió que dos mesas se solaparan al alargarlas.
 - **Una acción de grupo solo se ofrece si todas la admiten** (`aplica(accion, pieza)` para cada una);
   el panel las desactiva y `ejecutarAccion` lo vuelve a comprobar.
 - **Los textos de grupo van en femenino plural** (`HECHO_EN_GRUPO`): los de una sola pieza concuerdan
@@ -542,7 +544,10 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - **`validarMapa` genera un plano para comprobar las mesas**: cambia `butacas`, `muebles` y
   `mesas`. Después hay que volver a generar y dibujar la sala actual (lo hace `importarMapa`).
 - **`localStorage` puede lanzar excepciones** (páginas `data:`, modo privado, cuota llena): todo acceso
-  va en `try/catch` y la página tiene que funcionar sin él.
+  va en `try/catch` y la página tiene que funcionar sin él. El objeto de mapas leído usa prototipo
+  nulo: con uno normal, guardar un mapa llamado `__proto__` cambiaba su prototipo y el JSON lo perdía.
+  Al eliminar, **no quites el mapa de la interfaz hasta que `escribirAlmacen` confirme la escritura**;
+  si falla, el mapa seguiría en el navegador y reaparecería al recargar.
 - **`confirm` bloquea las pruebas automáticas:** en el navegador, sustitúyelo antes de guardar o
   importar sobre un nombre existente.
 - **`escalar` asigna el ancho exacto** en vez de multiplicar, para que el tope del zoom no falle por

@@ -4,7 +4,24 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — La documentación, para retomar el proyecto desde cero
+## Sin publicar — Integridad de grupos y mapas
+
+Rama `claude/integridad-mapas-grupos`.
+
+### Corregido
+
+- Las transformaciones de varias piezas rechazan las colisiones entre sus nuevas huellas.
+- Eliminar un mapa solo lo quita de la interfaz si la escritura en el navegador tuvo éxito.
+- Un mapa llamado `__proto__` se guarda y se recupera como cualquier otro.
+
+### Pruebas
+
+- Regresiones de las tres fallas y del camino exitoso de eliminación, sin dependencias nuevas.
+
+## 2026-09-24 — PR #40: La documentación, para retomar el proyecto desde cero
+
+[PR #40](https://github.com/jonathancr29/selector-asientos/pull/40), fusionado en `main` con el
+commit `2a2877c`.
 
 Rama `claude/documentacion`. No toca `index.html`: solo documentación y dos pruebas nuevas.
 
