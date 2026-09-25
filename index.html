@@ -470,6 +470,11 @@
     </div>
     <details class="grupo" open id="grupo-mapa" hidden>
       <summary>Mapa</summary>
+      <div class="herramientas" role="group" aria-label="Historial del plano">
+        <button type="button" id="deshacer" aria-keyshortcuts="Control+Z Meta+Z" disabled>Deshacer</button>
+        <button type="button" id="rehacer" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y" disabled>Rehacer</button>
+      </div>
+      <p class="pista" id="estado-guardado" role="status">Sin cambios pendientes.</p>
       <!-- Guardar el diseño con nombre, en el navegador o como JSON. -->
       <div class="herramientas" id="herramientas-mapa" role="group" aria-label="Guardar mapa">
         <label class="campo" for="nombre-mapa">Nombre del mapa</label>
@@ -3406,6 +3411,30 @@ function conciliarSeleccion(ids, lista) {
   return { ausentes, noLibres };
 }
 
+// Historial acotado por mapa. La firma compara el diseño visible; el plano conserva
+// también si se estaba usando la plantilla original (null) para restaurarla tal cual.
+function crearHistorial(inicial, maximo = 51) {
+  const estados = [inicial];
+  let indice = 0;
+  let guardado = inicial.firma;
+  return {
+    registrar(estado) {
+      if (estado.firma === estados[indice].firma) return false;
+      estados.splice(indice + 1);
+      estados.push(estado);
+      if (estados.length > maximo) estados.shift();
+      indice = estados.length - 1;
+      return true;
+    },
+    deshacer() { return indice ? estados[--indice] : null; },
+    rehacer() { return indice < estados.length - 1 ? estados[++indice] : null; },
+    puedeDeshacer() { return indice > 0; },
+    puedeRehacer() { return indice < estados.length - 1; },
+    marcarGuardado() { guardado = estados[indice].firma; },
+    tieneCambios() { return estados[indice].firma !== guardado; },
+  };
+}
+
 // === Fin de la parte sin DOM. pruebas.mjs evalua todo lo anterior en Node. ===
 
 // ---------------------------------------------------------------------------
@@ -4891,6 +4920,8 @@ let tipoActual, salaActual;
 // 'siguiente' y 'siguienteBanda' solo crecen: un id nuevo nunca reutiliza el de
 // una mesa o banda eliminada.
 const planos = {};
+const historiales = Object.create(null);
+let restaurandoHistorial = false;
 
 // 'mesaActiva' guarda el id de la pieza activa: mesa (M3), bloque (F2), forma (P1),
 // butaca suelta (B4) o el escenario.
@@ -5162,6 +5193,35 @@ function moverMesaConTeclado(id, flecha) {
 
 // El plano del tipo de sala actual, creado desde lo que se ve la primera vez
 // que se edita.
+function fotoDelPlano() {
+  const plano = planos[tipoActual] || null;
+  return { plano: plano ? JSON.stringify(plano) : null,
+           firma: JSON.stringify(plano || planoDesdeSala(tipoActual, salaActual)) };
+}
+
+function actualizarEstadoEdicion() {
+  const historial = historiales[tipoActual];
+  document.getElementById('deshacer').disabled = !historial || !historial.puedeDeshacer();
+  document.getElementById('rehacer').disabled = !historial || !historial.puedeRehacer();
+  document.getElementById('estado-guardado').textContent = historial && historial.tieneCambios()
+    ? 'Cambios sin guardar en este plano.' : 'Sin cambios pendientes.';
+}
+
+function restaurarEdicion(accion) {
+  const historial = historiales[tipoActual];
+  const estado = historial && historial[accion]();
+  if (!estado) return;
+  if (estado.plano === null) delete planos[tipoActual];
+  else planos[tipoActual] = JSON.parse(estado.plano);
+  restaurandoHistorial = true;
+  try {
+    regenerar(accion === 'deshacer' ? 'Último cambio deshecho.' : 'Cambio rehecho.');
+  } finally {
+    restaurandoHistorial = false;
+  }
+  calcularEncuadre();
+}
+
 function planoEditable() {
   if (!planos[tipoActual]) planos[tipoActual] = planoDesdeSala(tipoActual, salaActual);
   return planos[tipoActual];
@@ -5197,6 +5257,8 @@ function regenerar(mensaje, antes = fotoDeButacas()) {
   actualizarResumen();
   actualizarAforo(salaActual);
   actualizarControles();
+  if (!restaurandoHistorial) historiales[tipoActual].registrar(fotoDelPlano());
+  actualizarEstadoEdicion();
   anunciar(mensaje);
   document.getElementById('aviso').textContent = [
     frase(ausentes, 'ya no existe en el plano', 'ya no existen en el plano'),
@@ -5982,7 +6044,21 @@ function limpiarArea() {
 
 document.getElementById('modo-vista').addEventListener('click', () => cambiarModo('vista'));
 document.getElementById('modo-editor').addEventListener('click', () => cambiarModo('editor'));
+document.getElementById('deshacer').addEventListener('click', () => restaurarEdicion('deshacer'));
+document.getElementById('rehacer').addEventListener('click', () => restaurarEdicion('rehacer'));
+document.addEventListener('keydown', (e) => {
+  if (modo !== 'editor' || !(e.ctrlKey || e.metaKey) || e.altKey ||
+      e.target.closest('input, textarea, select, [contenteditable]')) return;
+  const tecla = e.key.toLowerCase();
+  const accion = tecla === 'z' ? (e.shiftKey ? 'rehacer' : 'deshacer')
+    : tecla === 'y' && !e.shiftKey ? 'rehacer' : null;
+  if (!accion) return;
+  e.preventDefault();
+  restaurarEdicion(accion);
+});
 document.getElementById('restablecer').addEventListener('click', () => {
+  if (historiales[tipoActual].tieneCambios() &&
+      !confirm('Hay cambios sin guardar en este plano. ¿Restablecerlo? Puedes deshacer esta acción.')) return;
   delete planos[tipoActual];
   marcarActivas([]);
   bandaActiva = null;
@@ -6109,6 +6185,7 @@ function redibujar(tipo) {
   document.getElementById('nombre-mapa').value = esMapa ? TIPOS_DE_SALA[tipo].nombre : '';
   document.getElementById('eliminar-mapa').hidden = !esMapa;
   salaActual = generarPlano(tipo, planos[tipo]);
+  if (!historiales[tipo]) historiales[tipo] = crearHistorial(fotoDelPlano());
   // Antes de dibujar: asi el DOM nace ya con la seleccion que sobrevive.
   const { ausentes, noLibres } = conciliarSeleccion(elegidas, butacas);
   completarMesasElegidas(elegidas, butacas);
@@ -6118,12 +6195,19 @@ function redibujar(tipo) {
   actualizarResumen();
   actualizarAforo(salaActual);
   actualizarControles();
+  actualizarEstadoEdicion();
   reencuadrar();
   document.getElementById('aviso').textContent = [
     frase(ausentes, 'esta sala no tiene', 'esta sala no tiene'),
     frase(noLibres, 'en esta sala no está libre', 'en esta sala no están libres'),
   ].filter(Boolean).join(' ');
 }
+
+window.addEventListener('beforeunload', (e) => {
+  if (!Object.values(historiales).some((h) => h.tieneCambios())) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
 
 // ---------------------------------------------------------------------------
 // Mapas guardados: en el navegador (localStorage) y como archivos JSON.
@@ -6196,7 +6280,9 @@ function guardarMapa() {
     return;
   }
   registrarMapa(mapa);
+  historiales[tipoActual].marcarGuardado();
   delete planos[clave];   // lo guardado pasa a ser el punto de partida del mapa
+  delete historiales[clave];
   construirSelector(clave);
   redibujar(clave);
   anunciar('Mapa «' + nombre + '» guardado en este navegador.');
@@ -6213,6 +6299,8 @@ function exportarMapa() {
   enlace.click();
   enlace.remove();
   setTimeout(() => URL.revokeObjectURL(enlace.href), 0);
+  historiales[tipoActual].marcarGuardado();
+  actualizarEstadoEdicion();
   anunciar('Mapa «' + nombre + '» exportado como ' + enlace.download + '.');
 }
 
@@ -6247,6 +6335,7 @@ async function importarMapa(archivo) {
   const guardado = Boolean(almacen) && ((almacen[mapa.nombre] = mapa), escribirAlmacen(almacen));
   registrarMapa(mapa);
   delete planos[clave];
+  delete historiales[clave];
   construirSelector(clave);
   redibujar(clave);
   anunciar('Mapa «' + mapa.nombre + '» importado' + (guardado
@@ -6269,6 +6358,7 @@ function eliminarMapa() {
   }
   delete TIPOS_DE_SALA[tipoActual];
   delete planos[tipoActual];
+  delete historiales[tipoActual];
   construirSelector('mixta-ambos');
   redibujar('mixta-ambos');
   anunciar('Mapa «' + nombre + '» eliminado.');

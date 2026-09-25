@@ -179,7 +179,9 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 11. **Modo editor:** `modo`, `mesaActiva`, `planos` (por tipo de sala), sombra de destino, arrastre, `regenerar`,
     `transformarMesa`, `agregarPiezaNueva` (con `agregarMesaNueva`, `agregarBloqueNuevo`,
     `agregarButacaNueva` y `agregarFormaNueva`), `eliminarMesa`, atajos (`ATAJOS`), `cambiarModo`,
-    `herramienta` (mesas o bloquear), `cambiarHerramienta`, `alternarBloqueo`.
+    `herramienta` (mesas o bloquear), `cambiarHerramienta`, `alternarBloqueo`. `historiales` conserva
+    las versiones de cada plano; `regenerar` registra el estado confirmado y actualiza el aviso de
+    cambios pendientes. `restaurarEdicion` repone una versión sin registrarla de nuevo.
 12. **Resumen y cambio de tipo de sala:** `actualizarResumen`, `actualizarAforo`, `redibujar`, y el
     selector de tipos, que se construye desde `TIPOS_DE_SALA` (`construirSelector`).
 13. **Mapas guardados:** `leerAlmacen`, `escribirAlmacen` (`localStorage`), `guardarMapa`,
@@ -458,6 +460,10 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 - **Un mapa guarda diseño, no venta:** pasillos, bandas, mesas, bloqueadas y contadores. Nunca la
   ocupación ni la selección. La ocupación de ejemplo vive en las plantillas (`ocupadas`,
   `mesasOcupadas`).
+- **El historial registra cambios confirmados:** solo después de `regenerar`, nunca al calcular un
+  destino o al fallar `aplicarBandas`. Al añadir una acción nueva del editor, pasa por `regenerar`;
+  deshacer debe restaurar también contadores, bloqueos y zonas. La selección de compra y el foco
+  no forman parte de las versiones. Guardar o exportar marca la versión actual como guardada.
 - **Una zona nueva se estrena en un solo sitio:** `zonaNueva(lista, siguiente, nombreBase)` decide el
   id (`zonaN`, saltando los que ya existen aunque el contador se haya quedado corto) y el nombre
   (numerado si choca: «General 2»), y no toca el plano. Lo usan `agregarZona` (una zona suelta) y
@@ -597,7 +603,8 @@ Y en todos los casos, el repaso de siempre:
      zoom con rueda y botones, arrastre del plano sin elegir butaca, cambio de tipo de sala con aviso.
    - **Editar plano:** arrastrar una mesa a un sitio válido y a uno inválido (pasillo, otra mesa),
      Esc, flechas, girar, alargar y acortar, cabeceras, agregar Lados y Cruz, eliminar,
-     «Restablecer sala», y que la selección se conserve.
+     «Restablecer sala», y que la selección se conserve. Deshacer y rehacer por botón y atajo,
+     una edición tras deshacer, aviso de cambios pendientes, guardado y confirmación al restablecer.
    - **Zonas y precios:** nombre, precio y el ✓ que guarda los dos; zona («Zona nueva» y compartir con
      otra banda, que iguala el color); el boton de la etiqueta, que crea un espacio con su zona; venta
      de las mesas de una zona de mesas; que al eliminar una banda se vaya su zona; que las zonas sin

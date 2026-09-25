@@ -51,6 +51,38 @@ assert.ok(!conComa, 'la parte sin DOM declara varios nombres en una sentencia:\n
 
 const cargar = () => new Function(fuente + '\nreturn { ' + declarados.join(', ') + ' };')();
 
+test('historial: deshacer, rehacer y cambios respecto al guardado', () => {
+  const { crearHistorial } = cargar();
+  const estado = (n) => ({ plano: String(n), firma: String(n) });
+  const h = crearHistorial(estado(0));
+  assert.equal(h.tieneCambios(), false);
+  assert.equal(h.registrar(estado(0)), false);
+  assert.equal(h.registrar(estado(1)), true);
+  assert.equal(h.tieneCambios(), true);
+  h.marcarGuardado();
+  assert.equal(h.tieneCambios(), false);
+  h.registrar(estado(2));
+  assert.equal(h.deshacer().plano, '1');
+  assert.equal(h.tieneCambios(), false);
+  assert.equal(h.rehacer().plano, '2');
+  assert.equal(h.tieneCambios(), true);
+});
+
+test('historial: una edición tras deshacer descarta el rehacer y respeta el límite', () => {
+  const { crearHistorial } = cargar();
+  const estado = (n) => ({ plano: String(n), firma: String(n) });
+  const h = crearHistorial(estado(0), 3);
+  h.registrar(estado(1));
+  h.registrar(estado(2));
+  assert.equal(h.deshacer().plano, '1');
+  h.registrar(estado(3));
+  assert.equal(h.puedeRehacer(), false);
+  h.registrar(estado(4));
+  assert.equal(h.deshacer().plano, '3');
+  assert.equal(h.deshacer().plano, '1');
+  assert.equal(h.puedeDeshacer(), false);
+});
+
 test('la API de las pruebas se escanea sola, sin lista que mantener', () => {
   assert.equal(new Set(declarados).size, declarados.length, 'hay nombres repetidos en el escaneo');
   const api = cargar();
@@ -2663,16 +2695,18 @@ test('si falla guardar la eliminacion, el mapa sigue disponible y se avisa', () 
   const fuenteEliminar = tramoDeScript('function eliminarMapa()', "document.getElementById('guardar-mapa')");
   const tipos = { 'mapa:Prueba': { nombre: 'Prueba' } };
   const planos = { 'mapa:Prueba': { mesas: [] } };
+  const historiales = { 'mapa:Prueba': {} };
   const mensajes = [];
   let redibujos = 0;
   const eliminarMapa = new Function('confirm', 'TIPOS_DE_SALA', 'tipoActual', 'leerAlmacen',
-    'escribirAlmacen', 'planos', 'construirSelector', 'redibujar', 'anunciar',
+    'escribirAlmacen', 'planos', 'historiales', 'construirSelector', 'redibujar', 'anunciar',
     fuenteEliminar + '\nreturn eliminarMapa;')(
-    () => true, tipos, 'mapa:Prueba', () => ({ Prueba: {} }), () => false, planos,
+    () => true, tipos, 'mapa:Prueba', () => ({ Prueba: {} }), () => false, planos, historiales,
     () => {}, () => { redibujos++; }, (texto) => mensajes.push(texto));
   eliminarMapa();
   assert.ok(tipos['mapa:Prueba']);
   assert.ok(planos['mapa:Prueba']);
+  assert.ok(historiales['mapa:Prueba']);
   assert.equal(redibujos, 0);
   assert.match(mensajes.at(-1), /No se pudo eliminar/);
 });
@@ -2681,18 +2715,20 @@ test('al guardar la eliminacion, el mapa desaparece de la sesion y del almacen',
   const fuenteEliminar = tramoDeScript('function eliminarMapa()', "document.getElementById('guardar-mapa')");
   const tipos = { 'mapa:Prueba': { nombre: 'Prueba' } };
   const planos = { 'mapa:Prueba': { mesas: [] } };
+  const historiales = { 'mapa:Prueba': {} };
   const almacen = { Prueba: { nombre: 'Prueba' } };
   let guardados = null, seleccionado = null, redibujado = null;
   const eliminarMapa = new Function('confirm', 'TIPOS_DE_SALA', 'tipoActual', 'leerAlmacen',
-    'escribirAlmacen', 'planos', 'construirSelector', 'redibujar', 'anunciar',
+    'escribirAlmacen', 'planos', 'historiales', 'construirSelector', 'redibujar', 'anunciar',
     fuenteEliminar + '\nreturn eliminarMapa;')(
     () => true, tipos, 'mapa:Prueba', () => almacen,
-    (mapas) => { guardados = { ...mapas }; return true; }, planos,
+    (mapas) => { guardados = { ...mapas }; return true; }, planos, historiales,
     (valor) => { seleccionado = valor; }, (valor) => { redibujado = valor; }, () => {});
   eliminarMapa();
   assert.deepEqual(guardados, {});
   assert.equal(tipos['mapa:Prueba'], undefined);
   assert.equal(planos['mapa:Prueba'], undefined);
+  assert.equal(historiales['mapa:Prueba'], undefined);
   assert.equal(seleccionado, 'mixta-ambos');
   assert.equal(redibujado, 'mixta-ambos');
 });
