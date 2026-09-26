@@ -580,6 +580,21 @@ de la columna «Botón» es el de su tooltip. Cada acción tiene atajo de teclad
 | Volver a la sala de su tipo | Restablecer sala | — |
 | Bloquear o desbloquear butacas | Bloquear butacas, y clic en la butaca | Enter o Espacio |
 
+### Deshacer y guardar cambios
+
+En **Mapa** están **Deshacer** y **Rehacer**. También funcionan Ctrl+Z y Ctrl+Mayús+Z
+(Cmd en Mac), o Ctrl+Y para rehacer. Cada acción confirmada del editor —incluidos los cambios
+de bandas, zonas, piezas y butacas, y **Restablecer sala**— ocupa un paso; una acción rechazada
+no lo ocupa. El historial conserva hasta 50 pasos por tipo de sala durante esta sesión. Los atajos
+no sustituyen el deshacer propio de un campo mientras se escribe en él.
+
+El mismo grupo indica si el plano actual tiene **cambios sin guardar**. Cambiar de tipo de sala
+conserva sus cambios y su historial mientras la página siga abierta. Guardar el mapa en el
+navegador o exportarlo como JSON marca la versión actual como guardada; deshacer hasta esa versión
+quita el aviso. Antes de cerrar o recargar, el navegador advierte si queda algún plano con cambios
+pendientes. **Restablecer sala** pide confirmación cuando los hay, y su resultado se puede deshacer.
+El historial no se incluye en el mapa guardado ni sobrevive a cerrar la página.
+
 Con el ratón, una mesa se arrastra y una sombra marca el destino encajado en la rejilla: verde si
 cabe, roja y con contorno discontinuo si no. Esc cancela un arrastre.
 

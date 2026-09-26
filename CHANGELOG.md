@@ -4,7 +4,23 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Integridad de grupos y mapas
+## Sin publicar — Proteger la edición
+
+Rama `claude/proteger-edicion`.
+
+### Agregado
+
+- Historial de deshacer y rehacer por plano, con botones y atajos de teclado.
+- Indicador de cambios sin guardar, aviso al salir y confirmación al restablecer un plano modificado.
+
+### Pruebas
+
+- Casos del historial para guardado, deshacer, rehacer, edición tras deshacer y límite de pasos.
+
+## 2026-09-25 — PR #41: Integridad de grupos y mapas
+
+[PR #41](https://github.com/jonathancr29/selector-asientos/pull/41), fusionado en `main` con el
+commit `3b38093`.
 
 Rama `claude/integridad-mapas-grupos`.
 
