@@ -261,9 +261,9 @@ asignársela; otro clic la devuelve a su zona de siempre.
 - Sirve para **cualquier asiento**: filas, bloques, butacas sueltas y lugares de mesa (también se
   puede asignar la zona Mesas a una butaca de fila).
 - Las butacas que ya son de la zona elegida se ven marcadas con la palomita.
-- **La numeración no cambia:** la butaca A3 de Luneta pintada de VIP se vende como *«VIP, fila A,
-  butaca 3»*, a precio de VIP, y su vecina sigue siendo *«Luneta, fila A, butaca 4»*. Un lugar de mesa
-  dice su zona: *«Mesa 1, lugar 1, VIP»*.
+- **La numeración sigue la zona física:** la butaca A3 de Luneta pintada de VIP conserva su ID,
+  pero pasa a *«VIP, fila A, butaca 1»* si es la primera de esa zona. Sus vecinas de Luneta se
+  renumeran. Un lugar de mesa muestra zona, mesa y lugar; las mesas empiezan en 1 en cada zona.
 - **Mesas completas:** su precio suma cada lugar a su zona, así que un lugar VIP la encarece.
 - Las butacas ocupadas no cambian de zona. Una zona asignada a algún asiento cuenta como en uso y no se
   puede eliminar.
@@ -628,7 +628,9 @@ Los lugares se identifican **por lado**, no por orden: `M2-N1`, `M2-N2` (un lado
 - **Acortar, quitar cabeceras, pasar a un solo lado o eliminar** hace desaparecer lugares. Se permite, pero se avisa: los
   elegidos se sueltan nombrándolos y, si alguno estaba ocupado, un aviso lo señala.
 
-Para mostrar, los lugares se numeran «lugar 1, 2, 3…» en sentido horario.
+Para mostrar, los lugares se numeran «lugar 1, 2, 3…» en sentido horario. El número visible de
+la mesa empieza en 1 en cada zona y se ordena de arriba abajo y de izquierda a derecha; `M2`
+sigue siendo solo su ID estable. Dos zonas pueden tener cada una una «Mesa 1».
 
 ### Datos
 
@@ -670,8 +672,9 @@ reservas y las bloqueadas. La **etiqueta visible** se calcula:
   cercana al escenario es la A, y todas las butacas de esa zona a esa altura se numeran de izquierda
   a derecha a través de bandas y bloques: A1–A5 en un bloque y A6–A7 en el de al lado. Dos bandas
   de la misma zona no reinician en A: la segunda continúa.
-- **Bloques que no miran al escenario de frente** (girados de lado o de espaldas) llevan su nombre
-  (o «Bloque N») y su propia secuencia: «Lateral izquierdo, fila B, butaca 2».
+- **Bloques que no miran al escenario de frente** conservan su nombre como orientación, pero sus
+  filas también toman letras únicas dentro de la zona. Su fila física no se mezcla con una fila
+  horizontal que pase a la misma altura.
 
 Como la etiqueta depende de la posición, mover un bloque puede cambiar las etiquetas de su zona (A6
 pasa a B3), pero nunca los ids.
@@ -798,6 +801,18 @@ guarda `formas` y `butacasSueltas` (listas opcionales) con sus contadores `sigui
 bloques y las butacas sueltas —sin ella heredan la de su banda— y las zonas de mesas, los espacios,
 las franjas y las bandas verticales pueden llevar la suya. Un mapa de la versión 3 se lee igual: como
 sus mesas no traían zona, pasan a heredar la de la banda donde están, que es la de mesas.
+
+**Catálogo de lugares.** En *Mapa → Exportar lugares* se valida el diseño y se descarga un JSON
+con un registro por lugar: ID local estable, zona física, fila/butaca o mesa/lugar, etiqueta,
+coordenadas, bloqueo y precio de referencia. El ID no cambia al mover una pieza ni al renumerar.
+La validación exige un nombre definitivo para cada zona con lugares, etiquetas únicas y que todos
+los lugares de una mesa estén en la misma zona física. Una zona llamada *Zona* o *Zona 2* es
+provisional. Los mapas viejos se siguen abriendo; si tienen `zonasDeAsiento`, antes de exportar el
+catálogo hay que revisar esas asignaciones con *Revisar zonas físicas asignadas*. La confirmación
+se guarda como `zonasFisicasConfirmadas`, asociada al ID y al valor de zona; cambiar la zona vuelve
+a exigir revisión. El precio del catálogo es solo una referencia de previsualización: Sin Taquilla
+decidirá la categoría y el importe al publicar y vender. El catálogo aún no es un inventario de
+evento ni publica el mapa en Sin Taquilla.
 
 Los mapas de la versión 1 (que guardaban `"pasillos": "ambos"`) se siguen leyendo: se convierten a
 bloques y pasillos al cargarlos.

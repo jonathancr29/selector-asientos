@@ -4,7 +4,31 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Fuentes separadas y redibujado incremental
+## Sin publicar — Identidad y numeración por zona física
+
+Rama `claude/identidad-por-zona`.
+
+### Cambiado
+
+- Las butacas pintadas toman la numeración de su zona física. Los bloques girados participan en
+  una secuencia única por zona, y las mesas muestran números que empiezan en 1 por zona y posición.
+  Los IDs locales y las coordenadas permanecen separados de las etiquetas.
+- El editor permite validar y exportar un catálogo de lugares. Rechaza nombres de zona
+  provisionales, etiquetas repetidas, mesas con varias zonas y asignaciones individuales antiguas
+  cuya ubicación física aún no se confirmó.
+- La confirmación de zonas físicas se guarda por ID y valor de zona; los mapas anteriores se siguen
+  importando sin modificar sus IDs.
+
+### Probado
+
+- 150 pruebas de lógica y 8 de navegador; cuatro mutaciones de las reglas nuevas fueron detectadas.
+  Los 6 recorridos anteriores pasaron también sobre la revisión previa para comparar lo que no
+  cambia.
+
+## 2026-09-26 — PR #45: Fuentes separadas y redibujado incremental
+
+[PR #45](https://github.com/jonathancr29/selector-asientos/pull/45), fusionado en `main` con el
+commit `0aba034`.
 
 Rama `claude/separar-fuentes`.
 
