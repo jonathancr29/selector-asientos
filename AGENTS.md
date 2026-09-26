@@ -36,6 +36,7 @@ en el propio archivo.
 | `pruebas.mjs` | Pruebas con `node:test` de la parte del script que no usa el DOM, y dos que vigilan que estos documentos sigan describiendo el código. |
 | `pruebas-navegador.mjs` | Recorridos de la interfaz en Chrome o Edge: guardado, recarga, importación, grupo, teclado y accesibilidad. |
 | `README.md` | Qué resuelve, modelo de datos, rejilla, accesibilidad, modo editor. |
+| `docs/CONTRATO_LUGARES_SINTAQUILLA.md` | Contrato de diseño con Sin Taquilla: identidad, ubicación, tarifa, venta e historial. |
 | `CHANGELOG.md` | Historial de cambios. |
 | `.github/workflows/pruebas.yml` | Pruebas de lógica y navegador en cada PR. |
 | `LICENSE`, `NOTICE` | MIT. El icono de butaca es de Material Icons (Apache 2.0). |

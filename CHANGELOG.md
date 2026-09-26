@@ -4,7 +4,21 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Pruebas de navegador
+## Sin publicar — Contrato de lugares con Sin Taquilla
+
+Rama `claude/contrato-lugares`.
+
+### Agregado
+
+- Contrato de diseño para identidad estable por evento y revisión del mapa, etiquetas por zona,
+  tarifa autorizada por el servidor, mesas completas, boletos históricos y edición tras publicar.
+- Brechas verificadas entre este selector y la propuesta de recintos de Sin Taquilla; condiciones
+  de aceptación para implementar las fases 5, 6 y 7.
+
+## 2026-09-25 — PR #43: Pruebas de navegador
+
+[PR #43](https://github.com/jonathancr29/selector-asientos/pull/43), fusionado en `main` con el
+commit `f9be0cb`.
 
 Rama `claude/pruebas-navegador`.
 
