@@ -17,5 +17,6 @@ jobs:
         with:
           # El recorrido de navegador usa WebSocket global, disponible en Node 22.
           node-version: '22'
+      - run: node construir.mjs --check
       - run: node --test pruebas.mjs
       - run: node --test pruebas-navegador.mjs

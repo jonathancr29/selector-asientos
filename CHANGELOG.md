@@ -4,7 +4,29 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Contrato de lugares con Sin Taquilla
+## Sin publicar — Fuentes separadas y redibujado incremental
+
+Rama `claude/separar-fuentes`.
+
+### Cambiado
+
+- El HTML autónomo se genera sin paquetes desde estructura, estilos, modelo, dibujo, interfaz,
+  editor y persistencia en `src/`. La CI comprueba que el archivo entregado está sincronizado.
+- Las butacas con el mismo ID conservan su nodo al redibujar; se actualizan geometría, estado,
+  etiqueta y posición en el árbol cuando cambian. Se mantiene el foco en las butacas que perduran.
+
+### Medido y probado
+
+- En Chrome sin interfaz y 18.720 butacas, la mediana de cinco redibujados consecutivos pasó de
+  1.119 a 625 ms en el mismo equipo (44 % menos); el número de nodos sigue en 56.160. La primera
+  pintura no se aceleró.
+- Los recorridos de navegador comprueban reutilización al girar mesas, coordenadas, foco y eliminación
+  de nodos al cambiar de sala.
+
+## 2026-09-26 — PR #44: Contrato de lugares con Sin Taquilla
+
+[PR #44](https://github.com/jonathancr29/selector-asientos/pull/44), fusionado en `main` con el
+commit `aa55bbc`.
 
 Rama `claude/contrato-lugares`.
 
