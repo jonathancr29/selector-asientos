@@ -879,6 +879,10 @@ cargar y la vuelve a consultar antes de enviar la selección, y el servidor rech
 se hayan ocupado entre tanto. La comprobación contra sobreventa va en una transacción de base de
 datos, nunca en el navegador.
 
+El [contrato de lugares para Sin Taquilla](docs/CONTRATO_LUGARES_SINTAQUILLA.md) define la identidad
+de cada lugar, su etiqueta y precio, las mesas completas y qué sucede con el mapa después de
+publicar un evento. Es un documento de diseño; la integración aún no está implementada.
+
 ## Sobre three.js
 
 Se evaluó y se descartó. three.js dibuja en un `<canvas>`, que es **un solo nodo del DOM**: se
