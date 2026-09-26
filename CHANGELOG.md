@@ -4,7 +4,19 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Proteger la edición
+## Sin publicar — Pruebas de navegador
+
+Rama `claude/pruebas-navegador`.
+
+### Agregado
+
+- Recorridos en Chrome para selección con teclado, guardado y recarga, importación, edición en grupo,
+  deshacer, vista estrecha y nombres del árbol de accesibilidad; se ejecutan en cada PR sin paquetes.
+
+## 2026-09-25 — PR #42: Proteger la edición
+
+[PR #42](https://github.com/jonathancr29/selector-asientos/pull/42), fusionado en `main` con el
+commit `76ca136`.
 
 Rama `claude/proteger-edicion`.
 

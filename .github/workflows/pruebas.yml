@@ -1,8 +1,6 @@
-# Las pruebas de la parte sin DOM, en cada empujon y en cada pull request.
+# Pruebas de logica y recorridos reales en Chrome, en cada empujon y pull request.
 #
-# Es lo unico que corre: el proyecto no tiene package.json, ni dependencias, ni
-# build. `node --test pruebas.mjs` lee index.html, evalua el <script> hasta la
-# marca «Fin de la parte sin DOM» y lo prueba, asi que se prueba lo que se sirve.
+# Sin package.json, dependencias ni build. La imagen incluye Chrome.
 name: Pruebas
 
 on:
@@ -12,11 +10,12 @@ on:
 
 jobs:
   pruebas:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          # 18 es la version minima que pide el README: node:test sin bandera.
-          node-version: '20'
+          # El recorrido de navegador usa WebSocket global, disponible en Node 22.
+          node-version: '22'
       - run: node --test pruebas.mjs
+      - run: node --test pruebas-navegador.mjs
