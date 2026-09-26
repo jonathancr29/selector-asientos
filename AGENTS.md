@@ -34,9 +34,10 @@ en el propio archivo.
 |---|---|
 | `index.html` | Toda la aplicación: HTML, CSS y el `<script>`. |
 | `pruebas.mjs` | Pruebas con `node:test` de la parte del script que no usa el DOM, y dos que vigilan que estos documentos sigan describiendo el código. |
+| `pruebas-navegador.mjs` | Recorridos de la interfaz en Chrome o Edge: guardado, recarga, importación, grupo, teclado y accesibilidad. |
 | `README.md` | Qué resuelve, modelo de datos, rejilla, accesibilidad, modo editor. |
 | `CHANGELOG.md` | Historial de cambios. |
-| `.github/workflows/pruebas.yml` | La única automatización: `node --test pruebas.mjs` en cada PR. |
+| `.github/workflows/pruebas.yml` | Pruebas de lógica y navegador en cada PR. |
 | `LICENSE`, `NOTICE` | MIT. El icono de butaca es de Material Icons (Apache 2.0). |
 
 La carpeta `.claude/` (si existe) es de trabajo de Claude Code y no forma parte del proyecto.
@@ -44,12 +45,13 @@ La carpeta `.claude/` (si existe) es de trabajo de Claude Code y no forma parte 
 ## Cómo ejecutar y probar
 
 - **Abrir:** `index.html` directamente en el navegador. Opcional: `python -m http.server 8000`.
-- **Pruebas:** `node --test pruebas.mjs` (Node 18 o posterior). Deben pasar todas antes de hacer commit.
+- **Pruebas:** `node --test pruebas.mjs` (Node 18 o posterior) y
+  `node --test pruebas-navegador.mjs` (Node 22 o posterior, Chrome o Edge). Deben pasar todas antes de
+  hacer commit.
   Dos de ellas no prueban código sino **documentación**: que los topes que `README.md` y `AGENTS.md`
   citan sean los del código, y que no nombren nada que ya no exista. Si fallan, arregla el texto.
-- **Integración continua:** `.github/workflows/pruebas.yml` corre esas mismas pruebas en cada pull
-  request y en cada empujón a `main`. Es lo único que corre: si añades otra comprobación, que no
-  necesite dependencias.
+- **Integración continua:** `.github/workflows/pruebas.yml` corre ambas suites en cada pull request y
+  en cada empujón a `main`. No necesitan dependencias instaladas.
 - **No hay** `package.json`, linter ni build. No los añadas sin que se pida.
 
 ## Cómo se trabaja en este proyecto
@@ -586,7 +588,8 @@ recojan lo que se escape. Según lo que hayas tocado:
   `validarMapa` fueron 679 (7 tipos de sala × 97 archivos estropeados), comparando la lista de
   errores **en su orden** y el mapa limpio.
 
-**Si tocaste la parte con DOM**, no hay pruebas que te cubran, así que:
+**Si tocaste la parte con DOM**, amplía los recorridos de `pruebas-navegador.mjs` para las acciones
+afectadas y además:
 
 - **Compara contra la versión anterior servida en paralelo:** `git show HEAD:index.html > antes.html`,
   y pasa el mismo guion por las dos anotando lo que importe (avisos, ids, posiciones, contadores).
@@ -597,7 +600,8 @@ recojan lo que se escape. Según lo que hayas tocado:
 
 Y en todos los casos, el repaso de siempre:
 
-1. `node --test pruebas.mjs`: todas en verde. Añade pruebas si tocas la parte sin DOM.
+1. `node --test pruebas.mjs` y `node --test pruebas-navegador.mjs`: todas en verde. Añade pruebas
+   si tocas la parte sin DOM o un recorrido de la interfaz.
 2. Abre `index.html` y comprueba, según lo que hayas tocado:
    - **Previsualizar:** elegir y soltar butacas (clic, Enter, Espacio), recorrer con flechas,
      zoom con rueda y botones, arrastre del plano sin elegir butaca, cambio de tipo de sala con aviso.

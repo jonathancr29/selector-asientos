@@ -824,6 +824,7 @@ propias y se recuperan al recargar.
 
 ```bash
 node --test pruebas.mjs
+node --test pruebas-navegador.mjs
 ```
 
 Cubren la rejilla, el reparto de mesas, el aforo de la tabla anterior, la conciliación de la
@@ -832,6 +833,12 @@ mira cada silla, dónde caben, girar, alargar, cabeceras, un solo lado y sitio p
 evalúa la parte del script anterior a la marca *«Fin de la parte sin DOM»*, así que el proyecto
 sigue siendo un solo archivo, y la API que ven las pruebas se escanea del propio archivo: una
 función nueva se prueba sin tocar el arnés. Requiere Node 18 o posterior.
+
+`pruebas-navegador.mjs` abre el archivo servido localmente en Chrome o Edge y recorre la interfaz:
+selección con teclado, guardado y recarga, importación de JSON, edición de varias piezas y deshacer.
+También comprueba el ancho de 390 px y los nombres expuestos en el árbol de accesibilidad. Requiere
+Node 22 o posterior y Chrome o Edge; en Windows se detecta su instalación habitual y en otros
+sistemas se puede indicar la ruta con `CHROME_BIN`. No instala paquetes.
 
 Dos de ellas vigilan **esta documentación**: que los topes que se citan aquí y en `AGENTS.md` sean
 los que tiene el código, y que no se nombre ninguna función que ya no exista. Así el texto no se

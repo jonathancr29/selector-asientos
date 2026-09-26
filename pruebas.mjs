@@ -2762,7 +2762,8 @@ test('los documentos citan los topes que de verdad tiene el codigo', () => {
 });
 
 test('los documentos no citan codigo que ya no existe', () => {
-  const fuentes = readFileSync(new URL('./index.html', import.meta.url), 'utf8') + '\n' + fuente;
+  const fuentes = readFileSync(new URL('./index.html', import.meta.url), 'utf8') + '\n' +
+    readFileSync(new URL('./pruebas-navegador.mjs', import.meta.url), 'utf8') + '\n' + fuente;
   // Palabras entre acentos graves que parecen un identificador suelto o una llamada.
   const parece = /^[a-zA-Z_$][A-Za-z0-9_$]*$/;
   // Lo que no es de este proyecto: JavaScript, el DOM, HTML, y los nombres de campo que
