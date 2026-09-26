@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<!--
+  Selector de asientos · plano de butacas interactivo en SVG.
+  Un solo archivo, sin dependencias ni paso de compilacion.
+
+  Copyright (c) 2026 Jonathan CR
+  Publicado bajo licencia MIT. Ver LICENSE.
+
+  El icono de la butaca es «event_seat» de Material Icons (Google),
+  bajo Apache License 2.0. Ver NOTICE.
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Selector de asientos</title>
+<style>{{ESTILOS}}</style>
+</head>
+<body>
+
+<!-- Iconos de las barras del editor. Los de Material Symbols (Apache 2.0, ver NOTICE)
+     usan su viewBox original; los propios dibujan mesas y piezas como en el plano. -->
+<svg class="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <symbol id="i-ver" viewBox="0 -960 960 960"><path d="M600.5-379.62q49.5-49.62 49.5-120.5T600.38-620.5Q550.76-670 479.88-670T359.5-620.38Q310-570.76 310-499.88t49.62 120.38q49.62 49.5 120.5 49.5t120.38-49.62Zm-200-41.12q-32.5-32.73-32.5-79.5 0-46.76 32.74-79.26 32.73-32.5 79.5-32.5 46.76 0 79.26 32.74 32.5 32.73 32.5 79.5 0 46.76-32.74 79.26-32.73 32.5-79.5 32.5-46.76 0-79.26-32.74ZM234.5-276Q124-352 57-470q-4-7.13-6-14.65-2-7.52-2-15.43 0-7.92 2-15.38 2-7.47 6-14.54 67-118 177.5-194T480-800q135 0 245.5 76T903-530q4 7.12 6 14.65 2 7.52 2 15.43 0 7.92-2 15.38-2 7.47-6 14.54-67 118-177.5 194T480-200q-135 0-245.5-76ZM480-500Zm222.5 174.5Q804-391 857-500q-53-109-154.33-174.5Q601.34-740 480.17-740T257.5-674.5Q156-609 102-500q54 109 155.33 174.5Q358.66-260 479.83-260t222.67-65.5Z"></path></symbol>
+    <symbol id="i-editar" viewBox="0 -960 960 960"><path d="M180-180h44l472-471-44-44-472 471v44Zm-30 60q-13 0-21.5-8.5T120-150v-73q0-12 5-23.5t13-19.5l557-556q8-8 19-12.5t23-4.5q11 0 22 4.5t20 12.5l44 44q9 9 13 20t4 22q0 11-4.5 22.5T823-694L266-138q-8 8-19.5 13t-23.5 5h-73Zm629-617-41-41 41 41Zm-105 64-22-22 44 44-22-22Z"></path></symbol>
+    <symbol id="i-acercar" viewBox="0 -960 960 960"><path d="M346-556h-52q-12.75 0-21.37-8.68-8.63-8.67-8.63-21.5 0-12.82 8.63-21.32 8.62-8.5 21.37-8.5h52v-51q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v51h51q12.75 0 21.38 8.68 8.62 8.67 8.62 21.5 0 12.82-8.62 21.32-8.63 8.5-21.38 8.5h-51v52q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63-8.5-8.62-8.5-21.37v-52Zm32 227q-108.16 0-183.08-75Q120-479 120-585t75-181q75-75 181.5-75t181 75Q632-691 632-584.85 632-542 618-502q-14 40-42 75l242 240q9 8.56 9 21.78T818-143q-9 9-22.22 9-13.22 0-21.78-9L533-384q-30 26-69.96 40.5Q423.08-329 378-329Zm-1-60q81.25 0 138.13-57.5Q572-504 572-585t-56.87-138.5Q458.25-781 377-781q-82.08 0-139.54 57.5Q180-666 180-585t57.46 138.5Q294.92-389 377-389Z"></path></symbol>
+    <symbol id="i-alejar" viewBox="0 -960 960 960"><path d="M305-556q-12.75 0-21.37-8.68-8.63-8.67-8.63-21.5 0-12.82 8.63-21.32 8.62-8.5 21.37-8.5h141q12.75 0 21.38 8.68 8.62 8.67 8.62 21.5 0 12.82-8.62 21.32-8.63 8.5-21.38 8.5H305Zm73 227q-108.16 0-183.08-75Q120-479 120-585t75-181q75-75 181.5-75t181 75Q632-691 632-584.85 632-542 618-502q-14 40-42 75l242 240q9 8.56 9 21.78T818-143q-9 9-22.22 9-13.22 0-21.78-9L533-384q-30 26-69.96 40.5Q423.08-329 378-329Zm-1-60q81.25 0 138.13-57.5Q572-504 572-585t-56.87-138.5Q458.25-781 377-781q-82.08 0-139.54 57.5Q180-666 180-585t57.46 138.5Q294.92-389 377-389Z"></path></symbol>
+    <symbol id="i-ajustar" viewBox="0 -960 960 960"><path d="M820-640v-100H720q-12.75 0-21.37-8.68-8.63-8.67-8.63-21.5 0-12.82 8.63-21.32 8.62-8.5 21.37-8.5h100q24 0 42 18t18 42v100q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63-8.5-8.62-8.5-21.37Zm-740 0v-100q0-24 18-42t42-18h100q12.75 0 21.38 8.68 8.62 8.67 8.62 21.5 0 12.82-8.62 21.32-8.63 8.5-21.38 8.5H140v100q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63Q80-627.25 80-640Zm740 480H720q-12.75 0-21.37-8.68-8.63-8.67-8.63-21.5 0-12.82 8.63-21.32 8.62-8.5 21.37-8.5h100v-100q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v100q0 24-18 42t-42 18Zm-680 0q-24 0-42-18t-18-42v-100q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v100h100q12.75 0 21.38 8.68 8.62 8.67 8.62 21.5 0 12.82-8.62 21.32-8.63 8.5-21.38 8.5H140Zm60-180v-280q0-24.75 17.63-42.38Q235.25-680 260-680h440q24.75 0 42.38 17.62Q760-644.75 760-620v280q0 24.75-17.62 42.37Q724.75-280 700-280H260q-24.75 0-42.37-17.63Q200-315.25 200-340Zm60 0h440v-280H260v280Zm0 0v-280 280Z"></path></symbol>
+    <symbol id="i-restablecer" viewBox="0 -960 960 960"><path d="M418-126q-111-21-184.5-109T160-439q0-71 30-134t85-107q8-6 19-5.5t19 8.5q10 10 9 23t-13 23q-42 35-65.5 85.5T220-439q0 94 58 163.5T425-186q11 2 18.5 11t7.5 20q0 14-10 22.5t-23 6.5Zm126 0q-13 2-23-6.5T511-155q0-11 7.5-20t18.5-11q90-20 147-89.5T741-439q0-109-75.5-184.5T481-699h-20l39 39q8 8 8 21t-8 21q-9 9-22 9t-21-9l-91-90q-5-5-7-10t-2-11q0-6 2-11t7-10l91-91q8-8 21-8t22 8q8 9 8 22t-8 21l-39 39h20q134 0 227 93.5T801-439q0 116-73 204T544-126Z"></path></symbol>
+    <symbol id="i-girar" viewBox="0 -960 960 960"><path d="M440-80q-150 0-255-105T80-440q0-151 105-257.5T441-804h31l-53-53q-9-9-9-21t9-21q9-9 21-9t21 9l104 104q5 5 7 10t2 11q0 6-2 11t-7 10L461-649q-9 9-21 9t-21-9q-9-9-9-21t9-21l53-53h-31q-126 0-213.5 89T140-440q0 125 87.5 212.5T440-140q40 0 78-11t73-31q11-6 23-2t17 15q6 11 2.5 23.5T619-127q-42 23-86.5 35T440-80Zm237-161L497-421q-5-5-7-10t-2-11q0-6 2-11t7-10l180-180q5-5 10-7t11-2q6 0 11 2t10 7l180 180q5 5 7 10t2 11q0 6-2 11t-7 10L719-241q-5 5-10 7t-11 2q-6 0-11-2t-10-7Zm21-61 136-136-136-136-136 136 136 136Zm0-136Z"></path></symbol>
+    <symbol id="i-alargar" viewBox="0 -960 960 960"><path d="m194-449 93 92q9 9 9 21t-9 21q-9 9-21.5 9t-21.5-9L101-458q-5-5-7-10t-2-11q0-6 2-11t7-10l144-144q9-9 21-8.5t21 9.5q9 9 9 21t-9 21l-92 91h569l-92-91q-9-9-9-21t9-21q9-9 21.5-9t21.5 9l143 143q5 5 7 10t2 11q0 6-2 11t-7 10L714-314q-9 9-21 9t-21-9q-9-9-9-21.5t9-21.5l92-92H194Z"></path></symbol>
+    <symbol id="i-acortar" viewBox="0 -960 960 960"><path transform="rotate(90 480 -480)" d="M195-410q-14 0-24.5-10.5T160-445q0-14 10.5-24.5T195-480h570q14 0 24.5 10.5T800-445q0 14-10.5 24.5T765-410H195Zm-5-121q-13 0-21.5-8.5T160-561q0-13 8.5-21.5T190-591h580q13 0 21.5 8.5T800-561q0 13-8.5 21.5T770-531H190ZM457.5-88.5Q449-97 449-110v-128l-56 55q-9 8-21 8.5t-21-8.5q-9-9-9-21t9-21l107-106q5-5 10-7t11-2q6 0 11 2t10 7l105 106q8 9 8.5 21t-8.5 21q-9 9-21 9t-21-9l-54-55v128q0 13-8.5 21.5T479-80q-13 0-21.5-8.5ZM468-662q-5-2-10-7L352-775q-8-8-8.5-20.5T352-817q9-9 21-9t21 9l54 55v-128q0-13 8.5-21.5T478-920q13 0 21.5 8.5T508-890v128l56-55q9-8 21-8.5t21 8.5q9 9 9 21t-9 21L500-669q-5 5-10 7t-11 2q-6 0-11-2Z"></path></symbol>
+    <symbol id="i-duplicar" viewBox="0 -960 960 960"><path d="M300-200q-24 0-42-18t-18-42v-560q0-24 18-42t42-18h440q24 0 42 18t18 42v560q0 24-18 42t-42 18H300Zm0-60h440v-560H300v560ZM180-80q-24 0-42-18t-18-42v-590q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v590h470q12.75 0 21.38 8.68 8.62 8.67 8.62 21.5 0 12.82-8.62 21.32Q662.75-80 650-80H180Zm120-180v-560 560Z"></path></symbol>
+    <symbol id="i-eliminar" viewBox="0 -960 960 960"><path d="M261-120q-24.75 0-42.37-17.63Q201-155.25 201-180v-570h-11q-12.75 0-21.37-8.68-8.63-8.67-8.63-21.5 0-12.82 8.63-21.32 8.62-8.5 21.37-8.5h158q0-13 8.63-21.5 8.62-8.5 21.37-8.5h204q12.75 0 21.38 8.62Q612-822.75 612-810h158q12.75 0 21.38 8.68 8.62 8.67 8.62 21.5 0 12.82-8.62 21.32-8.63 8.5-21.38 8.5h-11v570q0 24.75-17.62 42.37Q723.75-120 699-120H261Zm438-630H261v570h438v-570ZM418.5-274.63q8.5-8.62 8.5-21.37v-339q0-12.75-8.68-21.38-8.67-8.62-21.5-8.62-12.82 0-21.32 8.62-8.5 8.63-8.5 21.38v339q0 12.75 8.68 21.37 8.67 8.63 21.5 8.63 12.82 0 21.32-8.63Zm166 0q8.5-8.62 8.5-21.37v-339q0-12.75-8.68-21.38-8.67-8.62-21.5-8.62-12.82 0-21.32 8.62-8.5 8.63-8.5 21.38v339q0 12.75 8.68 21.37 8.67 8.63 21.5 8.63 12.82 0 21.32-8.63ZM261-750v570-570Z"></path></symbol>
+    <symbol id="i-barra" viewBox="0 -960 960 960"><path d="M450-180v-244L134-764q-6-6-9-14.5t-3-16.5q0-19 13-32t32-13h626q19 0 32 13t13 32q0 8-3 16.5t-9 14.5L510-424v244h180q13 0 21.5 8.5T720-150q0 13-8.5 21.5T690-120H270q-13 0-21.5-8.5T240-150q0-13 8.5-21.5T270-180h180ZM281-695h398l83-81H198l83 81Zm199 216 144-156H336l144 156Zm0 0Z"></path></symbol>
+    <symbol id="i-sala" viewBox="0 -960 960 960"><path d="M158-723v-96q0-8 7-12.5t15-.5l95 48q8 5 8 13t-8 13l-95 48q-8 4-15-.5t-7-12.5Zm540 0v-96q0-8 7-12.5t15-.5l95 48q8 5 8 13t-8 13l-95 48q-8 4-15-.5t-7-12.5Zm-252-36v-96q0-8 7-12.5t15-.5l95 48q8 5 8 13t-8 13l-95 48q-8 4-15-.5t-7-12.5ZM398-82q-139-10-228.5-42T80-200v-360q0-25 31.5-46.5t85.5-38q54-16.5 127-26t156-9.5q83 0 156 9.5t127 26q54 16.5 85.5 38T880-560v360q0 45-88.5 76.5T563-82q-14 1-23.5-7.5T530-112v-138H430v138q0 13-9.5 22T398-82Zm82-418q97 0 172.5-14.5T800-558q-23-24-107.5-43T480-620q-128 0-212.5 19T160-558q72 29 147.5 43.5T480-500ZM370-145v-105q0-25 17.5-42.5T430-310h100q25 0 42.5 17.5T590-250v105q80-5 138.5-21.5T820-205v-297q-57 26-149 44t-191 18q-99 0-191-18t-149-44v297q33 22 91.5 38.5T370-145Zm110-179Z"></path></symbol>
+    <symbol id="i-zona" viewBox="0 -960 960 960"><path d="M863-404 557-97q-9 8.5-20.25 12.75T514.25-80Q503-80 492-84.5T472-97L98-472q-8-8-13-18.96-5-10.95-5-23.04v-306q0-24.75 17.63-42.38Q115.25-880 140-880h307q12.07 0 23.39 4.87Q481.7-870.25 490-862l373 373q9.39 9 13.7 20.25 4.3 11.25 4.3 22.5t-4.5 22.75Q872-412 863-404ZM516-138l306-307-375-375H140v304l376 378ZM245-664q21 0 36.5-15.5T297-716q0-21-15.5-36.5T245-768q-21 0-36.5 15.5T193-716q0 21 15.5 36.5T245-664Zm236 185Z"></path></symbol>
+    <symbol id="i-nombre" viewBox="0 -960 960 960"><path d="M140-160q-24.75 0-42.37-17.63Q80-195.25 80-220v-520q0-24.75 17.63-42.38Q115.25-800 140-800h471q14.25 0 27 6.37 12.75 6.38 21 17.63l195 260q12 15.68 12 35.84Q866-460 854-444L660-184q-8.25 11.25-21 17.62-12.75 6.38-27 6.38H140Zm0-60h471l195-260-195-260H140v520Zm333-260Z"></path></symbol>
+    <symbol id="i-agregar" viewBox="0 -960 960 960"><path d="M450-450H230q-12.75 0-21.37-8.68-8.63-8.67-8.63-21.5 0-12.82 8.63-21.32 8.62-8.5 21.37-8.5h220v-220q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v220h220q12.75 0 21.38 8.68 8.62 8.67 8.62 21.5 0 12.82-8.62 21.32-8.63 8.5-21.38 8.5H510v220q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63-8.5-8.62-8.5-21.37v-220Z"></path></symbol>
+    <symbol id="i-bloquear" viewBox="0 0 24 24"><use href="#butaca" width="16" height="16"></use><rect x="13" y="14.5" width="9" height="7.5" rx="1.5"></rect><path d="M15.2 14.5v-2a2.3 2.3 0 0 1 4.6 0v2" fill="none" stroke="currentColor" stroke-width="1.6"></path></symbol>
+    <symbol id="i-escenario-quitar" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="10" rx="1.5"></rect><rect x="7" y="17.4" width="10" height="2.2" rx="1.1"></rect></symbol>
+    <symbol id="i-escenario-agregar" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="10" rx="1.5"></rect><rect x="7" y="17.4" width="10" height="2.2" rx="1.1"></rect><rect x="10.9" y="14.5" width="2.2" height="8" rx="1.1"></rect></symbol>
+    <symbol id="i-mesa-lados" viewBox="0 0 24 24"><rect x="5" y="9" width="14" height="6" rx="1.5" fill-opacity=".25" stroke="currentColor" stroke-width="1.6"></rect><rect x="6.5" y="3.5" width="4" height="3.5" rx="1"></rect><rect x="13.5" y="3.5" width="4" height="3.5" rx="1"></rect><rect x="6.5" y="17" width="4" height="3.5" rx="1"></rect><rect x="13.5" y="17" width="4" height="3.5" rx="1"></rect></symbol>
+    <symbol id="i-mesa-cruz" viewBox="0 0 24 24"><rect x="8" y="8" width="8" height="8" rx="1.5" fill-opacity=".25" stroke="currentColor" stroke-width="1.6"></rect><rect x="10" y="2.5" width="4" height="3.5" rx="1"></rect><rect x="10" y="18" width="4" height="3.5" rx="1"></rect><rect x="2.5" y="10" width="3.5" height="4" rx="1"></rect><rect x="18" y="10" width="3.5" height="4" rx="1"></rect></symbol>
+    <symbol id="i-mesa-un-lado" viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="6.5" rx="1.5" fill-opacity=".25" stroke="currentColor" stroke-width="1.6"></rect><rect x="3.5" y="14" width="4" height="3.5" rx="1"></rect><rect x="10" y="14" width="4" height="3.5" rx="1"></rect><rect x="16.5" y="14" width="4" height="3.5" rx="1"></rect></symbol>
+    <symbol id="i-bloque" viewBox="0 0 24 24"><use href="#butaca" x="0.5" y="4" width="7.5" height="7.5"></use><use href="#butaca" x="8.25" y="4" width="7.5" height="7.5"></use><use href="#butaca" x="16" y="4" width="7.5" height="7.5"></use><use href="#butaca" x="0.5" y="13" width="7.5" height="7.5"></use><use href="#butaca" x="8.25" y="13" width="7.5" height="7.5"></use><use href="#butaca" x="16" y="13" width="7.5" height="7.5"></use></symbol>
+    <symbol id="i-butaca" viewBox="0 0 24 24"><use href="#butaca" width="24" height="24"></use></symbol>
+    <symbol id="i-pista" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"></rect><rect x="3" y="3" width="4.5" height="4.5"></rect><rect x="3" y="12" width="4.5" height="4.5"></rect><rect x="7.5" y="7.5" width="4.5" height="4.5"></rect><rect x="7.5" y="16.5" width="4.5" height="4.5"></rect><rect x="12" y="3" width="4.5" height="4.5"></rect><rect x="12" y="12" width="4.5" height="4.5"></rect><rect x="16.5" y="7.5" width="4.5" height="4.5"></rect><rect x="16.5" y="16.5" width="4.5" height="4.5"></rect></symbol>
+    <symbol id="i-mas-fila" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"></rect><rect x="3" y="8" width="18" height="1.6"></rect><rect x="7.5" y="17.7" width="9" height="2.2" rx="1.1"></rect><rect x="10.9" y="15.3" width="2.2" height="7" rx="1.1"></rect></symbol>
+    <symbol id="i-menos-fila" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"></rect><rect x="3" y="8" width="18" height="1.6"></rect><rect x="7.5" y="17.7" width="9" height="2.2" rx="1.1"></rect></symbol>
+    <symbol id="i-cabeceras" viewBox="0 0 24 24"><rect x="6" y="8.5" width="12" height="7" rx="1.5" fill-opacity=".25" stroke="currentColor" stroke-width="1.6"></rect><rect x="1.5" y="10" width="3.5" height="4" rx="1"></rect><rect x="19" y="10" width="3.5" height="4" rx="1"></rect><rect x="7.5" y="3.5" width="4" height="3.5" rx="1" fill-opacity=".35"></rect><rect x="12.5" y="3.5" width="4" height="3.5" rx="1" fill-opacity=".35"></rect><rect x="7.5" y="17" width="4" height="3.5" rx="1" fill-opacity=".35"></rect><rect x="12.5" y="17" width="4" height="3.5" rx="1" fill-opacity=".35"></rect></symbol>
+    <symbol id="i-un-solo-lado" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="6" rx="1.5" fill-opacity=".25" stroke="currentColor" stroke-width="1.6"></rect><rect x="6" y="16.5" width="4" height="3.5" rx="1"></rect><rect x="14" y="16.5" width="4" height="3.5" rx="1"></rect><rect x="6" y="3.5" width="4" height="3.5" rx="1" fill-opacity=".35"></rect><rect x="14" y="3.5" width="4" height="3.5" rx="1" fill-opacity=".35"></rect></symbol>
+    <symbol id="i-guardar" viewBox="0 -960 960 960"><path d="M180-120q-24 0-42-18t-18-42v-600q0-24 18-42t42-18h478q12.44 0 23.72 5T701-822l121 121q8 8 13 19.28 5 11.28 5 23.72v478q0 24-18 42t-42 18H180Zm600-536L656-780H180v600h600v-476ZM553.5-275.26q30.5-30.27 30.5-73.5 0-43.24-30.26-73.74-30.27-30.5-73.5-30.5-43.24 0-73.74 30.26-30.5 30.27-30.5 73.5 0 43.24 30.26 73.74 30.27 30.5 73.5 30.5 43.24 0 73.74-30.26ZM263-584h298q12.75 0 21.38-8.63Q591-601.25 591-614v-83q0-12.75-8.62-21.38Q573.75-727 561-727H263q-12.75 0-21.37 8.62Q233-709.75 233-697v83q0 12.75 8.63 21.37Q250.25-584 263-584Zm-83-72v476-600 124Z"></path></symbol>
+    <symbol id="i-exportar" viewBox="0 -960 960 960"><path d="M469-327q-5-2-10-7L308-485q-9-9.27-8.5-21.64.5-12.36 9.11-21.36 9.39-9 21.89-9t21.5 9l98 99v-341q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v341l99-99q8.8-9 20.9-8.5 12.1.5 21.49 9.5 8.61 9 8.61 21.5t-9 21.5L501-334q-5 5-10.13 7-5.14 2-11 2-5.87 0-10.87-2ZM220-160q-24 0-42-18t-18-42v-113q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v113h520v-113q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v113q0 24-18 42t-42 18H220Z"></path></symbol>
+    <symbol id="i-importar" viewBox="0 -960 960 960"><path d="M220-160q-24 0-42-18t-18-42v-113q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v113h520v-113q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v113q0 24-18 42t-42 18H220Zm230-524-99 99q-8.8 9-20.9 8.5-12.1-.5-21.49-9.5-8.61-9-8.61-21.5t9-21.5l150-150q5-5 10.13-7 5.14-2 11-2 5.87 0 10.87 2 5 2 10 7l151 151q9 9 9 21t-8.61 21q-9.39 9-21.89 9t-21.5-9l-99-98v341q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63-8.5-8.62-8.5-21.37v-341Z"></path></symbol>
+    <symbol id="i-eliminar-mapa" viewBox="0 -960 960 960"><path d="M261-120q-24.75 0-42.37-17.63Q201-155.25 201-180v-570h-11q-12.75 0-21.37-8.68-8.63-8.67-8.63-21.5 0-12.82 8.63-21.32 8.62-8.5 21.37-8.5h158q0-13 8.63-21.5 8.62-8.5 21.37-8.5h204q12.75 0 21.38 8.62Q612-822.75 612-810h158q12.75 0 21.38 8.68 8.62 8.67 8.62 21.5 0 12.82-8.62 21.32-8.63 8.5-21.38 8.5h-11v570q0 24.75-17.62 42.37Q723.75-120 699-120H261Zm438-630H261v570h438v-570Zm-438 0v570-570Zm219 330 96 97q10 10 24 10.5t24-10q10-10.5 10-24T624-370l-96-98 96-98q10-10 10-23.5T624-613q-10-10-24-10t-24 10l-96 97-95-97q-10-10-24-10t-24 10q-10 10-10 24t10 24l96 97-96 97q-10 10-10 24t10 24q10 10 24 10t24-10l95-97Z"></path></symbol>
+    <symbol id="i-aplicar" viewBox="0 -960 960 960"><path d="m378-332 363-363q9-9 21.5-9t21.5 9q9 9 9 21.5t-9 21.5L399-267q-9 9-21 9t-21-9L175-449q-9-9-8.5-21.5T176-492q9-9 21.5-9t21.5 9l159 160Z"></path></symbol>
+    <symbol id="i-agregar-zona" viewBox="0 -960 960 960"><path d="M611-800q14.25 0 27 6.37 12.75 6.38 21 17.63l195 260q12 15.68 12 35.84Q866-460 854-444L660-184q-8.25 11.25-21 17.62-12.75 6.38-27 6.38H470q-12.75 0-21.37-8.68-8.63-8.67-8.63-21.5 0-12.82 8.63-21.32 8.62-8.5 21.37-8.5h141l195-260-195-260H140v230q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63Q80-497.25 80-510v-230q0-24.75 17.63-42.38Q115.25-800 140-800h471ZM208.5-128.63Q200-137.25 200-150v-90h-90q-12.75 0-21.37-8.68-8.63-8.67-8.63-21.5 0-12.82 8.63-21.32Q97.25-300 110-300h90v-90q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v90h90q12.75 0 21.38 8.68 8.62 8.67 8.62 21.5 0 12.82-8.62 21.32-8.63 8.5-21.38 8.5h-90v90q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63ZM473-480Z"></path></symbol>
+    <symbol id="i-arriba" viewBox="0 -960 960 960"><path d="M450-686 223-459q-9 9-21 9t-21-9q-9-9-9-21t9-21l278-278q5-5 10-7t11-2q6 0 11 2t10 7l278 278q9 9 9 21t-9 21q-9 9-21 9t-21-9L510-686v496q0 13-8.5 21.5T480-160q-13 0-21.5-8.5T450-190v-496Z"></path></symbol>
+    <symbol id="i-abajo" viewBox="0 -960 960 960"><path d="M450-274v-496q0-13 8.5-21.5T480-800q13 0 21.5 8.5T510-770v496l227-227q9-9 21-9t21 9q9 9 9 21t-9 21L501-181q-5 5-10 7t-11 2q-6 0-11-2t-10-7L181-459q-9-9-9-21t9-21q9-9 21-9t21 9l227 227Z"></path></symbol>
+    <symbol id="i-izquierda" viewBox="0 -960 960 960"><path d="m274-450 227 227q9 9 9 21t-9 21q-9 9-21 9t-21-9L181-459q-5-5-7-10t-2-11q0-6 2-11t7-10l278-278q9-9 21-9t21 9q9 9 9 21t-9 21L274-510h496q13 0 21.5 8.5T800-480q0 13-8.5 21.5T770-450H274Z"></path></symbol>
+    <symbol id="i-derecha" viewBox="0 -960 960 960"><path d="M686-450H190q-13 0-21.5-8.5T160-480q0-13 8.5-21.5T190-510h496L459-737q-9-9-9-21t9-21q9-9 21-9t21 9l278 278q5 5 7 10t2 11q0 6-2 11t-7 10L501-181q-9 9-21 9t-21-9q-9-9-9-21t9-21l227-227Z"></path></symbol>
+    <symbol id="i-agregar-vertical" viewBox="0 -960 960 960"><path d="M409-780H140v600h269v-600ZM140-120q-24.75 0-42.37-17.63Q80-155.25 80-180v-600q0-24.75 17.63-42.38Q115.25-840 140-840h600q24.75 0 42.38 17.62Q800-804.75 800-780v60q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63-8.5-8.62-8.5-21.37v-60H469v600h271v-60q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v60q0 24.75-17.62 42.37Q764.75-120 740-120H140Zm608.5-258.63Q740-387.25 740-400v-50h-50q-12.75 0-21.37-8.68-8.63-8.67-8.63-21.5 0-12.82 8.63-21.32 8.62-8.5 21.37-8.5h50v-50q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v50h50q12.75 0 21.38 8.68 8.62 8.67 8.62 21.5 0 12.82-8.62 21.32-8.63 8.5-21.38 8.5h-50v50q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63ZM469-480Zm-60 0h60-60Zm0 0Z"></path></symbol>
+    <symbol id="i-guias" viewBox="0 0 24 24"><text x="11" y="10" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor">A</text><text x="11" y="22" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor">B</text></symbol>
+    <symbol id="i-agregar-filas" viewBox="0 0 24 24"><use href="#butaca" x="0" y="0" width="7.5" height="7.5"></use><use href="#butaca" x="7" y="0" width="7.5" height="7.5"></use><use href="#butaca" x="0" y="7" width="7.5" height="7.5"></use><use href="#butaca" x="7" y="7" width="7.5" height="7.5"></use><rect x="18.4" y="15" width="2.2" height="9" rx="1.1"></rect><rect x="15" y="18.4" width="9" height="2.2" rx="1.1"></rect></symbol>
+    <symbol id="i-agregar-mesas" viewBox="0 0 24 24"><rect x="1" y="8" width="11" height="5" rx="1.2" fill-opacity=".25" stroke="currentColor" stroke-width="1.5"></rect><rect x="2" y="3" width="3.5" height="3" rx="0.8"></rect><rect x="7.5" y="3" width="3.5" height="3" rx="0.8"></rect><rect x="2" y="15" width="3.5" height="3" rx="0.8"></rect><rect x="7.5" y="15" width="3.5" height="3" rx="0.8"></rect><rect x="18.4" y="15" width="2.2" height="9" rx="1.1"></rect><rect x="15" y="18.4" width="9" height="2.2" rx="1.1"></rect></symbol>
+    <symbol id="i-agregar-espacio" viewBox="0 0 24 24"><rect x="1.5" y="3" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3 2"></rect><rect x="18.4" y="15" width="2.2" height="9" rx="1.1"></rect><rect x="15" y="18.4" width="9" height="2.2" rx="1.1"></rect></symbol>
+    <symbol id="i-agregar-division" viewBox="0 0 24 24"><rect x="1.5" y="3" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"></rect><rect x="7.3" y="3" width="1.5" height="13"></rect><rect x="18.4" y="15" width="2.2" height="9" rx="1.1"></rect><rect x="15" y="18.4" width="9" height="2.2" rx="1.1"></rect></symbol>
+    <symbol id="i-mesa-redonda" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.6" fill-opacity=".25" stroke="currentColor" stroke-width="1.6"></circle><rect x="10" y="1.5" width="4" height="3.2" rx="0.9"></rect><rect x="10" y="19.3" width="4" height="3.2" rx="0.9"></rect><rect x="1.5" y="10" width="3.2" height="4" rx="0.9"></rect><rect x="19.3" y="10" width="3.2" height="4" rx="0.9"></rect></symbol>
+    <symbol id="i-info" viewBox="0 -960 960 960"><path d="M504.5-288.63q8.5-8.62 8.5-21.37v-180q0-12.75-8.68-21.38-8.67-8.62-21.5-8.62-12.82 0-21.32 8.62-8.5 8.63-8.5 21.38v180q0 12.75 8.68 21.37 8.67 8.63 21.5 8.63 12.82 0 21.32-8.63Zm-1-314.57q9.5-9.2 9.5-22.8 0-14.45-9.48-24.22-9.48-9.78-23.5-9.78t-23.52 9.78Q447-640.45 447-626q0 13.6 9.48 22.8 9.48 9.2 23.5 9.2t23.52-9.2ZM480.27-80q-82.74 0-155.5-31.5Q252-143 197.5-197.5t-86-127.34Q80-397.68 80-480.5t31.5-155.66Q143-709 197.5-763t127.34-85.5Q397.68-880 480.5-880t155.66 31.5Q709-817 763-763t85.5 127Q880-563 880-480.27q0 82.74-31.5 155.5Q817-252 763-197.68q-54 54.31-127 86Q563-80 480.27-80Zm.23-60Q622-140 721-239.5t99-241Q820-622 721.19-721T480-820q-141 0-240.5 98.81T140-480q0 141 99.5 240.5t241 99.5Zm-.5-340Z"></path></symbol>
+    <symbol id="i-desplegar" viewBox="0 -960 960 960"><path d="M480-554 304-378q-9 9-21 8.5t-21-9.5q-9-9-9-21.5t9-21.5l197-197q9-9 21-9t21 9l198 198q9 9 9 21t-9 21q-9 9-21.5 9t-21.5-9L480-554Z"></path></symbol>
+    <symbol id="i-anterior" viewBox="0 -960 960 960"><path d="m406-481 177 177q9 9 8.5 21t-9.5 21q-9 9-21.5 9t-21.5-9L341-460q-5-5-7-10t-2-11q0-6 2-11t7-10l199-199q9-9 21.5-9t21.5 9q9 9 9 21.5t-9 21.5L406-481Z"></path></symbol>
+    <symbol id="i-siguiente" viewBox="0 -960 960 960"><path d="M530-481 353-658q-9-9-8.5-21t9.5-21q9-9 21.5-9t21.5 9l198 198q5 5 7 10t2 11q0 6-2 11t-7 10L396-261q-9 9-21 8.5t-21-9.5q-9-9-9-21.5t9-21.5l176-176Z"></path></symbol>
+    <symbol id="i-cerrar" viewBox="0 -960 960 960"><path d="M480-438 270-228q-9 9-21 9t-21-9q-9-9-9-21t9-21l210-210-210-210q-9-9-9-21t9-21q9-9 21-9t21 9l210 210 210-210q9-9 21-9t21 9q9 9 9 21t-9 21L522-480l210 210q9 9 9 21t-9 21q-9 9-21 9t-21-9L480-438Z"></path></symbol>
+  </defs>
+</svg>
+<div class="app" id="app">
+
+  <!-- Lateral izquierdo: leyenda, vista y herramientas del editor. Sticky en pantallas
+       anchas; en angostas pasa arriba del plano. Los grupos se pliegan (details). -->
+  <aside class="lateral lateral-herramientas" aria-label="Herramientas">
+    <details class="grupo" open>
+      <summary>Vista</summary>
+      <!-- Botones de icono: sin title (algunos lectores lo anuncian en lugar de aria-label);
+           el nombre visible va en data-tooltip. -->
+      <div class="herramientas rejilla-iconos" role="group" aria-label="Modo y zoom">
+        <button type="button" class="icono" id="modo-vista" aria-pressed="true" aria-label="Previsualizar" data-tooltip="Previsualizar"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-ver"></use></svg></button>
+        <button type="button" class="icono" id="modo-editor" aria-pressed="false" aria-label="Editar plano" data-tooltip="Editar plano"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-editar"></use></svg></button>
+        <button type="button" class="icono" id="acercar" aria-label="Acercar" data-tooltip="Acercar"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-acercar"></use></svg></button>
+        <button type="button" class="icono" id="alejar" aria-label="Alejar" data-tooltip="Alejar"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-alejar"></use></svg></button>
+        <button type="button" class="icono" id="ajustar" aria-label="Ajustar" data-tooltip="Ajustar a la sala"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-ajustar"></use></svg></button>
+      </div>
+    </details>
+    <!-- Las opciones salen de TIPOS_DE_SALA: el script las crea al cargar. -->
+    <div class="herramientas campo-ancho tipo-de-sala">
+      <label class="campo" for="tipo-sala" data-tooltip="Tipo de sala"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-sala"></use></svg><span class="solo-lector">Tipo de sala</span></label>
+      <select id="tipo-sala"></select>
+    </div>
+    <details class="grupo" open id="grupo-mapa" hidden>
+      <summary>Mapa</summary>
+      <div class="herramientas" role="group" aria-label="Historial del plano">
+        <button type="button" id="deshacer" aria-keyshortcuts="Control+Z Meta+Z" disabled>Deshacer</button>
+        <button type="button" id="rehacer" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y" disabled>Rehacer</button>
+      </div>
+      <p class="pista" id="estado-guardado" role="status">Sin cambios pendientes.</p>
+      <!-- Guardar el diseño con nombre, en el navegador o como JSON. -->
+      <div class="herramientas" id="herramientas-mapa" role="group" aria-label="Guardar mapa">
+        <label class="campo" for="nombre-mapa">Nombre del mapa</label>
+        <input type="text" id="nombre-mapa" maxlength="80" autocomplete="off" placeholder="Ej.: Salón Jardín, boda">
+        <div class="rejilla-iconos herramientas">
+          <button type="button" class="icono" id="guardar-mapa" aria-label="Guardar el mapa" data-tooltip="Guardar"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-guardar"></use></svg></button>
+          <button type="button" class="icono" id="exportar-mapa" aria-label="Exportar el mapa como JSON" data-tooltip="Exportar JSON"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-exportar"></use></svg></button>
+          <button type="button" class="icono" id="importar-mapa" aria-label="Importar un mapa desde un JSON" data-tooltip="Importar JSON"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-importar"></use></svg></button>
+          <button type="button" class="icono" id="eliminar-mapa" aria-label="Eliminar el mapa guardado" data-tooltip="Eliminar mapa" hidden><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-eliminar-mapa"></use></svg></button>
+        </div>
+        <input type="file" id="archivo-mapa" accept=".json,application/json" hidden>
+      </div>
+    </details>
+    <!-- La sala como columnas, zonas y lista de bandas, de arriba abajo. -->
+    <section class="bandas" id="panel-bandas" aria-labelledby="titulo-bandas" hidden>
+      <h2 class="solo-lector" id="titulo-bandas">Diseño de la sala</h2>
+      <details class="grupo" open>
+        <!-- El texto de ayuda no ocupa sitio: se abre con el boton de informacion. -->
+        <summary>Columnas<button type="button" class="icono info-grupo" id="info-columnas" aria-expanded="false" aria-controls="ayuda-de-columnas" aria-label="Qué son las columnas" data-tooltip="Información"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button></summary>
+        <div id="ayuda-de-columnas" hidden>
+          <p class="pista" id="ayuda-lienzo" hidden>
+            Columnas del lienzo, de 1 a 60. No hay pasillos fijos: el pasillo es el hueco que dejas entre
+            piezas. El alto es la suma de las bandas: cambia el alto de cada espacio con − y +.
+          </p>
+          <p class="pista" id="ayuda-columnas">
+            Cada número es un bloque de butacas; entre bloques va un pasillo. «4, 6, 4» con pasillos
+            «1, 2» son 14 butacas por fila y 17 columnas. Sin anchos, cada pasillo mide 1 columna.
+          </p>
+        </div>
+        <!-- En un lienzo (mapa en blanco) no hay pasillos: solo el ancho. -->
+          <div class="columnas-sala" id="columnas-lienzo" hidden>
+            <div class="fila-campo">
+              <label for="ancho-lienzo">Ancho del lienzo</label>
+              <input type="text" id="ancho-lienzo" inputmode="numeric" autocomplete="off"
+                     placeholder="20" aria-describedby="ayuda-lienzo">
+              <button type="button" class="icono" id="aplicar-ancho-lienzo" aria-label="Aplicar el ancho del lienzo" data-tooltip="Aplicar"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-aplicar"></use></svg></button>
+            </div>
+          </div>
+          <div class="columnas-sala" id="columnas-plantilla">
+            <div class="fila-campo">
+              <label for="bloques-sala">Butacas por bloque</label>
+              <input type="text" id="bloques-sala" inputmode="numeric" autocomplete="off"
+                     placeholder="4, 6, 4" aria-describedby="ayuda-columnas">
+            </div>
+            <div class="fila-campo">
+              <label for="pasillos-sala">Anchos de pasillo</label>
+              <input type="text" id="pasillos-sala" inputmode="numeric" autocomplete="off"
+                     placeholder="1, 1" aria-describedby="ayuda-columnas">
+              <button type="button" class="icono" id="aplicar-columnas" aria-label="Aplicar las columnas" data-tooltip="Aplicar"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-aplicar"></use></svg></button>
+            </div>
+          </div>
+      </details>
+      <!-- Una zona y una banda son lo mismo: cada fila lleva el color, el nombre y el
+           precio de la suya. Al final, las zonas que no son de ninguna banda. -->
+      <details class="grupo" open>
+        <summary>Zonas y precios<button type="button" class="icono info-grupo" id="info-zonas" aria-expanded="false" aria-controls="ayuda-de-zonas" aria-label="Cómo funcionan las zonas y los precios" data-tooltip="Información"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button></summary>
+        <div id="ayuda-de-zonas" hidden>
+          <p class="pista">
+            El precio es por lugar, en pesos, y se lo da a todo lo que cae dentro de la banda. Dos
+            bandas con la misma zona comparten precio y numeración; «Zona nueva» le da una propia.
+          </p>
+        </div>
+        <ol id="lista-bandas"></ol>
+        <ol class="zonas" id="lista-zonas" hidden aria-label="Zonas sin banda"></ol>
+          <div class="rejilla-iconos herramientas">
+            <button type="button" class="icono" id="agregar-zona" aria-label="Agregar una zona nueva, con su espacio" data-tooltip="Zona nueva"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar-zona"></use></svg></button>
+            <button type="button" class="icono" id="agregar-banda-filas" aria-label="Agregar una banda de filas al final" data-tooltip="Banda de filas"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar-filas"></use></svg></button>
+            <button type="button" class="icono" id="agregar-banda-mesas" aria-label="Agregar una zona de mesas al final" data-tooltip="Zona de mesas"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar-mesas"></use></svg></button>
+            <button type="button" class="icono" id="agregar-espacio" aria-label="Agregar un espacio sin zona al final" data-tooltip="Espacio sin zona"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar-espacio"></use></svg></button>
+            <button type="button" class="icono" id="agregar-division" aria-label="Agregar una franja con bandas verticales al final" data-tooltip="Franja con bandas verticales"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar-division"></use></svg></button>
+          </div>
+      </details>
+    </section>
+    <details class="grupo" open>
+      <summary>Leyenda</summary>
+      <ul class="leyenda">
+        <!-- Las muestras reutilizan los <symbol> del plano: la leyenda no puede
+             desalinearse del dibujo real. -->
+        <li><svg class="muestra" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/></svg>Disponible</li>
+        <li><svg class="muestra elegida" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/><use class="marca" href="#marca-elegida"/></svg>Seleccionado</li>
+        <li><svg class="muestra ocupada" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/><use class="marca" href="#marca-ocupada"/></svg>Ocupado</li>
+        <li><svg class="muestra bloqueada" viewBox="0 0 24 24" aria-hidden="true"><use href="#butaca"/><use class="marca" href="#marca-bloqueada"/></svg>Bloqueado</li>
+      </ul>
+    </details>
+  </aside>
+
+  <main class="centro">
+    <!-- Encabezado: solo textos de referencia e instrucciones. -->
+    <header class="encabezado">
+      <div class="titulo">
+        <h1>Selector de asientos</h1>
+        <button type="button" class="icono" id="boton-info" aria-expanded="false" aria-controls="hojas-info"
+                aria-label="Información: qué es, cómo se usa y notas" data-tooltip="Información"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button>
+      </div>
+      <p class="aforo" id="aforo"></p>
+      <!-- Hojas de informacion, de una en una. En escritorio el panel baja sobre el plano.
+           Se abren solo al pulsar el boton de informacion. -->
+      <section class="panel hojas" id="hojas-info" aria-roledescription="carrusel" aria-label="Información" hidden>
+        <article class="hoja" aria-roledescription="hoja" aria-label="1 de 3">
+          <h2>Qué es</h2>
+          <p class="bajada">Plano de butacas en SVG, sin dependencias. Filas numeradas, mesas y zona general en el mismo plano.</p>
+        </article>
+        <article class="hoja" aria-roledescription="hoja" aria-label="2 de 3" hidden>
+          <h2>Cómo se usa</h2>
+          <p class="pista" id="pista">Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer</p>
+        </article>
+        <article class="hoja" aria-roledescription="hoja" aria-label="3 de 3" hidden>
+          <h2>Notas</h2>
+          <p class="nota">
+            El plano se genera desde <code>butacas</code>, una lista plana con una fila por butaca:
+            identificador, fila, número, coordenadas, zona, grupo y estado. Es lo que devolvería tu
+            servidor. El SVG se produce al mostrar; nunca se almacena un SVG.
+          </p>
+          <p class="nota">
+            El selector de tipo de sala está aquí para comparar recintos: mixtos con distintos pasillos,
+            solo filas o solo mesas. En una aplicación real el recinto es fijo: se elegiría y editaría una
+            vez al crear su plano, y quedaría guardado en él. No sería un control para quien compra.
+          </p>
+        </article>
+        <div class="hojas-controles">
+          <button type="button" class="icono" id="hoja-anterior" aria-label="Hoja anterior" data-tooltip="Anterior · ←"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-anterior"></use></svg></button>
+          <span class="puntos" role="group" aria-label="Hojas">
+            <button type="button" class="punto" data-hoja="0" aria-label="Qué es" aria-current="true"></button>
+            <button type="button" class="punto" data-hoja="1" aria-label="Cómo se usa"></button>
+            <button type="button" class="punto" data-hoja="2" aria-label="Notas"></button>
+          </span>
+          <button type="button" class="icono" id="hoja-siguiente" aria-label="Hoja siguiente" data-tooltip="Siguiente · →"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-siguiente"></use></svg></button>
+          <button type="button" class="icono cerrar" id="cerrar-info" aria-label="Cerrar la información" data-tooltip="Cerrar · Esc"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-cerrar"></use></svg></button>
+        </div>
+      </section>
+    </header>
+
+    <div class="lienzo">
+      <svg id="plano" role="group" aria-label="Plano de butacas" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- El trazo se declara UNA vez y se instancia con <use>: el path no se
+               repite por butaca. -->
+          <symbol id="butaca" viewBox="0 0 24 24">
+            <path d="M4 18v3h3v-3h10v3h3v-6H4zm15-8h3v5h-3V10zM2 10h3v5H2V10zm3-6h14c1.1 0 2 .9 2 2v2H3V6c0-1.1.9-2 2-2z"></path>
+          </symbol>
+          <!-- Marcas de estado. Van en el hueco entre respaldo y asiento (y 8 a 15),
+               que el icono deja vacio, y comparten viewBox con la butaca. -->
+          <symbol id="marca-elegida" viewBox="0 0 24 24"><path d="M8.5 11.5l2.5 2.5 4.5-4.5"></path></symbol>
+          <symbol id="marca-ocupada" viewBox="0 0 24 24"><path d="M9.5 9.5l5 4.5M14.5 9.5l-5 4.5"></path></symbol>
+          <symbol id="marca-bloqueada" viewBox="0 0 24 24"><path d="M8.5 11.75h7"></path></symbol>
+          <!-- Cuadros de la pista de baile: una celda del plano, en cuatro cuadros. -->
+          <pattern id="cuadros-pista" width="12" height="12" patternUnits="userSpaceOnUse">
+            <rect width="12" height="12" fill="#2a2638"></rect>
+            <rect width="6" height="6" fill="#383250"></rect>
+            <rect x="6" y="6" width="6" height="6" fill="#383250"></rect>
+          </pattern>
+        </defs>
+        <g id="muebles"></g>
+        <g id="butacas"></g>
+        <g id="subtitulos"></g>        <!-- nombres en el borde de verticales y bandas interiores, sobre las butacas -->
+        <g id="seleccion-banda"></g>   <!-- solo en modo editor: el contorno de la banda seleccionada -->
+        <g id="piezas"></g>   <!-- solo en modo editor: una zona movible por mesa -->
+        <g id="rotulo-seleccion"></g>   <!-- el nombre de la banda seleccionada, encima de todo -->
+        <g id="area" class="area"></g>   <!-- el rectangulo de asignar zona o bloquear por area -->
+        <g id="tiradores" class="tiradores"></g>   <!-- solo en modo editor: agarres para redimensionar bandas -->
+        <g id="fantasma" class="fantasma"></g>   <!-- el tamano que tendria la banda al soltar el tirador -->
+      </svg>
+    </div>
+
+    <!-- Linea de estado fija al pie del plano: los mensajes se ven aunque el plano sea alto. -->
+    <!-- Pie: una sola barra fija. El estado a la izquierda; el resumen de la selección a la
+         derecha, con un boton que despliega hacia arriba el detalle de las butacas elegidas. -->
+    <footer class="barra-estado">
+      <div class="mensajes">
+        <p class="aviso" id="aviso" role="status"></p>
+        <p class="estado" id="estado" role="status"></p>
+      </div>
+      <div class="resumen-pie">
+        <p class="resumen" aria-live="polite">
+          Seleccionadas: <strong id="cuenta">0</strong> · Total <strong id="total">$0.00</strong>
+          <span id="vacio">— ninguna butaca seleccionada.</span>
+        </p>
+        <button type="button" class="icono" id="boton-detalle" aria-expanded="false" aria-controls="panel-detalle"
+                aria-label="Detalle de las butacas elegidas" data-tooltip="Detalle"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-desplegar"></use></svg></button>
+      </div>
+      <section class="panel" id="panel-detalle" aria-label="Butacas elegidas" hidden>
+        <h2>Butacas elegidas</h2>
+        <ul id="detalle"></ul>
+        <p class="pista" id="detalle-vacio">Elige butacas en el plano para verlas aquí, por zona y por mesa.</p>
+      </section>
+    </footer>
+  </main>
+
+  <!-- Lateral derecho, solo en modo editor: guardar el mapa y el diseño de la sala. -->
+  <aside class="lateral lateral-configuracion" id="lateral-configuracion" aria-label="Piezas del plano" hidden>
+    <!-- Solo en modo editor. Los botones de pieza actuan sobre la pieza activa. -->
+    <div id="herramientas-editor" role="group" aria-label="Editar mesas, bloques, butacas y formas" hidden>
+      <details class="grupo" open>
+        <summary>Agregar</summary>
+        <!-- Los atajos van en aria-keyshortcuts y en el tooltip, y estan explicados en la pista. -->
+        <div class="herramientas rejilla-iconos">
+          <button type="button" class="icono" id="agregar-lados" aria-label="Lados: mesa de largo 2, dos lugares por lado" data-tooltip="Mesa de lados"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mesa-lados"></use></svg></button>
+          <button type="button" class="icono" id="agregar-cruz" aria-label="Cruz: mesa de largo 1, un lugar por lado y cabeceras" data-tooltip="Mesa en cruz"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mesa-cruz"></use></svg></button>
+          <button type="button" class="icono" id="agregar-barra" aria-label="Un lado: mesa de largo 4 con lugares en un solo lado" data-tooltip="Mesa de un lado"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mesa-un-lado"></use></svg></button>
+          <button type="button" class="icono" id="agregar-redonda" aria-label="Mesa redonda: 8 lugares alrededor" data-tooltip="Mesa redonda"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mesa-redonda"></use></svg></button>
+    <button type="button" class="icono" id="agregar-bloque" aria-label="Bloque de filas: 5 butacas por fila y 2 filas" data-tooltip="Bloque de filas"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-bloque"></use></svg></button>
+          <button type="button" class="icono" id="agregar-butaca" aria-label="Butaca suelta: una butaca con la zona de su banda" data-tooltip="Butaca suelta"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-butaca"></use></svg></button>
+          <button type="button" class="icono" id="agregar-pista" aria-label="Pista de baile: 4 × 4 celdas" data-tooltip="Pista de baile"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-pista"></use></svg></button>
+          <button type="button" class="icono" id="agregar-forma-barra" aria-label="Barra: 4 × 1 celdas" data-tooltip="Barra"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-barra"></use></svg></button>
+        </div>
+      </details>
+      <details class="grupo" open>
+        <summary>Editar</summary>
+        <p class="mesa-activa" id="mesa-activa" aria-live="polite">Ninguna pieza seleccionada</p>
+        <div class="herramientas rejilla-iconos">
+          <button type="button" class="icono" data-accion="girar" aria-keyshortcuts="R" aria-label="Girar 90°" data-tooltip="Girar 90° · R"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-girar"></use></svg></button>
+          <button type="button" class="icono" data-accion="alargar" aria-keyshortcuts="+" aria-label="Alargar" data-tooltip="Alargar · +"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-alargar"></use></svg></button>
+          <button type="button" class="icono" data-accion="acortar" aria-keyshortcuts="-" aria-label="Acortar" data-tooltip="Acortar · −"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-acortar"></use></svg></button>
+          <button type="button" class="icono" data-accion="masfilas" aria-keyshortcuts="]" aria-label="Agregar fila" data-tooltip="Agregar fila · ]"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mas-fila"></use></svg></button>
+          <button type="button" class="icono" data-accion="menosfilas" aria-keyshortcuts="[" aria-label="Quitar fila" data-tooltip="Quitar fila · ["><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-menos-fila"></use></svg></button>
+          <button type="button" class="icono" data-accion="cabeceras" aria-pressed="false" aria-keyshortcuts="C" aria-label="Cabeceras" data-tooltip="Cabeceras · C"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-cabeceras"></use></svg></button>
+          <button type="button" class="icono" data-accion="unlado" aria-pressed="false" aria-keyshortcuts="U" aria-label="Un solo lado" data-tooltip="Un solo lado · U"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-un-solo-lado"></use></svg></button>
+          <button type="button" class="icono" data-accion="duplicar" aria-keyshortcuts="Control+D Meta+D" aria-label="Duplicar" data-tooltip="Duplicar · Ctrl+D"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-duplicar"></use></svg></button>
+          <button type="button" class="icono" data-accion="eliminar" aria-keyshortcuts="Delete" aria-label="Eliminar" data-tooltip="Eliminar · Supr"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-eliminar"></use></svg></button>
+        </div>
+        <!-- Las opciones salen de las zonas de la sala: se crean al dibujar. -->
+        <div class="herramientas campo-ancho">
+          <label class="campo" for="zona-pieza" data-tooltip="Zona"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-zona"></use></svg><span class="solo-lector">Zona</span></label>
+          <select id="zona-pieza" disabled></select>
+        </div>
+        <div class="herramientas campo-ancho">
+          <label class="campo" for="nombre-pieza" data-tooltip="Nombre"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-nombre"></use></svg><span class="solo-lector">Nombre</span></label>
+          <input type="text" id="nombre-pieza" maxlength="40" autocomplete="off" disabled placeholder="Ej.: Lateral izquierdo">
+        </div>
+        <!-- Solo para mesas: por mesa es un solo precio, la suma de sus lugares libres. -->
+        <div class="herramientas campo-ancho">
+          <label class="campo" for="venta-mesa" data-tooltip="Venta"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mesa-lados"></use></svg><span class="solo-lector">Venta</span></label>
+          <select id="venta-mesa" disabled>
+            <option value="butacas">Venta por butacas</option>
+            <option value="mesa">Venta por mesa</option>
+          </select>
+        </div>
+        <button type="button" class="ancho-completo" id="completa-todas" disabled>Aplicar a todas las mesas</button>
+      </details>
+      <details class="grupo" open>
+        <summary>Sala</summary>
+        <div class="herramientas rejilla-iconos">
+          <button type="button" class="icono" id="herramienta-zona" aria-pressed="false" aria-label="Asignar zona a butacas" data-tooltip="Asignar zona"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-zona"></use></svg></button>
+          <button type="button" class="icono" id="herramienta-bloquear" aria-pressed="false" aria-label="Bloquear butacas" data-tooltip="Bloquear butacas"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-bloquear"></use></svg></button>
+          <button type="button" class="icono" id="alternar-escenario" aria-label="Quitar escenario" data-tooltip="Quitar escenario"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-escenario-quitar"></use></svg></button>
+          <button type="button" class="icono" id="restablecer" aria-label="Restablecer sala" data-tooltip="Restablecer sala"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-restablecer"></use></svg></button>
+        </div>
+        <!-- Solo con «Asignar zona»: la zona con la que se pinta cada butaca al tocarla. -->
+        <div class="herramientas campo-ancho" id="pincel-zona" hidden>
+          <label class="campo" for="zona-pincel" data-tooltip="Zona a asignar"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-zona"></use></svg><span class="solo-lector">Zona a asignar</span></label>
+          <select id="zona-pincel"></select>
+        </div>
+      </details>
+    </div>
+  </aside>
+
+</div>
+
+<script>{{MODELO}}
+{{DIBUJO}}{{INTERFAZ}}
+{{EDITOR}}
+{{PERSISTENCIA}}</script>
+</body>
+</html>

@@ -148,8 +148,12 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       await protocolo.evaluar('document.querySelector(".butaca[role=checkbox]:not([aria-disabled=true])").focus()');
       await protocolo.tecla('Enter', 'Enter', 13);
       assert.equal(await protocolo.evaluar('document.querySelector("#cuenta").textContent'), '1');
+      await protocolo.evaluar('dibujarTodo()');
+      assert.equal(await protocolo.evaluar('document.activeElement.getAttribute("aria-checked") === "true" && !!document.activeElement.querySelector(".marca")'), true);
       await protocolo.tecla('Enter', 'Enter', 13);
       assert.equal(await protocolo.evaluar('document.querySelector("#cuenta").textContent'), '0');
+      await protocolo.evaluar('dibujarTodo()');
+      assert.equal(await protocolo.evaluar('document.activeElement.getAttribute("aria-checked") === "false" && !document.activeElement.querySelector(".marca")'), true);
     });
 
     await t.test('guardar y recargar conserva el mapa', async () => {
@@ -192,14 +196,17 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       await protocolo.clicPieza('M1');
       await protocolo.clicPieza('M2', 2);
       assert.match(await protocolo.evaluar('document.querySelector("#mesa-activa").textContent'), /2 piezas seleccionadas/);
+      await protocolo.evaluar('window.__lugarMesa = butacas.find(b => b.grupo?.id === "M1").nodo');
       await protocolo.evaluar('document.querySelector("[data-accion=girar]").click()');
       assert.equal(await protocolo.evaluar('mesas.filter(m => ["M1", "M2"].includes(m.id)).every(m => m.giro === 90)'), true);
+      assert.equal(await protocolo.evaluar('window.__lugarMesa === butacas.find(b => b.grupo?.id === "M1").nodo'), true);
+      assert.equal(await protocolo.evaluar('Number(window.__lugarMesa.firstElementChild.getAttribute("x")) === butacas.find(b => b.grupo?.id === "M1").x * PASO'), true);
       await protocolo.evaluar('document.querySelector("#deshacer").focus()');
       await protocolo.tecla('z', 'KeyZ', 90, 2);
       assert.equal(await protocolo.evaluar('mesas.filter(m => ["M1", "M2"].includes(m.id)).every(m => m.giro === 0)'), true);
     });
 
-    await t.test('vista estrecha y nombres accesibles', async () => {
+    await t.test('vista estrecha, nombres accesibles y redibujado', async () => {
       await protocolo.enviar('Emulation.setDeviceMetricsOverride', {
         width: 390, height: 844, deviceScaleFactor: 1, mobile: true,
       });
@@ -212,6 +219,26 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       await protocolo.evaluar('document.querySelector("#modo-vista").click()');
       const arbolVista = await protocolo.enviar('Accessibility.getFullAXTree');
       assert.ok(arbolVista.nodes.some((n) => n.role?.value === 'checkbox' && n.name?.value?.includes('fila A')));
+      assert.equal(await protocolo.evaluar(`(() => {
+        const asiento = document.querySelector('.butaca[role=checkbox]:not([aria-disabled=true])');
+        asiento.focus();
+        dibujarTodo();
+        return document.activeElement === asiento && porId.get(asiento.dataset.id).nodo === asiento;
+      })()`), true);
+      await protocolo.evaluar('window.__nodoMesaAntesCambio = document.querySelector(".butaca[data-pieza=M1]")');
+      await protocolo.evaluar(`(() => {
+        const selector = document.querySelector('#tipo-sala');
+        selector.value = 'mixta-ambos';
+        selector.dispatchEvent(new Event('change', { bubbles: true }));
+      })()`);
+      assert.equal(await protocolo.evaluar('window.__nodoMesaAntesCambio !== document.querySelector(".butaca[data-pieza=M1]")'), true);
+      await protocolo.evaluar(`(() => {
+        const selector = document.querySelector('#tipo-sala');
+        selector.value = 'solo-filas';
+        selector.dispatchEvent(new Event('change', { bubbles: true }));
+      })()`);
+      assert.equal(await protocolo.evaluar('document.querySelectorAll(".butaca[role=checkbox]").length === butacas.length'), true);
+      assert.equal(await protocolo.evaluar('document.querySelector(".butaca[data-pieza=M1]") === null'), true);
     });
 
     assert.deepEqual(protocolo.excepciones, [], 'errores JavaScript en el navegador');

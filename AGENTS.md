@@ -19,8 +19,8 @@ renombras algo o cambias una constante, el texto va en el mismo commit o la CI s
 
 ## Qué es
 
-Un selector de asientos: plano de butacas interactivo en SVG, en **un solo archivo HTML**, sin
-dependencias, sin paso de compilación y sin framework. Filas numeradas, mesas y zona general
+Un selector de asientos: plano de butacas interactivo en SVG, **entregado como un solo archivo HTML**,
+con fuentes separadas y un generador sin dependencias ni framework. Filas numeradas, mesas y zona general
 conviven en el mismo plano. Tiene dos modos: **Previsualizar** (elegir butacas, como quien compra)
 y **Editar plano** (mover, girar, alargar, agregar y eliminar mesas, editar las bandas de la
 sala y bloquear butacas). Los diseños se guardan con nombre en el navegador o como archivos JSON. Hay salas mixtas, solo filas y solo mesas.
@@ -32,7 +32,11 @@ en el propio archivo.
 
 | Archivo | Contenido |
 |---|---|
-| `index.html` | Toda la aplicación: HTML, CSS y el `<script>`. |
+| `index.html` | Archivo autónomo generado para abrir directamente en el navegador. |
+| `src/plantilla.html`, `src/estilos.css` | Estructura y estilos fuente. |
+| `src/modelo.js`, `src/dibujo.js`, `src/interfaz.js`, `src/editor.js`, `src/persistencia.js` | Secciones fuente del script, unidas en ese orden. |
+| `construir.mjs` | Genera `index.html` y comprueba que esté sincronizado con `--check`. |
+| `medir-render.mjs` | Medición local reproducible del plano de 18.720 butacas en Chrome o Edge; no bloquea la CI. |
 | `pruebas.mjs` | Pruebas con `node:test` de la parte del script que no usa el DOM, y dos que vigilan que estos documentos sigan describiendo el código. |
 | `pruebas-navegador.mjs` | Recorridos de la interfaz en Chrome o Edge: guardado, recarga, importación, grupo, teclado y accesibilidad. |
 | `README.md` | Qué resuelve, modelo de datos, rejilla, accesibilidad, modo editor. |
@@ -46,14 +50,16 @@ La carpeta `.claude/` (si existe) es de trabajo de Claude Code y no forma parte 
 ## Cómo ejecutar y probar
 
 - **Abrir:** `index.html` directamente en el navegador. Opcional: `python -m http.server 8000`.
+- **Editar:** modificar `src/`, ejecutar `node construir.mjs` e incluir el `index.html` generado en
+  el mismo commit. `node construir.mjs --check` debe pasar antes de probar.
 - **Pruebas:** `node --test pruebas.mjs` (Node 18 o posterior) y
   `node --test pruebas-navegador.mjs` (Node 22 o posterior, Chrome o Edge). Deben pasar todas antes de
   hacer commit.
   Dos de ellas no prueban código sino **documentación**: que los topes que `README.md` y `AGENTS.md`
   citan sean los del código, y que no nombren nada que ya no exista. Si fallan, arregla el texto.
-- **Integración continua:** `.github/workflows/pruebas.yml` corre ambas suites en cada pull request y
-  en cada empujón a `main`. No necesitan dependencias instaladas.
-- **No hay** `package.json`, linter ni build. No los añadas sin que se pida.
+- **Integración continua:** `.github/workflows/pruebas.yml` comprueba el HTML generado y corre ambas
+  suites en cada pull request y empujón a `main`. No necesita dependencias instaladas.
+- **No hay** `package.json`, linter ni herramientas de compilación externas. No las añadas sin pedirlo.
 
 ## Cómo se trabaja en este proyecto
 
@@ -94,10 +100,15 @@ commit `ca35a43`.
 Así el historial queda con una entrada fechada y trazable por cambio, y nunca hay dos «Sin
 publicar».
 
-## Cómo editar un archivo de 6.000 líneas
+## Cómo editar las fuentes y el archivo generado
 
-`index.html` es un archivo grande y las ediciones a ciegas son la principal fuente de destrozos.
-Lo que funciona:
+Edita `src/`, no `index.html`: el generador sobrescribe este último. Las cinco fuentes JavaScript
+se concatenan en un único `<script>` clásico, sin `import` ni `export`, para conservar el ámbito y
+el orden de inicialización. `src/modelo.js` termina en la marca «Fin de la parte sin DOM», que usa
+`pruebas.mjs`. Ejecuta `node construir.mjs` después de cada cambio y confirma con `--check`.
+
+Si una sustitución extensa requiere un guion de Node, hazla en la fuente apropiada y exige una
+coincidencia exacta:
 
 - **Un guion de Node que sustituye texto exacto y falla si no hay exactamente una coincidencia.**
   Así un cambio no se aplica dos veces ni en el sitio equivocado:
@@ -117,8 +128,9 @@ t = t.replace(de, () => a);   // funcion, nunca cadena
 
 ## Cómo está organizado el script
 
-El `<script>` de `index.html` va en este orden. Las secciones están separadas por comentarios
-`// ----`.
+El `<script>` generado une `src/modelo.js`, `src/dibujo.js`, `src/interfaz.js`, `src/editor.js` y
+`src/persistencia.js` en ese orden. Dentro de cada fuente, las secciones están separadas por
+comentarios `// ----`.
 
 1. **Constantes:** `PASO` (12 unidades del viewBox por celda), `GLIFO`, `ANCHO_SALA` (14 columnas).
 2. **Rejilla:** `rejillaDeBloques({ bloques, pasillos })` devuelve `ancho`, `bloques` y `columnas`. Es
@@ -192,8 +204,9 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
 
 ## Reglas que no se deben romper
 
-- **Un solo archivo, sin dependencias.** Nada de librerías, CDN, módulos ES ni build. Tiene que
-  abrirse con doble clic.
+- **Entrega autónoma, sin dependencias.** `index.html` debe abrirse con doble clic. Las fuentes se
+  unen con `construir.mjs`; el script de la aplicación no usa librerías, CDN ni módulos ES. Incluye
+  siempre el HTML generado y pasa `node construir.mjs --check`.
 - **Los datos mandan; el SVG se genera.** Nunca se guarda ni se lee estado del SVG. La selección es
   `elegidas` (ids) y las mesas editadas son `planos`: el DOM los refleja, no los contiene.
 - **Nada del DOM antes de la marca «Fin de la parte sin DOM».** Si una función de esa parte usa
@@ -391,12 +404,13 @@ El `<script>` de `index.html` va en este orden. Las secciones están separadas p
   porque estaba ahi oculta por CSS y era la cuarta parte de los nodos del plano (74.880 a 56.160 con
   18.720 butacas). Quien encienda la clase `elegida` a mano tiene que llamar antes a `ponerMarca`:
   hoy solo lo hace `alternar`, porque el pincel y el bloqueo pasan por `regenerar`. Al soltar la
-  butaca la marca **se queda**, oculta por CSS: quitarla costaria mas que dejarla.
-- **Las butacas se injertan de una vez:** `dibujarButacas` arma los nodos en un `DocumentFragment` y
-  lo cuelga al final. Pero lo que de verdad cuesta es **crear** los nodos y ponerles los atributos, no
-  injertarlos, asi que no esperes milagros de mover el injerto: medido, clonar un molde en vez de
-  crear cada nodo daba solo un 12% y no valia la complejidad. Lo unico que cambia el orden de magnitud
-  es no rehacer los nodos que no cambian.
+  butaca la marca queda oculta hasta el siguiente redibujado; este la quita si ya no corresponde.
+- **La primera pintura usa `DocumentFragment`; los redibujados del mismo mapa conservan nodos por ID.**
+  `dibujarButacas` actualiza la geometría, apariencia y marca si cambiaron, reordena los nodos
+  necesarios y elimina los IDs ausentes. Un cambio de definición empieza desde cero: el mismo ID
+  puede nombrar otro lugar en otro mapa. Así conserva el foco cuando una butaca sigue en el plano.
+  El coste dominante era crear nodos: clonar un molde solo mejoró 12 % en una medición anterior;
+  conservarlos redujo 44 % la mediana del redibujado repetido en esta fase.
 - **Accesibilidad:**
   - Cada butaca es `role="checkbox"` con `aria-label`; cada mesa del editor, `role="button"` con
     `aria-pressed` si es la activa.
@@ -648,9 +662,9 @@ Y en todos los casos, el repaso de siempre:
 
 ## Qué aguanta, medido
 
-Números de un recinto grande de verdad (una arena de 249 columnas con 18.720 butacas de fila en
-cuatro bloques), en un portátil de escritorio. Sirven para saber qué es normal y qué sería una
-regresión; en una máquina modesta, multiplica por dos o tres.
+Arena de 249 columnas con 18.720 butacas de fila en cuatro bloques. Las mediciones de generación y
+validación son históricas; el redibujado se comparó en Chrome sin interfaz el 26 de septiembre de
+2026, antes y después del cambio, en el mismo equipo. No extrapoles milisegundos a otro equipo.
 
 | | |
 |---|---:|
@@ -658,31 +672,32 @@ regresión; en una máquina modesta, multiplica por dos o tres.
 | Ancho de la sala (`ANCHO_MAXIMO`) | 300 columnas |
 | `generarPlano` con 18.720 butacas | ~20 ms |
 | `validarMapa` con 18.720 butacas | ~300 ms (solo al importar o abrir) |
-| `dibujarTodo` con 18.720 butacas | ~290 ms, 56.160 nodos (3 por butaca) |
+| `dibujarTodo` repetido con 18.720 butacas | mediana 1.119 → 625 ms, 56.160 nodos |
 | Elegir una butaca en Previsualizar | menos de 1 ms |
 | Zoom y desplazamiento | imperceptible (mueven el `viewBox`) |
 | JSON de un mapa así | unos pocos KB |
 | Acercamiento máximo | ~40 px por butaca en cualquier recinto |
 
 Lo que hay que entender de esa tabla: **vender va instantáneo a cualquier aforo**, porque elegir una
-butaca conmuta clases sobre el nodo que ya existe y no redibuja nada. Lo que cuesta es **cada acción
-del editor**, que pasa por `regenerar` → `dibujarTodo` y rehace el plano entero. El JSON es pequeño
+butaca conmuta clases sobre el nodo que ya existe y no redibuja nada. Cada acción del editor pasa
+por `regenerar` → `dibujarTodo`: ahora conserva los nodos de butacas con el mismo ID y solo rehace
+los otros elementos del plano. La primera pintura no se acelera. El JSON es pequeño
 porque un mapa guarda **el diseño, no las butacas**: una banda de 26 filas son tres líneas, generen
 58 o 5.800 asientos.
+
+Repite la medición con `node medir-render.mjs`; el guion informa una primera pintura y cinco
+redibujados y toma la mediana de estos últimos. La duración no bloquea CI porque depende del equipo.
 
 ## Pendiente
 
 Lo grande, por orden de valor:
 
-- **No rehacer los nodos que no han cambiado** en `dibujarButacas` (reconciliar por id en vez de
-  vaciar e injertar). Es lo único que baja de orden de magnitud el coste de una acción del editor:
-  hoy son ~290 ms con 18.720 butacas, y ya se hizo la parte barata (un cuarto de nodos menos, entre
-  un 13% y un 23%). Medido: lo caro es **crear** los nodos y ponerles los atributos, no injertarlos,
-  así que mover el injerto o clonar un molde no sirve (probado: 12%). Es cirugía sobre
-  `dibujarButacas` y `dibujarTodo`; hazlo con medición antes y después de cada paso.
-- **Partir el archivo en `src/`** con un guion de unión de unas 30 líneas, sin dependencias, que siga
-  produciendo el `index.html` de doble clic. Rompe la regla del archivo único, así que es una
-  decisión, no una corrección; el motivo externo está en *A dónde va esto*.
+- **Implementar identidad y numeración del contrato**: zona física separada de tarifa, mesas
+  numeradas por zona, etiquetas únicas y validación previa a publicar.
+- **Integrar Sin Taquilla**: convertir la entrega autónoma en CSS y JavaScript externos para su
+  política de seguridad; usar sus datos y transacciones para disponibilidad, precios y boletos.
+- **Medir antes de otra optimización del SVG**: la reconciliación de butacas redujo el redibujado
+  repetido aproximadamente un 44 % en la comparación de esta fase. El resto del plano aún se rehace.
 
 Lo demás, sin prisa:
 
@@ -715,4 +730,5 @@ ejecuta, punto. El `<script>` podría salvarse con un nonce; la hoja de estilos 
 Lo llamativo es que **todo lo demás ya es compatible**: cero `innerHTML`, cero `eval`, cero
 manejadores `onclick=` en el HTML, cero atributos `style=`, y las pocas escrituras a `.style` desde
 el script son CSSOM, que esa cabecera no bloquea. Separan el despliegue **exactamente dos bloques en
-línea**, que es lo que resolvería partir el archivo.
+línea**. Las fuentes separadas permiten preparar CSS y JavaScript externos para Sin Taquilla en la
+fase de integración; el `index.html` autónomo sigue llevando ambos en línea.

@@ -1,0 +1,371 @@
+
+  * { box-sizing: border-box; }
+
+  /* La paleta de la interfaz en un solo sitio. Son los colores que se repiten tres
+     veces o mas, mas el fondo de la pagina: cambiar aqui cambia toda la aplicacion.
+     Los colores de una sola vez (estados de butaca, madera, guias) siguen escritos
+     donde se usan, y la paleta de las capas vive en el script (COLORES_DE_CAPA). */
+  :root {
+    --fondo: #1e1e24;
+    --fondo-panel: #23232b;
+    --fondo-control: #2a2a33;
+    --fondo-plano: #17171c;
+    --borde: #3a3a46;
+    --borde-suave: #2c2c36;
+    --texto: #fff;
+    --texto-claro: #e2e8f0;
+    --texto-tenue: #cbd5e1;
+    --texto-apagado: #94a3b8;
+    --acento: #3b82f6;
+    --acento-fuerte: #1d4ed8;
+    --realce: #93c5fd;
+    --realce-velo: rgba(147, 197, 253, .12);
+    --rojo: #ef4444;
+  }
+  body {
+    margin: 0; min-height: 100vh; padding: 0;
+    font-family: system-ui, "Segoe UI", sans-serif;
+    background: var(--fondo); color: var(--texto);
+  }
+  h1 { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
+  /* No «.subtitulo»: esa clase es la de los nombres de banda del SVG (letra de 4 px). */
+  .bajada { margin: 0 0 12px; font-size: 13px; color: var(--texto-apagado); }
+
+  /* --- Disposicion: lateral de herramientas, plano y lateral de configuracion ---
+     Los laterales son sticky y tienen su propio scroll; en pantallas angostas se apilan. */
+  .app { display: grid; grid-template-columns: 248px minmax(0, 1fr); gap: 16px; align-items: start;
+    max-width: 1680px; margin: 0 auto; padding: 16px; }
+  /* Al editar, la izquierda (zonas, columnas y mapa) es la que necesita ancho; la
+     derecha solo lleva iconos y tres campos. */
+  .app.editando { grid-template-columns: 340px minmax(0, 1fr) 260px; }
+  .lateral { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; scrollbar-width: thin;
+    padding: 10px 12px; background: var(--fondo-panel); border: 1px solid var(--borde-suave); border-radius: 10px; }
+  .lateral[hidden] { display: none; }
+  .grupo { padding: 8px 0; border-top: 1px solid var(--borde-suave); }
+  .grupo:first-of-type { border-top: 0; padding-top: 0; }
+  .grupo > summary { padding: 2px 0 8px; font-size: 12px; font-weight: 700; color: var(--texto-tenue); cursor: pointer;
+    display: flex; align-items: center; gap: 6px; list-style: none; }
+  .grupo > summary:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; border-radius: 4px; }
+  .lateral .herramientas { margin-bottom: 8px; }
+  .rejilla-iconos.herramientas { display: grid; grid-template-columns: repeat(5, 32px); gap: 6px; }
+  .campo-ancho.herramientas { flex-wrap: nowrap; }
+  .campo-ancho select, .campo-ancho input[type="text"] { flex: 1; min-width: 0; width: auto; }
+  .lateral .mesa-activa { margin: 0 0 8px; min-width: 0; }
+  .lateral .leyenda { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; margin: 0; }
+  #herramientas-mapa input[type="text"] { flex: 1 1 100%; min-width: 0; }
+  /* El titulo del grupo: la flecha de plegar delante y, si lo tiene, el boton de
+     informacion detras. La flecha la dibuja el CSS porque con 'display: flex' el
+     navegador deja de pintar el marcador de <summary> (paso: se perdio al meter el
+     boton de informacion). */
+  .grupo > summary::-webkit-details-marker { display: none; }
+  .grupo > summary::before { content: '▾'; width: 10px; font-size: 10px; color: var(--texto-apagado); }
+  .grupo:not([open]) > summary::before { content: '▸'; }
+  /* El boton de informacion de un grupo es el mismo que el del encabezado. */
+  .info-grupo {
+    width: 24px; height: 24px; min-width: 24px; display: inline-flex; align-items: center;
+    justify-content: center; padding: 0; color: var(--texto-tenue); background: var(--fondo-control);
+    border: 1px solid var(--borde); border-radius: 6px; cursor: pointer;
+  }
+  .info-grupo[aria-expanded="true"] { background: var(--acento-fuerte); border-color: var(--acento); color: var(--texto); }
+  .lateral .bandas { margin: 0; padding: 0; background: none; border: 0; }
+  .encabezado { margin: 0 0 10px; }
+  .encabezado .pista { margin: 0 0 6px; }
+  /* Titulo con el boton de informacion. */
+  .titulo { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; }
+  .titulo h1 { margin: 0; }
+  .titulo .icono, .resumen-pie .icono, .hojas-controles .icono {
+    width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; padding: 0;
+    color: var(--texto-tenue); background: var(--fondo-control); border: 1px solid var(--borde); border-radius: 6px; cursor: pointer;
+  }
+  .titulo .icono[aria-expanded="true"], .resumen-pie .icono[aria-expanded="true"] { background: var(--acento-fuerte); border-color: var(--acento); color: var(--texto); }
+  .titulo .icono:focus-visible, .resumen-pie .icono:focus-visible, .hojas-controles .icono:focus-visible,
+  .punto:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
+  .hojas-controles .icono:disabled { opacity: .45; cursor: default; }
+  /* Paneles del encabezado (hojas) y del pie (detalle). */
+  .panel { padding: 10px 12px; background: var(--fondo-panel); border: 1px solid var(--borde); border-radius: 8px; }
+  .panel[hidden] { display: none; }
+  .panel h2 { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: var(--texto-claro); }
+  .hoja .nota:first-of-type { margin-top: 0; }
+  .hoja .bajada, .hoja .pista { margin: 0; font-size: 13px; line-height: 1.6; color: var(--texto-tenue); }
+  .hojas-controles { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .hojas-controles .cerrar { margin-left: auto; }
+  .puntos { display: inline-flex; gap: 6px; }
+  .punto { width: 10px; height: 10px; padding: 0; border-radius: 50%; border: 1px solid var(--texto-apagado); background: transparent; cursor: pointer; }
+  .punto[aria-current="true"] { background: var(--acento); border-color: var(--acento); }
+  #panel-detalle #detalle { margin: 0; }
+  /* Linea de estado: fija al pie del plano mientras se hace scroll por el. */
+  .barra-estado { position: sticky; bottom: 0; z-index: 5; min-height: 34px; margin-top: 8px; padding: 8px 10px;
+    background: var(--fondo-panel); border: 1px solid var(--borde-suave); border-radius: 8px; }
+  .barra-estado { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 16px; }
+  .barra-estado p, .barra-estado p:empty { margin: 0; }
+  .barra-estado .mensajes { flex: 1 1 260px; min-width: 0; }
+  .resumen-pie { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+  .resumen-pie .resumen { margin: 0; font-size: 13px; line-height: 1.4; }
+  #panel-detalle { flex-basis: 100%; }
+  /* Tooltip de los botones de icono: un solo elemento fijo, para que el scroll de los
+     laterales no lo recorte. Lo coloca el script. */
+  .tooltip { position: fixed; z-index: 50; padding: 4px 8px; font-size: 12px; line-height: 1.3; white-space: nowrap;
+    color: #f8fafc; background: #0f0f13; border: 1px solid #4b5563; border-radius: 4px; pointer-events: none; }
+  .tooltip[hidden] { display: none; }
+  /* --- Escritorio: una sola pantalla, sin scroll de pagina ---
+     Los laterales, el encabezado y el pie quedan fijos; el plano llena el hueco que
+     queda. Los paneles se abren sobre el plano: las hojas de informacion hacia abajo y
+     el detalle del pie hacia arriba, asi que el plano no cambia de tamaño. */
+  @media (min-width: 901px) and (min-height: 601px) {
+    body { overflow: hidden; }
+    .app { height: 100dvh; align-items: stretch; }
+    .lateral { position: static; height: 100%; max-height: none; }
+    .centro { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; min-height: 0; }
+    .encabezado, .barra-estado { position: relative; }
+    .lienzo { min-height: 0; overflow: hidden; }
+    /* Mas especifico que la regla de #plano de la seccion del plano, que va despues. */
+    .centro .lienzo #plano { height: 100%; }
+    /* Los paneles flotan sobre el plano: el de informacion baja y el del detalle sube. */
+    .centro .panel { position: absolute; left: 0; right: 0; z-index: 8; max-height: 60vh; overflow-y: auto;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, .5); }
+    .encabezado > .panel { top: calc(100% + 2px); }
+    .barra-estado > .panel { bottom: calc(100% + 2px); }
+  }
+  @media (max-width: 1280px) {
+    .app { grid-template-columns: 220px minmax(0, 1fr); }
+    .app.editando { grid-template-columns: 300px minmax(0, 1fr) 230px; }
+    /* En el flujo, la rejilla de iconos ocupa su propia linea dentro del grupo: si no,
+       dentro de un contenedor flexible se queda en una columna. */
+    .rejilla-iconos.herramientas { grid-template-columns: repeat(auto-fill, 32px); flex-basis: 100%; }
+  }
+  /* Pantallas angostas: sin laterales. Herramientas arriba del plano, configuracion debajo. */
+  @media (max-width: 900px) {
+    .app, .app.editando { display: block; padding: 12px; }
+    .lateral { position: static; max-height: none; overflow: visible; margin-bottom: 12px; }
+    .lateral-herramientas { margin-bottom: 12px; }
+    .lateral-configuracion { margin: 12px 0 0; }
+    .lateral .leyenda { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+  }
+
+  /* --- Leyenda --- */
+  .leyenda { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 12px; padding: 0; list-style: none; }
+  .leyenda li { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--texto-apagado); }
+  .muestra { width: 18px; height: 18px; flex: none; }
+
+  /* --- Barra de herramientas --- */
+  .herramientas { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .herramientas button, .herramientas select {
+    height: 30px; padding: 0 9px;
+    font: inherit; font-size: 13px; color: var(--texto-tenue);
+    background: var(--fondo-control); border: 1px solid var(--borde); border-radius: 6px; cursor: pointer;
+  }
+  .herramientas button { min-width: 34px; }
+  /* Botones de icono: 32 × 32 con un icono de 18. El nombre va en aria-label y, a la
+     vista, en un tooltip (data-tooltip) al pasar el raton o al llegar con Tab. */
+  .sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+  .ico { width: 18px; height: 18px; flex: none; fill: currentColor; }
+  .herramientas button.icono { width: 32px; min-width: 32px; height: 32px; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center; }
+  .solo-lector { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  /* Eliminar avisa de que es destructivo al pasar el raton, no solo por el color: el tooltip lo dice. */
+  .herramientas button[data-accion="eliminar"]:not(:disabled):hover { color: #fca5a5; border-color: var(--rojo); }
+  .herramientas button:hover, .herramientas select:hover { background: #33333e; }
+  .herramientas button:focus-visible, .herramientas select:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
+  .campo { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--texto-apagado); }
+  .pista { font-size: 11px; color: var(--texto-apagado); }
+  .aforo { margin: 0 0 8px; font-size: 12px; color: var(--texto-apagado); }
+  .aviso { margin: 8px 0 0; font-size: 12px; color: #fbbf24; }
+  /* Sin display:none: una region viva oculta asi no siempre se anuncia al llenarse. */
+  .aviso:empty { margin: 0; }
+  .estado { margin: 8px 0 0; font-size: 12px; color: var(--texto-tenue); }
+  .estado:empty { margin: 0; }
+  .herramientas button[aria-pressed="true"] { background: var(--acento-fuerte); border-color: var(--acento); color: var(--texto); }
+  .herramientas button:disabled { opacity: .45; cursor: default; }
+  .herramientas button:disabled:hover { background: var(--fondo-control); }
+  /* display:flex de .herramientas pisaria el atributo hidden. */
+  .herramientas[hidden] { display: none; }
+
+  /* --- Panel de bandas (editor) --- */
+  .bandas { margin: 16px 0 0; padding: 10px 12px; background: var(--fondo-panel); border: 1px solid var(--borde-suave); border-radius: 8px; }
+  .bandas[hidden] { display: none; }
+  .bandas h2 { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: var(--texto-claro); }
+  .bandas h3 { margin: 12px 0 6px; font-size: 13px; font-weight: 700; color: var(--texto-tenue); }
+  /* Columnas: una fila por campo, con la etiqueta a la izquierda y el campo corto. */
+  .columnas-sala { display: block; }
+  .fila-campo { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .fila-campo label { flex: 0 0 118px; font-size: 12px; color: var(--texto-apagado); }
+  .fila-campo input { flex: 0 0 110px; }
+  .columnas-sala label { font-size: 12px; color: var(--texto-apagado); }
+  .columnas-sala[hidden], .bandas .pista[hidden] { display: none; }
+  .columnas-sala input {
+    height: 28px; width: 130px; padding: 0 8px; font: inherit; font-size: 13px; color: var(--texto-claro);
+    background: var(--fondo-plano); border: 1px solid var(--borde); border-radius: 6px;
+  }
+  .columnas-sala input:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
+  .columnas-sala button {
+    height: 28px; padding: 0 10px; font: inherit; font-size: 12px; color: var(--texto-tenue);
+    background: var(--fondo-control); border: 1px solid var(--borde); border-radius: 6px; cursor: pointer;
+  }
+  .columnas-sala button:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
+  .bandas ol { margin: 0 0 8px; padding: 0; list-style: none; }
+  /* Verticales y bandas dentro de una franja: sangradas, a lo ancho de su fila. */
+  .banda > ol { flex-basis: 100%; margin: 4px 0 0 14px; padding-left: 10px; border-left: 1px solid var(--borde); }
+  .banda-vertical > .banda-nombre::before { content: '⇕ '; color: #64748b; }
+  .banda { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 6px 0; border-top: 1px solid var(--borde-suave); }
+  .banda:first-child { border-top: 0; }
+  .banda-nombre { flex: 1 1 100px; min-width: 80px; font-size: 13px; color: var(--texto-claro); }
+  .banda > .precio-zona {
+    flex: 0 0 76px; width: 76px; height: 28px; padding: 0 8px; text-align: right;
+    font: inherit; font-size: 13px; color: var(--texto-claro);
+    background: var(--fondo-plano); border: 1px solid var(--borde); border-radius: 6px;
+  }
+  .banda > .precio-zona:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
+  .banda-detalle { flex: 0 1 auto; min-width: 0; font-size: 12px; color: var(--texto-apagado); }
+  /* Los controles de cada banda, en su propia linea. */
+  .banda-controles { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex-basis: 100%; }
+  .banda button, .banda select {
+    height: 28px; min-width: 30px; padding: 0 8px; font: inherit; font-size: 12px; color: var(--texto-tenue);
+    background: var(--fondo-control); border: 1px solid var(--borde); border-radius: 6px; cursor: pointer;
+  }
+  .banda button.icono { width: 28px; min-width: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+  .banda button[aria-pressed="true"] { background: var(--acento-fuerte); border-color: var(--acento); color: var(--texto); }
+  /* Zonas: nombre, precio y papelera en una linea; los lugares, debajo. */
+  .zonas .banda { display: grid; grid-template-columns: 1fr 92px 28px; gap: 6px; align-items: center; }
+  .zonas .banda > .banda-detalle { grid-column: 1 / -1; }
+  .banda button:hover { background: #33333e; }
+  .banda button:disabled { opacity: .45; cursor: default; }
+  .banda button:focus-visible, .banda select:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
+  /* Limite entre bandas, solo en el editor. */
+  .limite-banda { stroke: #3f4f6b; stroke-width: .5; stroke-dasharray: 2 2; }
+  .limite-vertical { stroke: #56709a; stroke-width: .6; stroke-dasharray: 3 2; }
+  /* Subtitulos: el nombre de cada banda, en el margen o en su borde superior. */
+  .subtitulo { fill: var(--texto-apagado); font-size: 4px; text-anchor: end; dominant-baseline: middle; }
+  .subtitulo-borde rect { fill: var(--fondo-plano); stroke: var(--borde); stroke-width: .4; }
+  .subtitulo-borde text { fill: var(--texto-tenue); font-size: 3.2px; dominant-baseline: middle; }
+  #plano.editando .subtitulo, #plano.editando .subtitulo-borde { cursor: pointer; }
+  /* Van sobre las butacas para leerse; fuera del editor de piezas no capturan clics. */
+  #plano:not(.editando) .subtitulo-borde, #plano.bloqueando .subtitulo-borde, #plano.pintando .subtitulo-borde { pointer-events: none; }
+  /* La banda seleccionada lleva el color de su capa (--capa). No depende solo del
+     color: contorno continuo y grueso, y su nombre pasa a una etiqueta rellena en su
+     borde inferior, sobre todo lo demas (piezas incluidas). */
+  .contorno-banda { fill: var(--capa); fill-opacity: .07; stroke: var(--capa); stroke-width: 1.4; pointer-events: none; }
+  #rotulo-seleccion { pointer-events: none; }
+  .rotulo-seleccion rect { fill: var(--capa); stroke: var(--fondo-plano); stroke-width: .6; }
+  .rotulo-seleccion text { fill: var(--fondo-plano); font-size: 4px; font-weight: 700; dominant-baseline: middle; }
+  .muestra-capa { width: 12px; height: 12px; flex: none; border-radius: 3px; background: var(--capa); }
+  .banda-nombre input {
+    height: 28px; width: 150px; padding: 0 8px; font: inherit; font-size: 13px; color: var(--texto-claro);
+    background: var(--fondo-plano); border: 1px solid var(--borde); border-radius: 6px;
+  }
+  .banda-nombre input::placeholder { color: var(--texto-apagado); }
+  .banda-nombre input:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
+  .banda.activa > .banda-nombre input { border-color: var(--capa); border-width: 2px; font-weight: 700; }
+  /* Zonas y precios: una fila por zona, con su nombre y su precio editables. */
+  .zonas input {
+    height: 28px; padding: 0 8px; font: inherit; font-size: 13px; color: var(--texto-claro);
+    background: var(--fondo-plano); border: 1px solid var(--borde); border-radius: 6px;
+  }
+  .zonas input:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
+  .zonas .nombre-zona { width: 100%; }
+  .zonas .precio-zona { width: 100%; text-align: right; }
+  .mesa-activa { font-size: 12px; color: var(--texto-tenue); min-width: 150px; }
+  #nombre-pieza { min-width: 150px; width: 150px; }
+  .herramientas select:disabled, .herramientas input:disabled { opacity: .45; }
+
+  /* --- El plano ---
+     Un solo <svg> con viewBox. De ahi salen tres cosas que una rejilla de <div>
+     no da: escala con el ancho disponible, admite zoom y desplazamiento, y las
+     butacas viven en un sistema de coordenadas. */
+  .lienzo {
+    background: var(--fondo-plano); border: 1px solid var(--borde-suave); border-radius: 10px;
+    overflow: hidden; touch-action: none;
+  }
+  /* Sin seleccion de texto: al arrastrar el plano o una pieza, el navegador
+     seleccionaria los rotulos del SVG («ESCENARIO», «Mesa 1»...). */
+  #plano { display: block; width: 100%; height: auto; cursor: grab; -webkit-user-select: none; user-select: none; }
+  #plano.arrastrando { cursor: grabbing; }
+
+  /* El color de estado va en 'color' y se pinta con currentColor, asi la butaca
+     y su marca comparten tono. Todos pasan 3:1 contra el fondo del plano. */
+  .butaca, .muestra { color: #8a8a9a; fill: currentColor; transition: color .15s; }
+  .butaca .toque { fill: transparent; }      /* area de clic: una celda exacta, sin solape */
+  .butaca:not(.ocupada):not(.bloqueada) { cursor: pointer; }
+  /* El hover solo aclara si NO esta seleccionada, para que la confirmacion
+     visual no desaparezca bajo el cursor. */
+  .butaca:not(.ocupada):not(.bloqueada):not(.elegida):hover { color: #b4b4c2; }
+  .elegida { color: var(--acento); }
+  .ocupada { color: var(--rojo); }
+  .bloqueada { color: #646472; }
+  .butaca.ocupada, .butaca.bloqueada { cursor: not-allowed; }
+  /* Marcas en el hueco del respaldo: el estado no depende solo del color.
+     Seleccionada lleva una palomita, ocupada un aspa, bloqueada una raya. */
+  .marca { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .butaca:not(.elegida) .marca-elegida { display: none; }
+  .butaca:focus { outline: none; }
+  .butaca:focus-visible .toque { fill: none; stroke: var(--realce); stroke-width: 1.2; }
+
+  /* --- Modo editor ---
+     Las butacas no responden: el clic atraviesa hasta la pieza o el fondo. */
+  #plano.editando .butaca { pointer-events: none; }
+  /* Con la herramienta de bloqueo, las butacas vuelven a responder. */
+  #plano.editando.bloqueando .butaca, #plano.editando.pintando .butaca { pointer-events: auto; }
+  .herramientas input[type="text"] {
+    height: 30px; min-width: 210px; padding: 0 9px; font: inherit; font-size: 13px; color: var(--texto-claro);
+    background: var(--fondo-plano); border: 1px solid var(--borde); border-radius: 6px;
+  }
+  .herramientas input[type="text"]:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
+  .pieza { fill: transparent; stroke: var(--realce); stroke-width: .8; stroke-dasharray: 2 1.5; cursor: grab; }
+  .pieza:hover { fill: rgba(147, 197, 253, .1); }
+  .pieza:focus { outline: none; }
+  .pieza:focus-visible { stroke-dasharray: none; stroke-width: 1.4; }
+  /* La activa: contorno continuo y relleno, distinto del foco (solo contorno mas grueso). */
+  .pieza.activa { stroke-dasharray: none; fill: rgba(147, 197, 253, .14); }
+  /* Las butacas de la pieza seleccionada, marcadas con ella. */
+  .butaca.de-pieza-activa { color: var(--realce); }
+  #plano.moviendo-mesa, #plano.moviendo-mesa .pieza { cursor: grabbing; }
+  .levantada { opacity: .3; }
+  /* La sombra marca el destino. Verde si cabe; si no, roja y con contorno
+     discontinuo, para no depender solo del color. */
+  /* Los agarres para redimensionar espacios y verticales, y el fantasma del tamano
+     nuevo mientras se arrastra uno. */
+  .tirador { fill: var(--realce); fill-opacity: .55; stroke: var(--fondo-plano); stroke-width: .4; }
+  .tirador:hover { fill-opacity: 1; }
+  .tirador.esquina { cursor: nwse-resize; }
+  .tirador.esquina.solo-alto { cursor: ns-resize; }
+  .tirador.borde { cursor: ew-resize; }
+  .fantasma { pointer-events: none; }
+  .fantasma rect { fill: var(--realce-velo); stroke: var(--realce); stroke-width: .8; stroke-dasharray: 2 1.5; }
+  .fantasma text { fill: var(--texto-claro); font-size: 4px; font-weight: 700; paint-order: stroke; stroke: var(--fondo-plano); stroke-width: 1.2; }
+  /* El rectangulo de las herramientas por area, con su conteo. */
+  .area { pointer-events: none; }
+  .area rect { fill: var(--realce-velo); stroke: var(--realce); stroke-width: .8; stroke-dasharray: 2 1.5; }
+  .area.quitando rect { fill: rgba(248, 250, 252, .08); stroke: var(--texto-tenue); }
+  .area text { fill: var(--texto-claro); font-size: 4px; font-weight: 700; paint-order: stroke; stroke: var(--fondo-plano); stroke-width: 1.2; }
+  .sombra { color: #22c55e; fill: currentColor; pointer-events: none; }
+  .sombra.invalida { color: var(--rojo); }
+  .sombra .contorno { fill-opacity: .15; stroke: currentColor; stroke-width: 1; }
+  .sombra.invalida .contorno { stroke-dasharray: 3 2; }
+  .sombra .tablero { fill: none; stroke: currentColor; stroke-width: .8; }
+  .oculta { display: none; }
+
+  .mueble { fill: #26262f; stroke: var(--borde); stroke-width: .6; }
+  /* Mesa completa elegida: el tablero se marca junto con sus lugares. */
+  .mueble.elegida { fill: rgba(59, 130, 246, .22); stroke: var(--acento); stroke-width: 1.2; }
+  .mueble.completa { cursor: pointer; }
+  .lateral .ancho-completo { width: 100%; margin-bottom: 8px; }
+  /* Formas: la pista con cuadros suaves, la barra como un mostrador macizo. */
+  .forma-pista { fill: url(#cuadros-pista); stroke: #8b7fc4; stroke-width: .6; }
+  .forma-barra { fill: #4a3b2c; stroke: #a0805c; stroke-width: .8; }
+  .rotulo.forma-texto { fill: var(--texto-claro); }
+  .rotulo { fill: var(--texto-apagado); font-size: 4.2px; text-anchor: middle; dominant-baseline: middle; }
+  /* Guias de fila de un espacio: referencia, mas apagadas que un rotulo de butacas. */
+  .rotulo.guia { fill: #64748b; }
+  .escenario { fill: #f8fafc; }
+  .escenario-texto { fill: var(--fondo); font-size: 5px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; }
+
+  /* --- Resumen --- */
+  .resumen { margin: 8px 0 0; font-size: 14px; color: var(--texto-tenue); line-height: 1.7; }
+  .resumen strong { color: var(--acento); }
+  #detalle { margin: 8px 0 0; padding-left: 18px; }
+  #detalle li { font-size: 13px; color: var(--texto-apagado); }
+  .nota {
+    margin-top: 22px; padding: 12px 14px; font-size: 12px; line-height: 1.6; color: var(--texto-apagado);
+    background: rgba(0,0,0,.25); border-left: 3px solid var(--acento); border-radius: 4px;
+  }
+  .nota code { color: var(--texto-tenue); }
+  .nota + .nota { border-left-color: #fbbf24; }

@@ -195,7 +195,8 @@ ruta clara para los eventos existentes.
 ## 8. Condiciones para las fases siguientes
 
 1. **Fase 5:** separar fuentes y estilos sin alterar IDs, JSON ni este contrato. Mantener el HTML
-   autónomo como artefacto y resolver la política de estilos de Sin Taquilla al integrarlo.
+   autónomo como artefacto. La separación se hizo; queda resolver la política de estilos de Sin
+   Taquilla al integrarlo.
 2. **Fase 6:** exportar lugares desde un mapa validado; exigir zona física y etiqueta únicas;
    numerar mesas por zona; resolver bloques girados y `zonasDeAsiento`; adaptar mapas antiguos sin
    pérdida de IDs.

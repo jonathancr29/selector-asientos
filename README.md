@@ -1,7 +1,7 @@
 # Selector de asientos
 
-Plano de butacas interactivo en SVG, en **un solo archivo HTML**. Sin dependencias, sin paso de
-compilación y sin framework: se abre en el navegador tal cual.
+Plano de butacas interactivo en SVG. Se entrega como **un solo archivo HTML** que se abre en el
+navegador tal cual. Las fuentes están separadas y se unen con Node, sin dependencias ni framework.
 
 Tres formas de venta pueden convivir en el mismo plano: filas numeradas, mesas con lugares
 agrupados y zonas de acceso general. Hay salas mixtas, solo de filas y solo de mesas.
@@ -13,6 +13,10 @@ Abre `index.html` en el navegador. Si prefieres servirlo:
 ```bash
 python -m http.server 8000
 ```
+
+Si editas el proyecto, trabaja en `src/` y genera de nuevo el archivo autónomo con
+`node construir.mjs`. `node construir.mjs --check` comprueba que las fuentes y el HTML entregado
+coinciden; la CI lo exige. No hay instalación de paquetes.
 
 ## Qué resuelve
 
@@ -823,6 +827,7 @@ propias y se recuperan al recargar.
 ## Pruebas
 
 ```bash
+node construir.mjs --check
 node --test pruebas.mjs
 node --test pruebas-navegador.mjs
 ```
@@ -830,8 +835,8 @@ node --test pruebas-navegador.mjs
 Cubren la rejilla, el reparto de mesas, el aforo de la tabla anterior, la conciliación de la
 selección al cambiar de sala, los tipos de sala y las bandas, y las reglas del editor: geometría de las mesas, hacia dónde
 mira cada silla, dónde caben, girar, alargar, cabeceras, un solo lado y sitio para mesas nuevas; también el mapa en blanco (lienzo, espacios, guías, escenario opcional y mapas versión 4), butacas sueltas y formas, duplicar piezas y bandas, renombrar bandas, subtítulos y selección de bandas por clic. No hay copia del código: `pruebas.mjs` lee `index.html` y
-evalúa la parte del script anterior a la marca *«Fin de la parte sin DOM»*, así que el proyecto
-sigue siendo un solo archivo, y la API que ven las pruebas se escanea del propio archivo: una
+evalúa la parte del script anterior a la marca *«Fin de la parte sin DOM»*, así que se prueba el
+HTML que se entrega, y la API que ven las pruebas se escanea del propio archivo: una
 función nueva se prueba sin tocar el arnés. Requiere Node 18 o posterior.
 
 `pruebas-navegador.mjs` abre el archivo servido localmente en Chrome o Edge y recorre la interfaz:
@@ -849,22 +854,27 @@ Se ejecutan solas en cada pull request y en cada empujón a `main`
 
 ## Qué aguanta
 
-Medido sobre una arena de 249 columnas con 18.720 butacas, en un portátil de escritorio (en una
-máquina modesta, multiplica por dos o tres):
+Arena de 249 columnas con 18.720 butacas. Las cifras de generación son de la medición anterior;
+el redibujado se volvió a medir con Chrome sin interfaz el 26 de septiembre de 2026, comparando
+ambas versiones en el mismo equipo:
 
 | | |
 |---|---:|
 | Aforo máximo | **20.000 lugares** |
 | Ancho de la sala | **300 columnas** |
 | Generar el plano | ~20 ms |
-| Redibujarlo entero | ~290 ms |
+| Redibujarlo tras editar | ~625 ms de mediana; antes ~1.119 ms |
 | **Elegir una butaca** | **menos de 1 ms** |
 | Zoom y desplazamiento | imperceptible |
 | Tamaño del mapa guardado | unos pocos KB |
 
-**Comprar va instantáneo a cualquier aforo:** elegir una butaca no redibuja el plano, solo cambia
-clases en el nodo que ya existe. Lo que cuesta es cada acción del **editor**, que rehace el plano
-entero; con recintos de miles de butacas se nota, y está anotado como lo siguiente por hacer.
+Puedes repetir la medición con `node medir-render.mjs` (Node 22 y Chrome o Edge). Informa la primera
+pintura y cinco redibujados; la mediana anterior excluye la primera. No es una prueba de CI porque
+la duración depende del equipo.
+
+**Elegir una butaca** solo cambia el nodo que ya existe. Al editar el mismo mapa, las butacas cuyo ID permanece
+conservan su nodo SVG, su foco y sus marcas; se actualizan únicamente los atributos y posiciones
+que cambiaron. El resto del plano todavía se rehace en cada acción.
 
 El mapa guardado es pequeño porque guarda **el diseño, no las butacas**: una banda de 26 filas
 ocupa tres líneas de JSON, genere 58 o 5.800 asientos.
