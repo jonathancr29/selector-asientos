@@ -953,14 +953,14 @@ test('dos bandas de la misma zona continuan la secuencia en lugar de reiniciar e
   assert.deepEqual(rotulos, ['C', 'D']);
 });
 
-test('un bloque girado lleva su nombre y su propia secuencia', () => {
+test('un bloque girado participa en la secuencia unica de su zona', () => {
   const api = cargar();
   conBloques(api, 'mixta-ambos', bloque('F1', 1, 14, { giro: 90, ancho: 3, filas: 2, nombre: 'Lateral izquierdo' }));
-  assert.deepEqual(['F1-1-1', 'F1-1-3', 'F1-2-2'].map((id) => etiqueta(api, id)),
-    ['Lateral izquierdo A1', 'Lateral izquierdo A3', 'Lateral izquierdo B2']);
-  // Sin nombre propio, se llama «Bloque N».
+  const lugares = api.butacas.filter((b) => !b.grupo && b.zona === 'luneta');
+  assert.equal(new Set(lugares.map((b) => b.fila + b.numero)).size, lugares.length);
+  assert.equal(api.bloquesFilas[0].nombre, 'Lateral izquierdo');
   conBloques(api, 'mixta-ambos', bloque('F4', 1, 14, { giro: 270 }));
-  assert.equal(etiqueta(api, 'F4-1-1'), 'Bloque 4 A1');
+  assert.match(etiqueta(api, 'F4-1-1'), /^Luneta [A-Z]+\d+$/);
 });
 
 test('mover o girar un bloque no cambia los ids, aunque cambie la etiqueta', () => {
@@ -974,7 +974,7 @@ test('mover o girar un bloque no cambia los ids, aunque cambie la etiqueta', () 
   assert.equal(etiqueta(api, 'F1-1-1'), 'Luneta D1');
   conBloques(api, 'mixta-ambos', api.girarPieza(bloque('F1', 6, 14)));
   assert.deepEqual(ids(), antes);
-  assert.equal(etiqueta(api, 'F1-1-1'), 'Bloque 1 A1');
+  assert.match(etiqueta(api, 'F1-1-1'), /^Luneta [A-Z]+\d+$/);
 });
 
 test('un bloque puede ocupar columnas de pasillo pero no pisar filas, mesas ni otros bloques', () => {
@@ -1049,7 +1049,7 @@ test('los bloques se guardan en el mapa, con nombre propio, y se validan al leer
   assert.equal(leido.siguienteBloque, 4);
   const clave = api.registrarMapa(leido);
   api.generarPlano(clave);
-  assert.equal(etiqueta(api, 'F3-1-1'), 'Lateral A1');
+  assert.match(etiqueta(api, 'F3-1-1'), /^Luneta [A-Z]+\d+$/);
 
   const con = (cambio) => { const m = JSON.parse(JSON.stringify(mapa)); cambio(m); return api.validarMapa(m).errores || []; };
   assert.ok(con((m) => { m.bloquesFilas[0].id = 'X1'; }).includes('bloque 1: id no válido o repetido'));
@@ -1139,14 +1139,14 @@ test('con el escenario abajo, las filas lo miran y la A es la mas cercana', () =
   assert.equal(api.motivoNoCabe(sala, api.celdasOcupadas('M9'), { ...mesa, y: -1 }), 'se sale de la sala');
 });
 
-test('un bloque de espaldas al escenario lleva secuencia propia; de frente, entra en la zona', () => {
+test('bloques de espaldas y de frente comparten la secuencia unica de su zona', () => {
   const api = cargar();
   const { plano } = conZonaAbajo(api);
   const abajo = { ...plano, escenario: { x: 1, y: 22, ancho: 14, alto: 2 } };
   abajo.bloquesFilas = [bloque('F1', 1, 14), bloque('F2', 8, 14, { ancho: 2, giro: 180 })];
   api.generarPlano('mixta-ambos', abajo);
   // F1 sin girar mira hacia arriba, de espaldas al escenario de abajo.
-  assert.equal(etiqueta(api, 'F1-1-1'), 'Bloque 1 A1');
+  assert.match(etiqueta(api, 'F1-1-1'), /^Luneta [A-Z]+\d+$/);
   // F2 girado 180 mira hacia abajo, al escenario: numeracion por zona (Luneta).
   assert.equal(api.butacas.find((b) => b.id === 'F2-1-1').seccion, 'Luneta');
 });
@@ -1564,8 +1564,8 @@ test('agregar escenario: a todo el ancho en el primer hueco libre, o mas angosto
   api.generarPlano('mapa-en-blanco', conEscenario);
   assert.equal(api.escenario.ausente, false);
   assert.equal(api.muebles.filter((m) => m.tipo === 'escenario').length, 1);
-  // El bloque queda por encima del escenario: mira hacia arriba, de espaldas, con secuencia propia.
-  assert.equal(etiqueta(api, 'F1-1-1'), 'Bloque 1 A1');
+  // El bloque queda por encima del escenario y conserva la secuencia de General.
+  assert.match(etiqueta(api, 'F1-1-1'), /^General [A-Z]+\d+$/);
   // Sin un hueco a todo el ancho, uno de 8 columnas.
   const lleno = conLienzo(api, (p) => ({ ...p, bandas: [{ id: 'espacio', tipo: 'espacio', alto: 3 }], siguienteBloque: 2,
     bloquesFilas: [bloque('F1', 1, 0, { ancho: 12, filas: 3, zona: 'general' })] }));
@@ -2070,7 +2070,7 @@ const conVip = (api) => {
   return api.editarZona(api.agregarZona(plano), 'zona1', { nombre: 'VIP', precio: 90000 });
 };
 
-test('asignar una zona a un asiento cambia su precio y su seccion, no su fila ni su numero', () => {
+test('asignar zona fisica renumera el lugar sin cambiar su id', () => {
   const api = cargar();
   const vip = conVip(api);
   const pintado = api.asignarZonaAsiento(vip, 'luneta-A3', 'zona1', 'luneta');
@@ -2078,9 +2078,9 @@ test('asignar una zona a un asiento cambia su precio y su seccion, no su fila ni
   assert.deepEqual(vip.zonasDeAsiento, {});   // no toca el plano de entrada
   api.generarPlano('mixta-ambos', pintado);
   const a3 = api.butacas.find((b) => b.id === 'luneta-A3');
-  assert.deepEqual([a3.zona, a3.zonaOriginal, a3.seccion, a3.fila, a3.numero], ['zona1', 'luneta', 'VIP', 'A', 3]);
-  // Sus vecinas no cambian: la A4 sigue siendo la A4 de Luneta.
-  assert.equal(etiqueta(api, 'luneta-A4'), 'Luneta A4');
+  assert.deepEqual([a3.id, a3.zona, a3.zonaOriginal, a3.seccion, a3.fila, a3.numero],
+    ['luneta-A3', 'zona1', 'luneta', 'VIP', 'A', 1]);
+  assert.equal(etiqueta(api, 'luneta-A4'), 'Luneta A3');
   // Volver a su zona de siempre quita la asignacion.
   assert.deepEqual(api.asignarZonaAsiento(pintado, 'luneta-A3', 'luneta', 'luneta').zonasDeAsiento, {});
 });
@@ -2103,6 +2103,57 @@ test('una zona asignada a asientos esta en uso y no se elimina', () => {
   assert.match(api.eliminarZona(pintado, 'zona1').motivo, /VIP está en uso \(1 banda o pieza\)/);
   const limpio = api.asignarZonaAsiento(pintado, 'luneta-A3', 'luneta', 'luneta');
   assert.equal(api.eliminarZona(limpio, 'zona1').zonas.some((z) => z.id === 'zona1'), false);
+});
+
+test('las mesas visibles empiezan en 1 por zona sin cambiar los ids internos', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const separado = { ...plano, mesas: plano.mesas.map((m) => m.id === 'M2' ? { ...m, zona: 'luneta' } : m) };
+  api.generarPlano('mixta-ambos', separado);
+  assert.deepEqual(['M1', 'M2', 'M3'].map((id) => {
+    const mesa = api.mesas.find((m) => m.id === id);
+    return [mesa.id, mesa.zonaEfectiva, mesa.numeroVisible];
+  }), [['M1', 'mesas', 1], ['M2', 'luneta', 1], ['M3', 'mesas', 2]]);
+  assert.equal(api.butacas.find((b) => b.id === 'M3-N1').grupo.nombre, 'Mesa 2');
+  assert.equal(api.muebles.find((m) => m.mesa === 'M3').numero, '2');
+});
+
+test('el catalogo exige zona fisica confirmada y exporta identidades y etiquetas unicas', () => {
+  const api = cargar();
+  const pintado = api.asignarZonaAsiento(conVip(api), 'luneta-A3', 'zona1', 'luneta');
+  const mapa = (plano) => api.mapaDesdePlano('Recinto', plano, null);
+  const sinConfirmar = api.exportarLugaresDeMapa(mapa(pintado));
+  assert.match(sinConfirmar.errores.join(' '), /confirma la zona física de luneta-A3/);
+  const confirmado = api.confirmarZonasFisicas(pintado);
+  const salida = api.exportarLugaresDeMapa(mapa(confirmado));
+  assert.equal(salida.errores, undefined);
+  const lugares = salida.catalogo.lugares;
+  assert.equal(lugares.length, api.butacas.length);
+  assert.equal(new Set(lugares.map((l) => l.local_place_id)).size, lugares.length);
+  assert.equal(new Set(lugares.map((l) => l.label)).size, lugares.length);
+  assert.deepEqual(lugares.find((l) => l.local_place_id === 'luneta-A3').physical_zone,
+    { id: 'zona1', name: 'VIP' });
+  assert.equal(lugares.find((l) => l.local_place_id === 'luneta-A3').seat_number, 1);
+  assert.equal(lugares.find((l) => l.local_place_id === 'M1-N1').table_number, 1);
+  assert.equal(lugares.find((l) => l.local_place_id === 'M1-N1').table_place_number, 1);
+  const releido = api.validarMapa(mapa(confirmado));
+  assert.ok(releido.mapa, JSON.stringify(releido.errores));
+  assert.equal(releido.mapa.zonasFisicasConfirmadas['luneta-A3'], 'zona1');
+  const viejo = { ...mapa(confirmado) };
+  delete viejo.zonasFisicasConfirmadas;
+  assert.match(api.exportarLugaresDeMapa(viejo).errores.join(' '), /confirma la zona física/);
+});
+
+test('el catalogo rechaza nombres provisionales y mesas de zonas mezcladas', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const provisional = api.agregarZona(plano);
+  provisional.mesas[0].zona = 'zona1';
+  const mapa = (p) => api.mapaDesdePlano('Recinto', p, null);
+  assert.match(api.exportarLugaresDeMapa(mapa(provisional)).errores.join(' '), /nombre definitivo/);
+  const pintado = api.asignarZonaAsiento(plano, 'M1-N1', 'luneta', 'mesas');
+  const mezcla = api.exportarLugaresDeMapa(mapa(api.confirmarZonasFisicas(pintado)));
+  assert.match(mezcla.errores.join(' '), /mesa M1 tiene lugares en varias zonas físicas/);
 });
 
 test('duplicar copia las zonas de los asientos, y el mapa las guarda y valida', () => {

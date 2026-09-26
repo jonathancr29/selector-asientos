@@ -1,6 +1,6 @@
 # Contrato de lugares para Sin Taquilla (fase 4)
 
-**Estado:** contrato de diseño; todavía no hay integración ni migración de datos.
+**Estado:** contrato de diseño; el selector ya exporta un catálogo validado de lugares. Todavía no hay integración ni migración de datos en Sin Taquilla.
 **Revisado contra:** este selector en `f9be0cb` y la copia local de Sin Taquilla en
 `cac1455a` (rama `docs/variantes-selector-asientos`, 25 de septiembre de 2026).
 
@@ -9,7 +9,7 @@ Este contrato complementa la propuesta vigente de Sin Taquilla en
 lugar según la categoría**, con una sola transacción de venta para web y taquilla. Define los datos
 que faltaban para conectar este plano: zonas, mesas, identidad estable y boletos históricos.
 
-## 1. Situación comprobada
+## 1. Situación comprobada al redactar el contrato, antes de la fase 6
 
 | Sistema | Dato actual | Consecuencia |
 | --- | --- | --- |
@@ -96,9 +96,10 @@ espacios decorativos pueden seguir sin zona. `Zona`, `Zona 2` y nombres automát
 son provisionales y deben revisarse antes de publicar. Precio `0` es válido para un evento gratuito,
 pero debe confirmarse expresamente.
 
-El selector hoy incumple parte de estas reglas en mesas, bloques girados y asignaciones
-individuales de zona. La **fase 6** hará la numeración y validación, sin renombrar IDs ni mover
-piezas por el mero hecho de cambiar una etiqueta.
+La fase 6 aplica estas reglas en el selector: las mesas se numeran por zona, los bloques girados
+participan en una secuencia única y las asignaciones individuales renumeran según la zona física.
+El catálogo rechaza nombres provisionales, mesas repartidas entre zonas y asignaciones antiguas sin
+confirmación. Ninguna de estas operaciones renombra IDs ni mueve piezas.
 
 ## 5. Contrato de lectura y compra
 
@@ -197,9 +198,9 @@ ruta clara para los eventos existentes.
 1. **Fase 5:** separar fuentes y estilos sin alterar IDs, JSON ni este contrato. Mantener el HTML
    autónomo como artefacto. La separación se hizo; queda resolver la política de estilos de Sin
    Taquilla al integrarlo.
-2. **Fase 6:** exportar lugares desde un mapa validado; exigir zona física y etiqueta únicas;
-   numerar mesas por zona; resolver bloques girados y `zonasDeAsiento`; adaptar mapas antiguos sin
-   pérdida de IDs.
+2. **Fase 6 completada en el selector:** exportar lugares desde un mapa validado; exigir zona
+   física y etiqueta únicas; numerar mesas por zona; resolver bloques girados y `zonasDeAsiento`;
+   abrir mapas antiguos sin pérdida de IDs y exigir confirmación de asignaciones ambiguas.
 3. **Fase 7:** migrar esquema y APIs de Sin Taquilla, reservar atómicamente, liberar retenciones y
    actualizar boletos, PDFs, check-in y taquilla. Probar compra mixta, mesa completa, dos compras
    simultáneas del mismo lugar, vencimiento, confirmación de pago tardía tras vencer, reembolso y

@@ -808,7 +808,8 @@ const centroDelEscenario = () => (escenario.ausente ? { x: 0, y: -Infinity }
 const miraHaciaEscenario = (y) => (centroDelEscenario().y > y + 1 ? MIRA_ABAJO : MIRA_ESCENARIO);
 
 // Si una butaca mira al escenario de frente: su giro es vertical y apunta hacia el.
-// Las que miran de lado (90 o 270) o de espaldas llevan secuencia propia.
+// Las que miran de lado (90 o 270) o de espaldas forman filas fisicas
+// independientes, pero toman letras de la misma secuencia de su zona.
 function miraDeFrente(butaca) {
   const centro = centroDelEscenario().y;
   if (butaca.mira === MIRA_ESCENARIO) return centro <= butaca.y + 0.5;
@@ -857,38 +858,35 @@ function letraDeFila(n) {
 //   escenario es la A; todas las butacas de esa zona a esa altura, de cualquier
 //   banda o bloque, se numeran de izquierda a derecha: A1-A5 y A6-A7.
 // - Las de un bloque que no mira al escenario de frente (girado de lado o de
-//   espaldas) llevan el nombre del bloque y su propia secuencia: fila A la de
-//   delante, numeradas en el orden del bloque.
+//   espaldas) forman filas fisicas distintas y toman letra de la zona.
 function numerarFilas() {
-  const bloquePorId = new Map(bloquesFilas.map((b) => [b.id, b]));
   const porZona = new Map();
   const centro = centroDelEscenario().y;
   for (const b of butacas) {
     if (b.grupo) continue;
-    const bloque = b.bloque && bloquePorId.get(b.bloque);
-    if (bloque && !miraDeFrente(b)) {
-      Object.assign(b, { fila: letraDeFila(b.filaLocal), numero: b.numeroLocal, seccion: bloque.nombre });
-      continue;
-    }
-    if (!porZona.has(b.zona)) porZona.set(b.zona, []);
-    porZona.get(b.zona).push(b);
+    if (!porZona.has(b.zona)) porZona.set(b.zona, new Map());
+    // Las filas laterales o de espaldas no comparten letra con una fila horizontal
+    // que pasa por la misma altura. El id del bloque solo separa sus filas fisicas.
+    const clave = b.bloque && !miraDeFrente(b) ? b.bloque + ':' + b.filaLocal : 'y:' + b.y;
+    const filas = porZona.get(b.zona);
+    if (!filas.has(clave)) filas.set(clave, []);
+    filas.get(clave).push(b);
   }
-  for (const [zona, lista] of porZona) {
-    // Por distancia al escenario; a igual distancia, primero la de arriba.
-    // Sin escenario todas estan a distancia infinita (Infinity - Infinity es NaN): manda la altura.
-    const distancia = (y) => Math.abs(y + 0.5 - centro);
-    // Agrupadas una sola vez por altura: filtrar la lista por cada altura era cuadratico
-    // (6 s con 100.000 butacas). push conserva el orden y sort es estable.
-    const porAltura = new Map();
-    for (const b of lista) {
-      if (!porAltura.has(b.y)) porAltura.set(b.y, []);
-      porAltura.get(b.y).push(b);
-    }
-    const alturas = [...porAltura.keys()].sort((a, c) => distancia(a) - distancia(c) || a - c);
-    alturas.forEach((y, i) => {
-      porAltura.get(y).sort((a, c) => a.x - c.x).forEach((b, k) => {
-        Object.assign(b, { fila: letraDeFila(i), numero: k + 1, seccion: zonas[zona].nombre });
-      });
+  for (const [zona, filas] of porZona) {
+    const distancia = (y) => centro === -Infinity ? y : Math.abs(y + 0.5 - centro);
+    const grupos = [...filas.values()].map((lista) => ({
+      lista,
+      primera: lista.reduce((b, actual) => actual.y < b.y ||
+        (actual.y === b.y && actual.x < b.x) ? actual : b),
+    })).sort((a, c) => distancia(a.primera.y) - distancia(c.primera.y) ||
+      a.primera.y - c.primera.y || a.primera.x - c.primera.x ||
+      a.primera.id.localeCompare(c.primera.id));
+    grupos.forEach(({ lista }, i) => {
+      lista.sort((a, c) => a.bloque && !miraDeFrente(a) ? a.numeroLocal - c.numeroLocal
+        : a.x - c.x || a.id.localeCompare(c.id));
+      lista.forEach((b, k) => Object.assign(b, {
+        fila: letraDeFila(i), numero: k + 1, seccion: zonas[zona].nombre,
+      }));
     });
   }
   // Los rotulos de las bandas muestran la letra de su zona: la de la primera butaca de
@@ -904,6 +902,37 @@ function numerarFilas() {
     if (m.tipo !== 'rotulo') continue;
     const butaca = primeraDeFila.get(m.banda)?.get(m.filaLocal);
     if (butaca) m.texto = butaca.fila;
+  }
+}
+
+// El numero visible de mesa depende de su zona y posicion; M... sigue siendo el id.
+function numerarMesas() {
+  const porZona = new Map();
+  const lugares = new Map();
+  const tablero = new Map(muebles.filter((m) => m.mesa).map((m) => [m.mesa, m]));
+  for (const b of butacas) if (b.grupo) {
+    if (!lugares.has(b.grupo.id)) lugares.set(b.grupo.id, []);
+    lugares.get(b.grupo.id).push(b);
+  }
+  for (const mesa of mesas) {
+    if (!porZona.has(mesa.zonaEfectiva)) porZona.set(mesa.zonaEfectiva, []);
+    porZona.get(mesa.zonaEfectiva).push(mesa);
+  }
+  for (const lista of porZona.values()) {
+    lista.sort((a, b) => a.y - b.y || a.x - b.x || a.id.localeCompare(b.id, 'es', { numeric: true }));
+    lista.forEach((mesa, i) => {
+      mesa.numeroVisible = i + 1;
+      mesa.nombre = 'Mesa ' + mesa.numeroVisible;
+      const mueble = tablero.get(mesa.id);
+      if (mueble) {
+        mueble.texto = mesa.nombre;
+        mueble.numero = String(mesa.numeroVisible);
+      }
+      for (const b of lugares.get(mesa.id) || []) {
+        b.grupo.nombre = mesa.nombre;
+        b.numeroMesa = mesa.numeroVisible;
+      }
+    });
   }
 }
 
@@ -1033,17 +1062,17 @@ function generarPlano(tipo, plano = null) {
       for (const b of lugares) if (b.estado === 'libre') b.estado = 'ocupada';
     }
   }
-  numerarFilas();
-  // Zona asignada a mano a un asiento: cambia su precio y el nombre de su seccion,
-  // pero no su fila ni su numero, que ya se calcularon con la zona de siempre.
+  // La zona pintada determina ubicacion fisica y numeracion visible. El precio
+  // sigue siendo solo una referencia de previsualizacion hasta integrar tarifas.
   const zonasDeAsiento = (plano && plano.zonasDeAsiento) || definicion.zonasDeAsiento || {};
   for (const b of butacas) {
     b.zonaOriginal = b.zona;
     const zona = zonasDeAsiento[b.id];
     if (!zona || !zonas[zona] || zona === b.zona) continue;
     b.zona = zona;
-    if (!b.grupo) b.seccion = zonas[zona].nombre;
   }
+  numerarFilas();
+  numerarMesas();
 
   // Filas de la rejilla donde puede haber piezas: toda la sala. El escenario
   // ocupa sus celdas, asi que nada se le pone encima.
@@ -1234,6 +1263,7 @@ const copiarPlano = (plano) => ({
   ...plano, bandas: copiarBandas(plano.bandas),
   ...(plano.zonas ? { zonas: copiarZonas(plano.zonas) } : {}),
   ...(plano.zonasDeAsiento ? { zonasDeAsiento: { ...plano.zonasDeAsiento } } : {}),
+  ...(plano.zonasFisicasConfirmadas ? { zonasFisicasConfirmadas: { ...plano.zonasFisicasConfirmadas } } : {}),
   ...Object.fromEntries(LISTAS_DE_PIEZAS.map(({ lista }) => [lista, (plano[lista] || []).map((p) => ({ ...p }))])),
   ...(plano.escenario ? { escenario: { ...plano.escenario } } : {}),   // null (sin escenario) llega con ...plano
 });
@@ -1481,6 +1511,7 @@ function planoDesdeSala(tipo, sala) {
     distribucion: distribucionDeSala(sala),
     bloqueadas: butacas.filter((b) => b.estado === 'bloqueada').map((b) => b.id),
     zonasDeAsiento: Object.fromEntries(butacas.filter((b) => b.zona !== b.zonaOriginal).map((b) => [b.id, b.zona])),
+    zonasFisicasConfirmadas: { ...(definicion.zonasFisicasConfirmadas || {}) },
     siguiente: Math.max(definicion.siguiente || 0, ...mesas.map((m) => Number(m.id.slice(1)) + 1), 1),
     siguienteBanda: Math.max(definicion.siguienteBanda || 1, 1),
     siguienteBloque: Math.max(definicion.siguienteBloque || 1, ...bloquesFilas.map((b) => Number(b.id.slice(1)) + 1), 1),
@@ -1658,6 +1689,8 @@ function mapaDesdePlano(nombre, plano, guardado, idsExistentes = null) {
     bloqueadas: (plano.bloqueadas || []).filter((id) => !idsExistentes || idsExistentes.has(id)),
     zonasDeAsiento: Object.fromEntries(Object.entries(plano.zonasDeAsiento || {})
       .filter(([id]) => !idsExistentes || idsExistentes.has(id))),
+    zonasFisicasConfirmadas: Object.fromEntries(Object.entries(plano.zonasFisicasConfirmadas || {})
+      .filter(([id, zona]) => (!idsExistentes || idsExistentes.has(id)) && plano.zonasDeAsiento?.[id] === zona)),
     siguiente: plano.siguiente,
     siguienteBanda: plano.siguienteBanda,
     siguienteBloque: plano.siguienteBloque || 1,
@@ -1678,6 +1711,7 @@ const definicionDeMapa = (mapa) => ({
   nombre: mapa.nombre, grupo: GRUPO_MAPAS, lienzo: Boolean(mapa.lienzo), distribucion: mapa.distribucion, bandas: mapa.bandas,
   mesas: mapa.mesas, bloquesFilas: mapa.bloquesFilas, formas: mapa.formas, butacasSueltas: mapa.butacasSueltas,
   escenario: mapa.escenario, bloqueadas: mapa.bloqueadas, zonasDeAsiento: mapa.zonasDeAsiento,
+  zonasFisicasConfirmadas: mapa.zonasFisicasConfirmadas,
   siguiente: mapa.siguiente, siguienteBanda: mapa.siguienteBanda, siguienteBloque: mapa.siguienteBloque,
   siguienteForma: mapa.siguienteForma, siguienteButaca: mapa.siguienteButaca,
   zonas: mapa.zonas, siguienteZona: mapa.siguienteZona,
@@ -2004,6 +2038,10 @@ function validarMapa(dato) {
     errores.push('la lista de butacas bloqueadas no es válida');
   }
   const zonasDeAsiento = zonasDeAsientoDeMapa(dato, errores, idsZona);
+  const confirmadas = zonasDeAsientoDeMapa({ zonasDeAsiento: dato.zonasFisicasConfirmadas }, errores, idsZona);
+  for (const [id, zona] of Object.entries(confirmadas)) {
+    if (zonasDeAsiento[id] !== zona) errores.push('asiento ' + id + ': confirmación de zona física desactualizada');
+  }
   if (errores.length) return { errores };
 
   // Los contadores nunca por debajo de lo que ya existe: un id no se reutiliza.
@@ -2019,6 +2057,7 @@ function validarMapa(dato) {
     ...(escenarioLimpio !== undefined ? { escenario: escenarioLimpio } : {}),
     bloqueadas: [...new Set(bloqueadas)],
     zonasDeAsiento,
+    zonasFisicasConfirmadas: confirmadas,
     siguiente: contador(dato.siguiente, idsMesa, /^M(\d+)$/),
     siguienteBanda: contador(dato.siguienteBanda, idsBanda, /^banda(\d+)$/),
     siguienteBloque: contador(dato.siguienteBloque, idsBloque, /^F(\d+)$/),
@@ -2033,6 +2072,75 @@ function validarMapa(dato) {
   const fallo = primeraPiezaQueNoCabe(sala);
   if (fallo) return { errores: [fallo.pieza.nombre + ' ' + fallo.motivo] };
   return { mapa };
+}
+
+// Confirma expresamente que las zonas pintadas son ubicaciones fisicas. Los mapas
+// antiguos no traen esta evidencia: pudieron usar la misma accion solo para precio.
+function confirmarZonasFisicas(plano) {
+  return { ...copiarPlano(plano), zonasFisicasConfirmadas: { ...(plano.zonasDeAsiento || {}) } };
+}
+
+// Catalogo de un borrador apto para publicar. El evento, la revision, la tarifa y
+// el precio de venta los asignara Sin Taquilla; aqui solo hay identidad local y lugar.
+function exportarLugaresDeMapa(dato) {
+  const validacion = validarMapa(dato);
+  if (validacion.errores) return { errores: validacion.errores };
+  const mapa = validacion.mapa;
+  const errores = [];
+  const usados = new Map();
+  const zonasConLugares = new Set(butacas.map((b) => b.zona));
+  const normalizar = (s) => s.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleUpperCase('es');
+  const nombres = new Set();
+  for (const z of mapa.zonas.filter((z) => zonasConLugares.has(z.id))) {
+    const nombre = normalizar(z.nombre);
+    if (/^ZONA(?: \d+)?$/.test(nombre)) errores.push('la zona ' + z.id + ' necesita un nombre definitivo');
+    if (nombres.has(nombre)) errores.push('nombre de zona repetido: ' + z.nombre);
+    nombres.add(nombre);
+  }
+  for (const [id, zona] of Object.entries(mapa.zonasDeAsiento)) {
+    if (mapa.zonasFisicasConfirmadas[id] !== zona) {
+      errores.push('confirma la zona física de ' + id + ' (' + zonas[zona].nombre + ')');
+    }
+  }
+  const zonasPorMesa = new Map();
+  for (const b of butacas) if (b.grupo) {
+    if (!zonasPorMesa.has(b.grupo.id)) zonasPorMesa.set(b.grupo.id, new Set());
+    zonasPorMesa.get(b.grupo.id).add(b.zona);
+  }
+  for (const [id, lista] of zonasPorMesa) if (lista.size > 1) {
+    errores.push('la mesa ' + id + ' tiene lugares en varias zonas físicas');
+  }
+  const lugares = [];
+  for (const b of butacas) {
+    const zona = zonas[b.zona];
+    if (!zona || !normalizar(zona.nombre)) {
+      errores.push('el lugar ' + b.id + ' no tiene zona física con nombre');
+      continue;
+    }
+    const mesa = Boolean(b.grupo);
+    const clave = b.zona + ':' + (mesa ? 'M:' + b.numeroMesa : 'F:' + b.fila) + ':' + b.numero;
+    if (usados.has(clave)) errores.push('etiqueta repetida: ' + usados.get(clave) + ' y ' + b.id);
+    usados.set(clave, b.id);
+    lugares.push({
+      local_place_id: b.id,
+      physical_zone: { id: b.zona, name: zona.nombre },
+      kind: mesa ? 'table_place' : 'row_seat',
+      row: mesa ? null : b.fila,
+      seat_number: mesa ? null : b.numero,
+      table_id: mesa ? b.grupo.id : null,
+      table_number: mesa ? b.numeroMesa : null,
+      table_place_number: mesa ? b.numero : null,
+      label: mesa ? zona.nombre + ', mesa ' + b.numeroMesa + ', lugar ' + b.numero
+        : zona.nombre + ', fila ' + b.fila + ', butaca ' + b.numero,
+      x: b.x, y: b.y, blocked: b.estado === 'bloqueada',
+      preview_price_cents: zona.precio, preview_currency: 'MXN',
+    });
+  }
+  if (errores.length) return { errores };
+  return { catalogo: {
+    formato: 'selector-asientos/lugares', version: 1, mapa: mapa.nombre,
+    lugares,
+  } };
 }
 
 // Cambia los bloques y pasillos de toda la sala y recoloca las mesas:

@@ -191,6 +191,41 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       assert.equal(await protocolo.evaluar('!!JSON.parse(localStorage.getItem("selector-asientos:mapas"))["Mapa importado"]'), true);
     });
 
+    await t.test('exportar lugares pide confirmar la zona fisica heredada', async () => {
+      await protocolo.evaluar(`(() => {
+        document.querySelector('#modo-editor').click();
+        planos[tipoActual] = asignarZonaAsiento(planoEditable(), 'luneta-A3', 'general', 'luneta');
+        regenerar('');
+        document.querySelector('#exportar-lugares').click();
+      })()`);
+      assert.match(await protocolo.evaluar('document.querySelector("#estado").textContent'), /confirma la zona física/);
+      await protocolo.evaluar(`(() => {
+        window.confirm = () => true;
+        document.querySelector('#confirmar-zonas-fisicas').click();
+      })()`);
+      assert.equal(await protocolo.evaluar('planos[tipoActual].zonasFisicasConfirmadas["luneta-A3"]'), 'general');
+      await protocolo.evaluar('document.querySelector("#exportar-lugares").click()');
+      assert.match(await protocolo.evaluar('document.querySelector("#estado").textContent'), /Catálogo de \d+ lugares validado/);
+    });
+
+    await t.test('dos mesas numero 1 de zonas distintas no se mezclan en el resumen', async () => {
+      const resumen = await protocolo.evaluar(`(() => {
+        const plano = planoEditable();
+        planos[tipoActual] = { ...plano, mesas: plano.mesas.map(m => m.id === 'M2' ? { ...m, zona: 'luneta' } : m) };
+        regenerar('');
+        elegidas.add('M1-N1');
+        elegidas.add('M2-N1');
+        actualizarResumen();
+        const textos = [...document.querySelectorAll('#detalle li')].map(li => li.textContent);
+        elegidas.clear();
+        actualizarResumen();
+        return textos;
+      })()`);
+      assert.equal(resumen.length, 2);
+      assert.ok(resumen.some((t) => t.includes('Mesa 1 · Mesas')));
+      assert.ok(resumen.some((t) => t.includes('Mesa 1 · Luneta')));
+    });
+
     await t.test('edicion de grupo y atajo de deshacer', async () => {
       await protocolo.evaluar('document.querySelector("#modo-editor").click()');
       await protocolo.clicPieza('M1');
