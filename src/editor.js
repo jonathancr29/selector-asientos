@@ -9,7 +9,7 @@ let mesaActiva = null;     // id de la mesa sobre la que actuan los botones y at
 const piezasActivas = new Set();
 let herramienta = 'mesas'; // en el editor: 'mesas' (colocar), 'bloquear' o 'zona' (butacas)
 // Las herramientas que trabajan sobre butacas: las butacas responden y se recorren.
-const conButacas = () => ['bloquear', 'zona', 'numeracion', 'ajustar'].includes(herramienta);
+const conButacas = () => ['bloquear', 'zona', 'numeracion', 'ajustar', 'fisica'].includes(herramienta);
 let bandaActiva = null;    // id de la banda, vertical o franja seleccionada (excluye a mesaActiva)
 let tipoActual, salaActual;
 // Plano guardado por tipo de sala: { 'mixta-ambos': { bandas, mesas, siguiente,
@@ -120,6 +120,7 @@ const aplica = (accion, p) => ACCIONES_DE[tipoDePieza(p)].has(accion);
 function actualizarControles() {
   actualizarIdentidadControles();
   actualizarControlesGeometria();
+  actualizarControlesFisicos();
   const m = mesaActiva && piezaPorId(mesaActiva);
   const varias = piezasActivas.size > 1;
   const todas = [...piezasActivas].map((id) => piezaPorId(id)).filter(Boolean);
@@ -330,7 +331,8 @@ function planoEditable() {
 // Las configuraciones son datos: se guardan y el plano se regenera desde ellas.
 // Si al regenerar desaparecen lugares (acortar, quitar cabeceras, eliminar, bandas),
 // se avisa de los elegidos que se soltaron y de los ocupados que se quitaron.
-const fotoDeButacas = () => butacas.map((b) => ({ id: b.id, estado: b.estado }));
+const fotoDeButacas = () => butacas.map((b) => ({ id: b.id, estado: b.estado,
+  sectorId: b.sectorFisico?.id, filaId: b.filaFisica?.id, grupoId: b.grupo?.tipo === 'palco' ? b.grupo.id : undefined }));
 
 // 'antes' se puede pasar hecho cuando el plano ya se genero para validarlo.
 function regenerar(mensaje, antes = fotoDeButacas()) {
@@ -350,6 +352,11 @@ function regenerar(mensaje, antes = fotoDeButacas()) {
     }
   }
   const existe = new Set(butacas.map((b) => b.id));
+  const porIdFisico = new Map(butacas.map((b) => [b.id,b]));
+  const desvinculadas = antes.filter((a) => {
+    const b = porIdFisico.get(a.id);
+    return b && ((a.sectorId && a.sectorId !== b.sectorFisico?.id) || (a.filaId && a.filaId !== b.filaFisica?.id) || (a.grupoId && a.grupoId !== b.grupo?.id));
+  }).map((a) => a.id);
   const { ausentes, noLibres } = conciliarSeleccion(elegidas, butacas);
   const completadas = completarMesasElegidas(elegidas, butacas);
   const ocupadasQuitadas = antes.filter((b) => b.estado === 'ocupada' && !existe.has(b.id))
@@ -365,6 +372,7 @@ function regenerar(mensaje, antes = fotoDeButacas()) {
   actualizarEstadoEdicion();
   anunciar(mensaje);
   document.getElementById('aviso').textContent = [
+    desvinculadas.length ? 'Pertenencias físicas desvinculadas o reasignadas: ' + desvinculadas.join(', ') + '.' : '',
     frase(ausentes, 'ya no existe en el plano', 'ya no existen en el plano'),
     frase(noLibres, 'ya no está libre', 'ya no están libres'),
     ocupadasQuitadas.length
@@ -871,6 +879,7 @@ function cambiarModo(nuevo) {
   document.getElementById('herramienta-numeracion').setAttribute('aria-pressed', 'false');
   document.getElementById('herramienta-ajustar').setAttribute('aria-pressed', 'false');
   herramienta = 'mesas';
+  seleccionFisica.clear();
   svg.classList.remove('bloqueando', 'pintando', 'numerando');
   document.getElementById('herramienta-bloquear').setAttribute('aria-pressed', 'false');
   document.getElementById('herramienta-zona').setAttribute('aria-pressed', 'false');
@@ -900,7 +909,8 @@ function cambiarHerramienta(nueva) {
   herramienta = nueva;
   const bloqueando = herramienta === 'bloquear';
   const pintando = herramienta === 'zona';
-  svg.classList.toggle('numerando', ['numeracion', 'ajustar'].includes(herramienta));
+  svg.classList.toggle('numerando', ['numeracion', 'ajustar', 'fisica'].includes(herramienta));
+  document.getElementById('herramienta-fisica').setAttribute('aria-pressed', String(herramienta === 'fisica'));
   document.getElementById('herramienta-numeracion').setAttribute('aria-pressed', String(herramienta === 'numeracion'));
   document.getElementById('herramienta-ajustar').setAttribute('aria-pressed', String(herramienta === 'ajustar'));
   svg.classList.toggle('bloqueando', bloqueando);
@@ -911,6 +921,7 @@ function cambiarHerramienta(nueva) {
   if (pintando) llenarPincel();
   document.getElementById('pista').textContent = herramienta === 'numeracion'
     ? 'Haz clic en un lugar o pulsa Enter para editar su etiqueta oficial. Las flechas recorren los lugares.'
+    : herramienta === 'fisica' ? 'Haz clic o pulsa Enter para añadir o quitar un lugar de la selección física; después aplica la pertenencia.'
     : herramienta === 'ajustar' ? 'Haz clic o pulsa Enter en una butaca de bloque libre para ajustar su posición y orientación.'
     : PISTAS[bloqueando ? 'bloquear' : pintando ? 'zona' : modo];
   actualizarAccesoButacas();
@@ -922,6 +933,7 @@ function cambiarHerramienta(nueva) {
     ? 'Bloquear butacas: haz clic en una butaca para bloquearla o desbloquearla.'
     : pintando
     ? 'Asignar zona: elige la zona y haz clic en las butacas. Las marcadas con la palomita ya son de esa zona.'
+    : herramienta === 'fisica' ? 'Seleccionar lugares para asignar su pertenencia física; la selección de compra se conserva.'
     : 'Colocar mesas.');
 }
 
@@ -1230,6 +1242,7 @@ function cambiarNivelVista(id) {
   if (nuevo.motivo) { anunciar(nuevo.motivo); return; }
   if (arrastreMesa) terminarArrastreMesa(false);
   limpiarArea(); marcarActivas([]); bandaActiva = null;
+  seleccionFisica.clear();
   planos[tipoActual] = nuevo;
   salaActual = generarPlano(tipoActual, nuevo);
   dibujarTodo(); actualizarResumen(); actualizarAforo(salaActual); actualizarControles();
@@ -1354,6 +1367,8 @@ function actualizarIdentidadControles() {
   const id = document.getElementById('id-lugar-oficial').value;
   const existe = oficial && butacas.some((b) => b.id === id);
   for (const campo of ['fila-oficial', 'numero-oficial', 'guardar-etiqueta']) document.getElementById(campo).disabled = !existe;
+  const lugar = butacas.find((b) => b.id === id);
+  if (lugar?.filaFisica || lugar?.grupo?.tipo === 'palco') document.getElementById('fila-oficial').disabled = true;
 }
 
 document.getElementById('modo-numeracion').addEventListener('change', (e) => {
@@ -1377,10 +1392,10 @@ function elegirEtiquetaOficial(elemento) {
   const b = porNodo(elemento);
   if (!b) return;
   document.getElementById('id-lugar-oficial').value = b.id;
-  document.getElementById('fila-oficial').value = b.grupo ? b.numeroMesa : b.fila;
+  document.getElementById('fila-oficial').value = b.grupo?.tipo === 'palco' ? b.grupo.nombre : b.grupo ? b.numeroMesa : b.fila;
   document.getElementById('numero-oficial').value = b.numero;
   actualizarIdentidadControles();
-  document.getElementById('fila-oficial').focus();
+  document.getElementById(document.getElementById('fila-oficial').disabled ? 'numero-oficial' : 'fila-oficial').focus();
   anunciar('Etiqueta de ' + etiquetaDe(b) + '. El ID ' + b.id + ' se conserva.');
 }
 document.getElementById('formulario-numeracion').addEventListener('submit', (e) => {
@@ -1391,4 +1406,85 @@ document.getElementById('formulario-numeracion').addEventListener('submit', (e) 
   if (resultado.motivo) { anunciar('No se cambió la etiqueta: ' + resultado.motivo + '.'); return; }
   planos[tipoActual] = resultado;
   regenerar('Etiqueta oficial guardada para ' + id + '.');
+});
+
+// Esta seleccion edita pertenencias; nunca cambia la seleccion de compra.
+const seleccionFisica = new Set();
+function llenarOpcionesFisicas(id, opciones, inicial = '') {
+  const s = document.getElementById(id);
+  const previo = s.value;
+  s.textContent = '';
+  for (const [valor,nombre] of opciones) {
+    const o = document.createElement('option'); o.value = valor; o.textContent = nombre; s.appendChild(o);
+  }
+  s.value = opciones.some(([valor]) => valor === previo) ? previo : inicial;
+}
+function actualizarControlesFisicos() {
+  const plano = planos[tipoActual] || TIPOS_DE_SALA[tipoActual];
+  const visibles = new Set(butacasVisibles().map((b) => b.id));
+  for (const id of seleccionFisica) if (!visibles.has(id) || modo !== 'editor') seleccionFisica.delete(id);
+  const tipo = document.getElementById('tipo-fisico').value;
+  llenarOpcionesFisicas('zona-fisica-entidad', zonasDe(plano).map((z) => [z.id,z.nombre]), zonaParaFilas(zonasDe(plano)));
+  const zona = document.getElementById('zona-fisica-entidad').value;
+  const lista = (plano[TIPOS_FISICOS[tipo].lista] || []).filter((e) => e.nivel === salaActual.nivel && e.zona === zona);
+  llenarOpcionesFisicas('entidad-fisica', [['','— crear o elegir —'], ...lista.map((e) => [e.id,e.nombre])]);
+  const id = document.getElementById('entidad-fisica').value;
+  const entidad = entidadFisicaDe(plano,tipo,id);
+  document.getElementById('detalle-entidad-fisica').textContent = entidad ? entidad.id + ' · ' + miembrosFisicos(plano,tipo,id).length + ' lugares · ' + salaActual.niveles.find((n) => n.id === entidad.nivel).nombre : 'Las entidades vacías no añaden aforo.';
+  for (const boton of ['renombrar-entidad-fisica','eliminar-entidad-fisica','fisica-miembros']) document.getElementById(boton).disabled = !entidad;
+  document.getElementById('asignar-entidad-fisica').disabled = !entidad || !seleccionFisica.size;
+  document.getElementById('desvincular-entidad-fisica').disabled = !seleccionFisica.size;
+  document.getElementById('detalle-seleccion-fisica').textContent = seleccionFisica.size + ' lugares para asignar: ' + [...seleccionFisica].slice(0,5).join(', ');
+  const f = seleccionFisica.size === 1 ? Object.values(plano.identidadFisica || {}).find((p) => p.id === [...seleccionFisica][0]) : null;
+  document.getElementById('numero-lugar-palco').disabled = !f?.grupoId;
+  document.getElementById('guardar-numero-palco').disabled = !f?.grupoId;
+  document.getElementById('numero-lugar-palco').value = f?.numeroGrupo || '';
+  document.getElementById('herramienta-fisica').setAttribute('aria-pressed', String(herramienta === 'fisica'));
+}
+function elegirLugarFisico(elemento) {
+  const b = porNodo(elemento);
+  if (!b) return;
+  if (seleccionFisica.has(b.id)) seleccionFisica.delete(b.id); else seleccionFisica.add(b.id);
+  actualizarControlesFisicos(); dibujarTodo();
+  porId.get(b.id)?.nodo.focus();
+  anunciar(seleccionFisica.size + ' lugares en la selección física.');
+}
+function aplicarResultadoFisico(resultado, mensaje) {
+  if (modo !== 'editor' || planoEditable().revisionFisica?.estado === 'publicada') { anunciar('Crea un borrador editable antes de cambiar la estructura física.'); return false; }
+  if (resultado.motivo) { anunciar('No se aplicó: ' + resultado.motivo + '.'); return false; }
+  planos[tipoActual] = resultado.plano || resultado; regenerar(mensaje); return true;
+}
+for (const id of ['tipo-fisico','zona-fisica-entidad','entidad-fisica']) document.getElementById(id).addEventListener('change', () => {
+  actualizarControlesFisicos();
+  const e = entidadFisicaDe(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('entidad-fisica').value);
+  document.getElementById('nombre-entidad-fisica').value = e?.nombre || '';
+});
+document.getElementById('agregar-entidad-fisica').addEventListener('click', () => {
+  const resultado = agregarEntidadFisica(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('nombre-entidad-fisica').value,salaActual.nivel,document.getElementById('zona-fisica-entidad').value);
+  if (aplicarResultadoFisico(resultado,'Entidad física creada sin mover ni añadir lugares.')) {
+    document.getElementById('entidad-fisica').value = resultado.id; actualizarControlesFisicos();
+  }
+});
+document.getElementById('formulario-entidad-fisica').addEventListener('submit', (e) => {
+  e.preventDefault(); aplicarResultadoFisico(renombrarEntidadFisica(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('entidad-fisica').value,document.getElementById('nombre-entidad-fisica').value),'Nombre físico actualizado; IDs conservados.');
+});
+document.getElementById('eliminar-entidad-fisica').addEventListener('click', () => aplicarResultadoFisico(eliminarEntidadFisica(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('entidad-fisica').value),'Entidad vacía eliminada; su ID queda retirado.'));
+document.getElementById('herramienta-fisica').addEventListener('click', () => cambiarHerramienta(herramienta === 'fisica' ? 'mesas' : 'fisica'));
+document.getElementById('fisica-desde-piezas').addEventListener('click', () => {
+  const ids = butacasVisibles().filter((b) => piezasActivas.has(b.grupo?.tipo === 'palco' ? b.bloque || b.suelta : b.grupo?.id || b.bloque || b.suelta)).map((b) => b.id);
+  seleccionFisica.clear(); ids.forEach((id) => seleccionFisica.add(id)); cambiarHerramienta('fisica');
+});
+document.getElementById('fisica-miembros').addEventListener('click', () => {
+  seleccionFisica.clear(); miembrosFisicos(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('entidad-fisica').value).forEach((id) => seleccionFisica.add(id)); cambiarHerramienta('fisica');
+});
+document.getElementById('vaciar-seleccion-fisica').addEventListener('click', () => { seleccionFisica.clear(); actualizarControlesFisicos(); dibujarTodo(); });
+for (const [boton,asignar] of [['asignar-entidad-fisica',true],['desvincular-entidad-fisica',false]]) document.getElementById(boton).addEventListener('click', () => {
+  const tipo = document.getElementById('tipo-fisico').value;
+  const id = asignar ? document.getElementById('entidad-fisica').value : '';
+  if (asignar && !id) return;
+  aplicarResultadoFisico(asignarPertenenciaFisica(planoEditable(),[...seleccionFisica],tipo,id),'Pertenencia física ' + (asignar ? 'asignada' : 'desvinculada') + '; geometría, IDs y selección de compra conservados.');
+});
+document.getElementById('formulario-numero-palco').addEventListener('submit', (e) => {
+  e.preventDefault(); if (seleccionFisica.size !== 1) return;
+  aplicarResultadoFisico(editarNumeroPalco(planoEditable(),[...seleccionFisica][0],document.getElementById('numero-lugar-palco').value),'Número de lugar del palco actualizado.');
 });

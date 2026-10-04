@@ -94,6 +94,188 @@ const lienzoLibre = (api) => {
   return api.sincronizarIdentidad(plano);
 };
 
+const recintoFisico = (api) => {
+  let p = api.planoDesdeSala('mapa-en-blanco', api.generarPlano('mapa-en-blanco'));
+  p.distribucion = { bloques: [40], pasillos: [] }; p.bandas = [{id:'libre',tipo:'espacio',alto:40}]; p.escenario = null;
+  p.bloquesFilas = [
+    {id:'F1',tipo:'filas',x:4,y:6,ancho:2,filas:2,giro:0,zona:'luneta',geometria:api.geometriaInicial()},
+    {id:'F2',tipo:'filas',x:12,y:6,ancho:2,filas:2,giro:0,zona:'luneta',geometria:api.geometriaInicial()},
+    {id:'F3',tipo:'filas',x:22,y:6,ancho:3,filas:1,giro:45,zona:'luneta',geometria:api.geometriaInicial()},
+  ]; p.siguienteBloque = 4;
+  api.generarPlano('mapa-en-blanco',p); p = api.sincronizarIdentidad(p);
+  for (const [tipo,nombre] of [['sector','Izquierdo'],['sector','Derecho'],['fila','A'],['palco','B']]) p = api.agregarEntidadFisica(p,tipo,nombre,'n1','luneta').plano;
+  p = api.asignarPertenenciaFisica(p,['F1-1-1','F1-1-2'],'sector','sector1');
+  p = api.asignarPertenenciaFisica(p,['F2-1-1','F2-1-2'],'sector','sector2');
+  p = api.asignarPertenenciaFisica(p,['F1-1-1','F1-1-2','F2-1-1','F2-1-2'],'fila','fila1');
+  p = api.asignarPertenenciaFisica(p,['F3-1-1','F3-1-2','F3-1-3'],'palco','palco1');
+  api.generarPlano('mapa-en-blanco',p); return p;
+};
+
+test('fase 5: fila compartida entre sectores y palco exportan ubicacion completa sin duplicar aforo', () => {
+  const api = cargar(); const p = recintoFisico(api);
+  const mapa = api.mapaDesdePlano('Teatro físico',p,null);
+  const r = api.exportarLugaresDeMapa(mapa);
+  assert.equal(r.errores,undefined); assert.equal(mapa.version,8); assert.equal(r.catalogo.version,5);
+  assert.ok(api.butacas.filter((b)=>b.grupo?.tipo==='palco').every((b)=>b.fila===null&&b.numeroMesa===null));
+  assert.equal(r.catalogo.lugares.length,11);
+  assert.deepEqual(api.miembrosFisicos(p,'fila','fila1'),['F1-1-1','F1-1-2','F2-1-1','F2-1-2']);
+  const fila = r.catalogo.lugares.filter((l) => l.physical_row?.id === 'fila1');
+  assert.equal(new Set(fila.map((l) => l.sector.id)).size,2);
+  assert.deepEqual(fila.filter((l) => l.sector.id !== 'sector1').map((l) => l.local_place_id),['F2-1-1','F2-1-2']);
+  const palco = r.catalogo.lugares.filter((l) => l.physical_group?.id === 'palco1');
+  assert.ok(palco.every((l) => l.kind === 'box_place' && l.row === null && l.physical_row === null && l.table_id === null));
+  assert.deepEqual(palco.map((l) => l.group_place_number),['1','2','3']);
+  assert.deepEqual(r.catalogo.grupos[0].lugares,palco.map((l) => l.local_place_id));
+  assert.equal(r.catalogo.grupos[0].tipo,'palco');
+  assert.match(palco[0].label,/Palco B, lugar 1/);
+  assert.equal('price' in palco[0],false); assert.equal('completa' in r.catalogo.grupos[0],false);
+});
+
+test('fase 5: mover, girar y regenerar conservan pertenencias y numero de palco', () => {
+  const api=cargar(); let p=recintoFisico(api);
+  p=api.editarNumeroPalco(p,'F3-1-2','07');
+  const antes=JSON.stringify(p.identidadFisica);
+  const sala=api.generarPlano('mapa-en-blanco',p);
+  const movido=api.cambiarGeometriaBloque(p,sala,'F3',{x:24.3,y:12,giro:121,geometria:p.bloquesFilas[2].geometria});
+  assert.equal(movido.motivo,undefined); api.generarPlano('mapa-en-blanco',movido);
+  p=api.sincronizarIdentidad(movido); assert.equal(JSON.stringify(p.identidadFisica),antes);
+  assert.equal(api.butacas.find((b)=>b.id==='F3-1-2').numero,'07');
+  assert.equal(api.butacas.find((b)=>b.id==='F3-1-2').grupo.id,'palco1');
+  assert.equal(api.editarNumeroPalco(p,'F3-1-1','07').motivo,'número de lugar repetido en el palco');
+  const cajas=api.celdasOcupadas(null);
+  assert.ok(api.choqueDeRectangulo(cajas,{x:api.butacas.find((b)=>b.id==='F3-1-1').x,y:api.butacas.find((b)=>b.id==='F3-1-1').y,ancho:1,alto:1}));
+});
+
+test('fase 5: reasignaciones incompatibles son atomicas; fila y palco se desvinculan expresamente', () => {
+  const api=cargar(); const p=recintoFisico(api); const antes=JSON.stringify(p);
+  assert.match(api.asignarPertenenciaFisica(p,['F1-1-1','ausente'],'sector','sector1').motivo,/existir/);
+  assert.match(api.asignarPertenenciaFisica(p,['F1-1-1'],'palco','palco1').motivo,/desvincula la fila/);
+  assert.match(api.asignarPertenenciaFisica(p,['F3-1-1'],'fila','fila1').motivo,/desvincula el palco/);
+  assert.equal(JSON.stringify(p),antes);
+  const q=api.asignarPertenenciaFisica(p,['F1-1-1'],'fila','');
+  const r=api.asignarPertenenciaFisica(q,['F1-1-1'],'palco','palco1');
+  assert.equal(r.identidadFisica['F1-1-1'].numeroGrupo,'4');
+  assert.equal(r.identidadFisica['F1-1-1'].filaId,undefined);
+  const sin=api.asignarPertenenciaFisica(r,['F1-1-1'],'palco','');
+  assert.equal(sin.identidadFisica['F1-1-1'].numeroGrupo,undefined);
+  const nivel=api.agregarNivel(p,'Arriba');
+  const entidad=api.agregarEntidadFisica(nivel,'sector','Arriba','n2','luneta');
+  assert.match(api.asignarPertenenciaFisica(entidad.plano,['F1-1-1'],'sector',entidad.id).motivo,/compartir nivel/);
+});
+
+test('fase 5: renombrar y eliminar entidades preservan IDs, protegen usados y retiran los vacios', () => {
+  const api=cargar(); let p=recintoFisico(api);
+  assert.match(api.eliminarEntidadFisica(p,'fila','fila1').motivo,/reasigna/);
+  p=api.cambiarNumeracion(p,'oficial');
+  const r=api.renombrarEntidadFisica(p,'fila','fila1','AA');
+  assert.equal(r.identidadFisica['F1-1-1'].fila,'AA'); assert.equal(r.identidadFisica['F1-1-1'].id,'F1-1-1');
+  assert.match(api.editarEtiquetaOficial(r,'F1-1-1',{fila:'Z',numero:'08'}).motivo,/renombra la fila/);
+  assert.match(api.renombrarEntidadFisica(r,'sector','sector1','Derecho').motivo,/repetido/);
+  assert.equal(api.agregarEntidadFisica(r,'fila','AA','n1','luneta').plano,undefined);
+  p=api.asignarPertenenciaFisica(r,api.miembrosFisicos(r,'fila','fila1'),'fila','');
+  p=api.eliminarEntidadFisica(p,'fila','fila1'); assert.ok(p.entidadesRetiradas.includes('fila1'));
+  const creado=api.agregarEntidadFisica(p,'fila','AA','n1','luneta'); assert.equal(creado.id,'fila2');
+  const restaurado=api.conciliarIdentidadAlRestaurar(creado.plano,r);
+  assert.ok(restaurado.entidadesRetiradas.includes('fila2')); assert.ok(!restaurado.entidadesRetiradas.includes('fila1'));
+  assert.equal(restaurado.siguienteFilaFisica,3);
+  assert.equal(api.agregarEntidadFisica(restaurado,'fila','CC','n1','luneta').id,'fila3');
+});
+
+test('fase 5: duplicar conserva sector y exige asignar otra fila o palco', () => {
+  const api=cargar(); const p=recintoFisico(api); const sala=api.generarPlano('mapa-en-blanco',p);
+  const r=api.duplicarPieza(p,sala,'F1'); assert.equal(r.motivo,undefined);
+  const copia=Object.values(r.identidadFisica).filter((f)=>f.sectorId==='sector1'&&!f.filaId);
+  assert.equal(copia.length,2); assert.ok(copia.every((f)=>!api.miembrosFisicos(p,'sector','sector1').includes(f.id)));
+  const q=api.duplicarPieza(p,sala,'F3'); assert.equal(q.motivo,undefined);
+  assert.equal(api.miembrosFisicos(q,'palco','palco1').length,3);
+  assert.ok(Object.entries(q.identidadFisica).filter(([k])=>k.startsWith('F4-')).every(([,f])=>!f.grupoId&&!f.numeroGrupo));
+});
+
+test('fase 5: guardar, publicar y reabrir conservan estructura; revision publicada detecta cambios', () => {
+  const api=cargar(); let p=recintoFisico(api); p=api.cambiarNumeracion(p,'oficial');
+  p=api.editarNumeroPalco(p,'F3-1-2','03B');
+  const mapa=api.mapaDesdePlano('Recinto oficial',p,null);
+  const abierto=api.validarMapa(JSON.parse(JSON.stringify(mapa))); assert.equal(abierto.errores,undefined);
+  assert.deepEqual(abierto.mapa.identidadFisica,mapa.identidadFisica);
+  const recompuesto=api.planoDesdeSala('mapa-en-blanco',api.generarPlano('mapa-en-blanco',p));
+  assert.deepEqual(recompuesto.palcos,p.palcos); assert.deepEqual(recompuesto.filasFisicas,p.filasFisicas); assert.deepEqual(recompuesto.sectores,p.sectores);
+  const pub=api.publicarRevisionFisica(mapa); assert.equal(pub.errores,undefined);
+  assert.equal(api.validarMapa(JSON.parse(JSON.stringify(pub.mapa))).errores,undefined);
+  const mod=JSON.parse(JSON.stringify(pub.mapa)); mod.palcos[0].nombre='C';
+  assert.match(api.validarMapa(mod).errores.join(' '),/publicada fue modificada/);
+  const borrador=api.nuevaRevisionFisica(pub.mapa); assert.equal(borrador.revisionFisica.numero,2);
+  assert.equal(api.validarMapa(borrador).errores,undefined);
+});
+
+test('fase 5: zona y nivel no dejan referencias colgantes; mesas mantienen su grupo', () => {
+  const api=cargar(); let p=recintoFisico(api);
+  const cambio=api.reasignarZonaFisica(p,['F3-1-1'],'general');
+  assert.equal(cambio.identidadFisica['F3-1-1'].grupoId,undefined);
+  assert.equal(cambio.identidadFisica['F3-1-1'].numeroGrupo,undefined);
+  assert.equal(api.miembrosFisicos(cambio,'palco','palco1').length,2);
+  const vacia=api.agregarEntidadFisica(p,'sector','General','n1','general').plano;
+  assert.ok(api.usosDeZona(vacia,'general')>0); assert.ok(api.eliminarZona(vacia,'general').motivo);
+  p=api.agregarNivel(p,'Superior'); p=api.agregarEntidadFisica(p,'palco','D','n2','luneta').plano;
+  p=api.eliminarNivel(p,'n2'); assert.equal(p.palcos.length,1); assert.ok(p.entidadesRetiradas.includes('palco2'));
+  const sala=api.generarPlano('mixta-ambos'); const mesas=api.planoDesdeSala('mixta-ambos',sala);
+  const e=api.agregarEntidadFisica(mesas,'palco','Mesa','n1','mesas');
+  assert.match(api.asignarPertenenciaFisica(e.plano,['M1-N1'],'palco',e.id).motivo,/mesa/);
+  const cat=api.exportarLugaresDeMapa(api.mapaDesdePlano('Mesas',mesas,null));
+  assert.equal(cat.errores,undefined); assert.ok(cat.catalogo.grupos.some((g)=>g.id==='M1'&&g.tipo==='mesa'));
+});
+
+test('fase 5: importacion rechaza referencias, numeros y entidades incoherentes; limpia campos ajenos', () => {
+  const api=cargar(); const mapa=api.mapaDesdePlano('Validación',recintoFisico(api),null);
+  const falla=(cambiar,patron)=>{ const m=JSON.parse(JSON.stringify(mapa)); cambiar(m); const r=api.validarMapa(m); assert.ok(r.errores); assert.match(r.errores.join(' '),patron); };
+  falla(m=>m.identidadFisica['F1-1-1'].sectorId='ausente',/pertenencia/);
+  falla(m=>m.identidadFisica['F1-1-1'].filaId='ausente',/pertenencia/);
+  falla(m=>m.identidadFisica['F3-1-1'].grupoId='ausente',/pertenencia/);
+  falla(m=>m.identidadFisica['F3-1-2'].numeroGrupo='1',/repetido en palco/);
+  falla(m=>m.identidadFisica['F3-1-2'].numeroGrupo='',/palco inválido/);
+  falla(m=>m.identidadFisica['F1-1-1'].numeroGrupo='8',/sin grupo/);
+  falla(m=>m.identidadFisica['F3-1-1'].filaId='fila1',/también a una fila/);
+  falla(m=>m.sectores[0].nivel='n2',/entidad física/);
+  falla(m=>m.sectores[0].zona='general',/pertenencia/);
+  falla(m=>m.sectores.push({...m.sectores[0]}),/entidad física/);
+  falla(m=>m.sectores[1].nombre='Izquierdo',/nombre físico/);
+  falla(m=>m.entidadesRetiradas=['sector1'],/retirada/);
+  falla(m=>m.siguienteSector=0,/contador/);
+  falla(m=>m.palcos=null,/lista física/);
+  const limpio=JSON.parse(JSON.stringify(mapa)); limpio.sectores[0].precio=99; limpio.identidadFisica['F1-1-1'].precio=99; limpio.revisionFisica.precio=99;
+  const r=api.validarMapa(limpio); assert.equal(r.errores,undefined);
+  assert.equal('precio' in r.mapa.sectores[0],false); assert.equal('precio' in r.mapa.identidadFisica['F1-1-1'],false);
+  assert.equal('precio' in r.mapa.revisionFisica,false);
+});
+
+test('fase 5: etiquetas iguales se distinguen por sector pero no por IDs de fila invisibles', () => {
+  const api=cargar(); let p=recintoFisico(api); p=api.cambiarNumeracion(p,'oficial');
+  p=api.editarEtiquetaOficial(p,'F1-1-1',{fila:'A',numero:'01'});
+  p=api.editarEtiquetaOficial(p,'F2-1-1',{fila:'A',numero:'01'});
+  assert.equal(p.motivo,undefined);
+  assert.equal(api.exportarLugaresDeMapa(api.mapaDesdePlano('Sectores',p,null)).errores,undefined);
+  const q=api.asignarPertenenciaFisica(p,['F1-1-1','F2-1-1'],'sector','');
+  assert.match(api.validarMapa(api.mapaDesdePlano('Ambiguo',q,null)).errores.join(' '),/repetida/);
+  const etiquetas = [
+    {nivel:'n1',zona:'luneta',filaId:'fila1',fila:'A',numero:'01'},
+    {nivel:'n1',zona:'luneta',fila:'A',numero:'01'},
+  ];
+  assert.equal(api.claveEtiquetaFisica(etiquetas[0]),api.claveEtiquetaFisica(etiquetas[1]));
+});
+
+test('fase 5: retirar y recrear butaca de palco no recupera pertenencia ni identidad', () => {
+  const api=cargar(); let p=recintoFisico(api); const original=p.identidadFisica['F3-1-3'].id;
+  p.bloquesFilas[2].ancho=2; api.generarPlano('mapa-en-blanco',p); p=api.sincronizarIdentidad(p);
+  assert.ok(p.idsRetirados.includes(original)); assert.equal(api.miembrosFisicos(p,'palco','palco1').length,2);
+  p.bloquesFilas[2].ancho=3; api.generarPlano('mapa-en-blanco',p); p=api.sincronizarIdentidad(p);
+  assert.notEqual(p.identidadFisica['F3-1-3'].id,original); assert.equal(p.identidadFisica['F3-1-3'].grupoId,undefined);
+  const registro=p.identidadFisica['F3-1-3'];
+  p=api.asignarPertenenciaFisica(p,[registro.id],'palco','palco1');
+  assert.equal(p.identidadFisica['F3-1-3'].id,registro.id);
+  const exceso={...p,siguientePalco:1e6}; assert.match(api.agregarEntidadFisica(exceso,'palco','C','n1','luneta').motivo,/agotaron/);
+  const lleno={...p,sectores:Array.from({length:1000},(_,i)=>({id:'sector'+(i+1),nombre:'Sector '+i,nivel:'n1',zona:'luneta'}))};
+  assert.match(api.agregarEntidadFisica(lleno,'sector','Extra','n1','luneta').motivo,/límite/);
+});
+
 test('fase 4: tres niveles conservan seleccion, IDs, etiquetas repetidas entre pisos y revision canonica', () => {
   const api = cargar();
   let plano = lienzoLibre(api);
@@ -1022,7 +1204,7 @@ test('un mapa guarda el diseño y las bloqueadas, pero no la ocupacion', () => {
   const mapa = api.mapaDesdePlano('Salón Jardín', editado, '2026-09-16T18:30:00Z', ids);
 
   assert.equal(mapa.formato, api.FORMATO_MAPA);
-  assert.equal(mapa.version, 7);
+  assert.equal(mapa.version, 8);
   assert.deepEqual(mapa.distribucion, { bloques: [4, 4, 4], pasillos: [1, 1] });
   assert.equal(mapa.pasillos, undefined);
   const texto = JSON.stringify(mapa);
@@ -1064,7 +1246,7 @@ test('validarMapa rechaza archivos que no son mapas o traen datos no validos', (
   assert.deepEqual(api.validarMapa(null).errores, ['el archivo no contiene un mapa']);
   assert.deepEqual(api.validarMapa([1, 2]).errores, ['el archivo no contiene un mapa']);
   assert.deepEqual(con((m) => { m.formato = 'otra-cosa'; }), ['no es un mapa de este selector de asientos']);
-  assert.deepEqual(con((m) => { m.version = 8; }), ['versión de mapa no compatible (8)']);
+  assert.deepEqual(con((m) => { m.version = 9; }), ['versión de mapa no compatible (9)']);
   assert.ok(con((m) => { m.nombre = '   '; }).includes('el nombre debe tener entre 1 y 80 caracteres'));
   assert.ok(con((m) => { m.distribucion.pasillos = [1]; }).includes('columnas: con 3 bloques hacen falta 2 anchos de pasillo'));
   assert.ok(con((m) => { delete m.distribucion; }).includes('columnas: faltan los bloques o los pasillos'));
@@ -1281,7 +1463,7 @@ test('un mapa guarda las columnas y un mapa de la version 1 se sigue leyendo', (
   delete viejo.distribucion;
   const { mapa: convertido, errores } = api.validarMapa(viejo);
   assert.equal(errores, undefined);
-  assert.equal(convertido.version, 7);
+  assert.equal(convertido.version, 8);
   assert.deepEqual(convertido.distribucion, { bloques: [4, 9], pasillos: [1] });
   assert.equal(convertido.pasillos, undefined);
 });
@@ -1996,7 +2178,7 @@ test('mapas version 3: lienzo, sin escenario y espacios con guias, y se validan 
   const { plano } = conLienzo(api, (p) => api.agregarBanda(api.alternarGuias(p, 'espacio'), 'espacio', 20));
   const mapa = JSON.parse(JSON.stringify(api.mapaDesdePlano('Salón de eventos', plano, null)));
   assert.deepEqual([mapa.version, mapa.lienzo, mapa.escenario, mapa.bandas],
-    [7, true, null, [{ id: 'espacio', tipo: 'espacio', alto: 10, guias: true }, { id: 'banda1', tipo: 'espacio', alto: 4 }]]);
+    [8, true, null, [{ id: 'espacio', tipo: 'espacio', alto: 10, guias: true }, { id: 'banda1', tipo: 'espacio', alto: 4 }]]);
   const { mapa: leido, errores } = api.validarMapa(mapa);
   assert.equal(errores, undefined);
   assert.deepEqual([leido.lienzo, leido.escenario, leido.bandas[0].guias], [true, null, true]);
@@ -2209,7 +2391,7 @@ test('migracion v1-v4 conserva identidad y antecedentes sin activar tarifas ni c
     const esperado = plano.mesas.map((m) => [m.id, m.x, m.y]);
     const salida = api.validarMapa(viejo);
     assert.equal(salida.errores, undefined);
-    assert.equal(salida.mapa.version, 7);
+    assert.equal(salida.mapa.version, 8);
     assert.deepEqual(salida.mapa.mesas.map((m) => [m.id, m.x, m.y]), esperado);
     assert.ok(salida.mapa.zonas.every((z) => !('precio' in z)));
     assert.ok(salida.mapa.mesas.every((m) => !('completa' in m)));
@@ -2222,7 +2404,7 @@ test('migracion v1-v4 conserva identidad y antecedentes sin activar tarifas ni c
     const reexportado = api.mapaDesdePlano('Anterior', api.planoDesdeSala('mapa:Anterior', sala), null);
     assert.deepEqual(api.validarMapa(reexportado).mapa, salida.mapa);
     const catalogo = api.exportarLugaresDeMapa(reexportado).catalogo;
-    assert.equal(catalogo.version, 4);
+    assert.equal(catalogo.version, 5);
     assert.ok(catalogo.lugares.every((l) => !('preview_price_cents' in l) && !('preview_currency' in l)));
     assert.equal('antecedentesComerciales' in catalogo, false);
   }
@@ -2749,7 +2931,7 @@ test('mapas version 4: la zona de una mesa y la de una banda de mesas son opcion
   // Un mapa de la version 3: sus mesas no traian zona y pasan a heredar la de su banda.
   const viejo = { ...JSON.parse(JSON.stringify(api.mapaDesdePlano('Viejo', plano, null))), version: 3 };
   const leidoViejo = api.validarMapa(viejo).mapa;
-  assert.equal(leidoViejo.version, 7);
+  assert.equal(leidoViejo.version, 8);
   api.generarPlano(api.registrarMapa(leidoViejo));
   assert.equal(api.butacas.find((b) => b.id === 'M1-N1').zona, 'mesas');
 });

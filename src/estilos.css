@@ -376,3 +376,7 @@
   }
   .nota code { color: var(--texto-tenue); }
   .nota + .nota { border-left-color: #fbbf24; }
+.palco-fisico { pointer-events: none; }
+.palco-fisico rect { fill: none; stroke: #a4bdd9; stroke-width: .6; stroke-dasharray: 2 2; }
+.palco-fisico text { text-anchor: start; font-size: 4px; }
+.butaca.fisica-seleccionada .toque { stroke: #facc15; stroke-width: 1.4; }

@@ -510,7 +510,8 @@ comentarios `// ----`.
   descartan los campos desconocidos y se comprueba que las mesas quepan. No se confía en el archivo.
 - **Las bloqueadas son una lista de ids** (`plano.bloqueadas`). `bloqueadasAlFinal` de las plantillas
   solo se usa si no hay lista.
-- **Formato del mapa, versión 7:** niveles y regiones independientes, filas libres y correcciones.
+- **Formato del mapa, versión 8:** sectores, filas físicas y palcos independientes del dibujo.
+  La versión 7 añadió niveles y regiones independientes, filas libres y correcciones.
   La versión 6 añadió inventario físico, numeración oficial, IDs retirados y revisiones.
   La versión 5 quitó precios activos y venta completa activa; conserva
   antecedentes comerciales validados de mapas antiguos. En versión 4, `zona` es opcional en mesas, bloques y butacas sueltas (sin ella,
@@ -535,6 +536,16 @@ comentarios `// ----`.
   las huellas nuevas al transformar varias piezas; no reservar el rectángulo vacío de un arco.
 - **Región gráfica no cambia pertenencia:** solo transforma sus bloques vinculados; una transformación
   imposible no mueve ninguno. Al eliminarla sobreviven los lugares y su identidad física.
+- **Pertenencias físicas por lugar:** `sectorId`, `filaId` y `grupoId` se guardan en el inventario.
+  Una fila puede atravesar sectores; fila y palco son excluyentes, y una mesa conserva su identidad.
+  Cada entidad y sus integrantes comparten nivel y zona. Duplicar conserva sector, pero no asigna
+  las copias a la fila o palco originales. Reasignar zona desvincula pertenencias incompatibles.
+- **Entidades retiradas:** los contadores físicos y `entidadesRetiradas` impiden reutilizar IDs,
+  también después de deshacer. Eliminar una entidad usada exige desvincular sus lugares;
+  eliminar nivel retira sus entidades. Las entidades vacías sujetan su zona pero no añaden aforo.
+- **Palco no es mesa ni fila:** el grupo se resuelve después de generar todos los niveles. Conserva
+  `numeroGrupo` explícito por ID; no necesita fila ficticia. Sus butacas siguen colisionando y sus
+  piezas geométricas siguen siendo editables. El contorno es una referencia sin área sensible.
 
 ## Trampas conocidas
 

@@ -4,7 +4,24 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Niveles, regiones y geometría libre (fase 4)
+## Sin publicar — Sectores, filas físicas y palcos (fase 5)
+
+Rama `claude/estructura-fisica`, desde `main` tras fusionar el PR #50.
+
+- Entidades físicas con IDs propios, referencias por lugar y filas compartidas entre sectores.
+- Palcos con lugares individuales, numeración explícita y contorno de referencia; las mesas
+  conservan su identidad y la modalidad comercial sigue fuera del mapa.
+- Herramienta de selección física por clic, teclado o piezas, independiente de la compra.
+- Duplicación con nuevos lugares y sector conservado; asignación deliberada de fila o palco.
+- Mapa v8 y catálogo v5, migración v1–v7, validación de pertenencias y revisiones publicadas.
+- Verificado: 182 pruebas de lógica y 16 de navegador; 49 mapas anteriores y 105 importaciones
+  inválidas comparados con fase 4, 31 mutaciones detectadas y los 12 recorridos anteriores
+  ejecutados también sobre fase 4. HTML sincronizado, revisión visual y sin errores JavaScript.
+
+## 2026-10-04 — PR #50: Niveles, regiones y geometría libre (fase 4)
+
+[PR #50](https://github.com/jonathancr29/selector-asientos/pull/50), fusionado en `main` con el
+commit `1bb1c88`.
 
 Rama `claude/niveles-geometria`, desde `main` tras revisar y fusionar el PR #49.
 
