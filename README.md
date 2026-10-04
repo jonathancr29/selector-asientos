@@ -1,5 +1,10 @@
 # Selector de asientos
 
+La evolución del recinto y la configuración por evento se define en
+[Contrato de recinto, evento y conector](docs/CONTRATO_RECINTO_EVENTO.md).
+Ese contrato distingue funciones actuales y fases pendientes; incluye un ejemplo ficticio
+de tres niveles, una fila compartida entre sectores y un palco.
+
 Plano de butacas interactivo en SVG. Se entrega como **un solo archivo HTML** que se abre en el
 navegador tal cual. Las fuentes están separadas y se unen con Node, sin dependencias ni framework.
 

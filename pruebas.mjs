@@ -51,6 +51,37 @@ assert.ok(!conComa, 'la parte sin DOM declara varios nombres en una sentencia:\n
 
 const cargar = () => new Function(fuente + '\nreturn { ' + declarados.join(', ') + ' };')();
 
+test('contrato: referencias cruzadas, fila compartida y conjunto no comprable', () => {
+  const { recinto: r, evento: e, esperado } = JSON.parse(readFileSync(new URL('./docs/ejemplo-recinto-evento.json', import.meta.url), 'utf8'));
+  for (const lista of [r.niveles, r.zonas, r.sectores, r.filas, r.grupos, r.lugares]) {
+    assert.equal(new Set(lista.map((x) => x.id)).size, lista.length);
+  }
+  const existe = (lista, id) => lista.some((x) => x.id === id);
+  for (const p of r.lugares) {
+    for (const [campo, lista] of [['nivel', r.niveles], ['zona', r.zonas], ['sector', r.sectores], ['fila', r.filas], ['grupo', r.grupos]]) {
+      if (p[campo] !== null) assert.ok(existe(lista, p[campo]), campo + ' de ' + p.id);
+    }
+    assert.ok(!r.retirados.includes(p.id));
+  }
+  assert.equal(e.revision, r.revision);
+  assert.equal(r.niveles.length, 3);
+  assert.equal(new Set(r.lugares.filter((p) => p.fila === 'f1').map((p) => p.sector)).size, 2);
+  for (const g of r.grupos) {
+    assert.deepEqual(g.lugares, r.lugares.filter((p) => p.grupo === g.id).map((p) => p.id));
+  }
+  const habilitados = r.lugares.filter((p) => p.utilizable && e.zonas.find((z) => z.id === p.zona).habilitada &&
+    !Object.entries(e.exclusiones).some(([lista, ids]) => ids.includes(p[{ sectores: 'sector', filas: 'fila', grupos: 'grupo', lugares: 'id' }[lista]])));
+  const disponibles = habilitados.filter((p) => e.disponibilidad.find((d) => d.lugar === p.id).estado === 'libre');
+  const conjuntos = e.grupos.filter((g) => g.requeridos.every((id) => disponibles.some((p) => p.id === id)));
+  const comprables = disponibles.filter((p) => !p.grupo || conjuntos.some((g) => g.id === p.grupo));
+  assert.equal(r.lugares.length, esperado.inventariados);
+  assert.equal(r.lugares.filter((p) => p.utilizable).length, esperado.utilizables);
+  assert.deepEqual(habilitados.map((p) => p.id), esperado.habilitados);
+  assert.deepEqual(disponibles.map((p) => p.id), esperado.disponibles);
+  assert.deepEqual(comprables.map((p) => p.id), esperado.comprables);
+  assert.deepEqual(conjuntos.map((g) => g.id), esperado.conjuntosComprables);
+});
+
 test('historial: deshacer, rehacer y cambios respecto al guardado', () => {
   const { crearHistorial } = cargar();
   const estado = (n) => ({ plano: String(n), firma: String(n) });
