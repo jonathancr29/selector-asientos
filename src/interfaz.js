@@ -526,7 +526,7 @@ let vista, vistaInicial;
 // el viewBox llena el elemento sin franjas y cada pixel sigue siendo una misma
 // distancia en unidades, que es lo que suponen enUnidades y el arrastre.
 function calcularEncuadre() {
-  const cajas = [...butacas, ...muebles, { x: 0, y: 0, w: salaActual.ancho + 1, h: salaActual.alto }];
+  const cajas = [...butacasVisibles(), ...muebles, { x: 0, y: 0, w: salaActual.ancho + 1, h: salaActual.alto }];
   const margen = PASO;
   let x = Math.min(...cajas.map((c) => c.x)) * PASO - margen;
   let y = Math.min(...cajas.map((c) => c.y)) * PASO - margen;
@@ -743,7 +743,7 @@ svg.addEventListener('pointerdown', (e) => {
       x: e.clientX, y: e.clientY, movido: 0,
       // Con la herramienta de zona o de bloqueo, arrastrar dibuja un rectangulo en vez
       // de mover el plano; Alt lo deshace (zona de siempre, o desbloquear).
-      area: modo === 'editor' && conButacas() && herramienta !== 'numeracion' && !soloMover ? { desde: celdaBajo(e), alt: e.altKey } : null,
+      area: modo === 'editor' && ['zona', 'bloquear'].includes(herramienta) && !soloMover ? { desde: celdaBajo(e), alt: e.altKey } : null,
       // Colocando piezas, arrastrar el fondo las selecciona; con Ctrl, se suman a las
       // que ya estaban.
       marco: modo === 'editor' && !conButacas() && !soloMover
@@ -892,6 +892,7 @@ function alternar(elemento) {
     if (herramienta === 'bloquear' && elemento) alternarBloqueo(elemento);
     if (herramienta === 'zona' && elemento) pintarZona(elemento);
     if (herramienta === 'numeracion' && elemento) elegirEtiquetaOficial(elemento);
+    else if (herramienta === 'ajustar' && elemento) elegirLugarAjuste(elemento);
     return;
   }
   const b = elemento && porNodo(elemento);
@@ -923,14 +924,7 @@ function alternarMesaPorTablero(id) {
 function moverFoco(desde, dx, dy) {
   const origen = porNodo(desde);
   if (!origen) return;
-  const candidatas = butacas.filter((b) => (dx
-    ? Math.sign(b.x - origen.x) === dx && b.y === origen.y
-    : Math.sign(b.y - origen.y) === dy));
-  if (!candidatas.length) return;
-  const destino = candidatas.reduce((mejor, b) => {
-    const d = Math.abs(b.x - origen.x) + Math.abs(b.y - origen.y) * 1.5;
-    return d < mejor.d ? { b, d } : mejor;
-  }, { b: null, d: Infinity }).b;
+  const destino = vecinoDeLugar(butacasVisibles(), origen, dx, dy);
   if (!destino) return;
   destino.nodo.focus();   // el tabindex y el encuadre los ajusta 'focusin'
 }
@@ -1008,7 +1002,7 @@ svg.addEventListener('keydown', (e) => {
   }
   const elemento = e.target.closest('.butaca');
   if (!elemento) return;
-  const porArea = modo === 'editor' && conButacas() && herramienta !== 'numeracion';
+  const porArea = modo === 'editor' && ['zona', 'bloquear'].includes(herramienta);
   if (e.key === 'Escape' && areaTeclado) {
     e.preventDefault();
     limpiarArea();

@@ -4,7 +4,26 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Identidad física, numeración oficial y revisiones (fase 3)
+## Sin publicar — Niveles, regiones y geometría libre (fase 4)
+
+Rama `claude/niveles-geometria`, desde `main` tras revisar y fusionar el PR #49.
+
+- Niveles con coordenadas y escenario propios, selección compartida y vista conservada por piso.
+- Regiones gráficas independientes con posición, medidas y giro; transforman bloques vinculados.
+- Filas rectas o arcos circulares, ángulos arbitrarios y coordenadas fraccionarias. Orientación
+  independiente según fila, escenario o ángulo manual.
+- Correcciones por lugar relativas a la fila, conservadas al regenerar y duplicar, retiradas
+  junto con su ID. Comprobación de solapamientos fraccionarios y cambios atómicos.
+- Mapa versión 7 y catálogo versión 4, con migración de mapas anteriores a un nivel.
+- Sectores, palcos, curvas generales y conector comercial permanecen pendientes.
+- Verificado: 172 pruebas de lógica y 13 de navegador; 41 mapas anteriores y 105 importaciones
+  inválidas comparados con fase 3, 23 mutaciones detectadas y los 10 recorridos previos también
+  ejecutados sobre fase 3. HTML sincronizado y revisión visual sin errores JavaScript.
+
+## 2026-10-03 — PR #49: Identidad física, numeración oficial y revisiones (fase 3)
+
+[PR #49](https://github.com/jonathancr29/selector-asientos/pull/49), fusionado en `main` con el
+commit `da14382`.
 
 Rama `claude/identidad-oficial`, desde `main` tras fusionar los PR #46, #47 y #48.
 

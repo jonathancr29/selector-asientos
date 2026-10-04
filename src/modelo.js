@@ -698,7 +698,9 @@ const ANCHO_BLOQUE_MAXIMO = 40;
 const bloquesFilas = [];   // {id, tipo: 'filas', x, y, ancho, filas, zona, giro, nombre, nombrePropio, geo}
 const esBloqueFilas = (pieza) => Boolean(pieza) && pieza.tipo === 'filas';
 
-function geometriaBloqueFilas({ ancho, filas, giro = 0 }) {
+function geometriaBloqueFilas(config) {
+  const { ancho, filas, giro = 0 } = config;
+  if (config.geometria) return geometriaFilasLibre(config);
   const lugares = [];
   for (let f = 0; f < filas; f++) {
     for (let c = 0; c < ancho; c++) lugares.push({ fila: f, columna: c, dx: c, dy: f, mira: MIRA_ESCENARIO });
@@ -706,6 +708,94 @@ function geometriaBloqueFilas({ ancho, filas, giro = 0 }) {
   let geo = { ancho, alto: filas, tablero: null, lugares };
   for (let g = 0; g < giro; g += 90) geo = girar90(geo);
   return geo;
+}
+
+const normalizarAngulo = (a) => ((a % 360) + 360) % 360;
+const rotarPunto = (x, y, giro) => ({
+  x: x * Math.cos(giro * Math.PI / 180) - y * Math.sin(giro * Math.PI / 180),
+  y: x * Math.sin(giro * Math.PI / 180) + y * Math.cos(giro * Math.PI / 180),
+});
+
+// Las correcciones viven en coordenadas de fila: viajan y giran con ella.
+function geometriaFilasLibre(config) {
+  const { ancho, filas, giro = 0, geometria: g } = config;
+  const lugares = [];
+  for (let f = 0; f < filas; f++) for (let c = 0; c < ancho; c++) {
+    let x = c * g.separacion, y = f * g.separacionFilas, mira = 0;
+    if (g.tipo === 'arco') {
+      const a = (ancho === 1 ? 0 : -g.apertura / 2 + c * g.apertura / (ancho - 1)) * Math.PI / 180;
+      const r = g.radio + f * g.separacionFilas;
+      x = r * Math.sin(a); y = r * Math.cos(a) - g.radio;
+      mira = -a * 180 / Math.PI;
+    }
+    const ajuste = config.ajustes?.[(f + 1) + '-' + (c + 1)];
+    x += ajuste?.dx || 0; y += ajuste?.dy || 0;
+    const p = rotarPunto(x, y, giro);
+    lugares.push({ fila: f, columna: c, dx: p.x, dy: p.y,
+      mira: normalizarAngulo(MIRA_ESCENARIO + (g.orientacion === 'manual' ? g.anguloButacas : mira) + giro + (ajuste?.giro || 0)) });
+  }
+  const minX = Math.min(...lugares.map((l) => l.dx));
+  const minY = Math.min(...lugares.map((l) => l.dy));
+  for (const l of lugares) { l.dx -= minX; l.dy -= minY; }
+  return { ancho: Math.max(...lugares.map((l) => l.dx)) + 1,
+    alto: Math.max(...lugares.map((l) => l.dy)) + 1, tablero: null, lugares, libre: true };
+}
+
+const geometriaInicial = () => ({ tipo: 'recta', separacion: 1.5, separacionFilas: 1.5,
+  radio: 8, apertura: 90, orientacion: 'fila', anguloButacas: 0 });
+
+function cambiarGeometriaBloque(plano, sala, id, valores) {
+  const bloque = plano.bloquesFilas.find((p) => p.id === id);
+  if (!bloque) return { motivo: 'elige un bloque de filas' };
+  const geometria = { ...geometriaInicial(), ...bloque.geometria, ...valores.geometria };
+  const nuevo = { ...bloque, geometria, giro: normalizarAngulo(valores.giro ?? bloque.giro ?? 0),
+    x: valores.x ?? bloque.x, y: valores.y ?? bloque.y };
+  const motivo = motivoGeometria(nuevo) || motivoNoCabe(sala, celdasOcupadas(id), nuevo);
+  if (motivo) return { motivo };
+  const copia = copiarPlano(plano);
+  copia.bloquesFilas = copia.bloquesFilas.map((p) => p.id === id ? nuevo : p);
+  return copia;
+}
+
+function ajustarLugar(plano, sala, id, valores) {
+  const b = butacas.find((p) => p.id === id && p.nivel === sala.nivel);
+  if (!b?.bloque) return { motivo: 'elige una butaca de un bloque libre' };
+  const bloque = plano.bloquesFilas.find((p) => p.id === b.bloque);
+  if (!bloque?.geometria) return { motivo: 'activa primero la geometría libre del bloque' };
+  if (![valores.dx, valores.dy, valores.giro].every((v) => Number.isFinite(v) && Math.abs(v) <= 360)) return { motivo: 'ajustes fuera de rango' };
+  const ajustes = JSON.parse(JSON.stringify(bloque.ajustes || {}));
+  ajustes[(b.filaLocal + 1) + '-' + b.numeroLocal] = { id, ...valores };
+  const nuevo = { ...bloque, ajustes };
+  const motivo = motivoNoCabe(sala, celdasOcupadas(b.bloque), nuevo);
+  if (motivo) return { motivo };
+  const copia = copiarPlano(plano);
+  copia.bloquesFilas = copia.bloquesFilas.map((p) => p.id === b.bloque ? nuevo : p);
+  return copia;
+}
+
+function motivoGeometria(p) {
+  const g = p.geometria;
+  if (!g || !['recta', 'arco'].includes(g.tipo) || !['fila', 'escenario', 'manual'].includes(g.orientacion) ||
+      ![p.giro, p.x, p.y, g.separacion, g.separacionFilas, g.radio, g.apertura, g.anguloButacas].every(Number.isFinite) ||
+      p.giro < 0 || p.giro >= 360 || g.separacion < 1 || g.separacion > 10 ||
+      g.separacionFilas < 1 || g.separacionFilas > 10 || g.radio < 1 || g.radio > 300 ||
+      g.apertura < 1 || g.apertura > 330 || Math.abs(g.anguloButacas) > 360) return 'geometría de filas inválida';
+  return null;
+}
+
+// En una curva la siguiente butaca puede estar a la izquierda en coordenadas.
+function vecinoDeLugar(lista, origen, dx, dy) {
+  const visibles = lista.filter((b) => b.id !== origen.id && b.nivel === origen.nivel);
+  if (origen.libre) {
+    const local = visibles.find((b) => b.bloque === origen.bloque && b.filaLocal === origen.filaLocal + dy && b.numeroLocal === origen.numeroLocal + dx);
+    if (local) return local;
+  }
+  const candidatas = visibles.filter((b) => dx ? Math.sign(b.x - origen.x) === dx &&
+    (origen.libre || b.libre || Math.abs(b.y - origen.y) < .001) : Math.sign(b.y - origen.y) === dy);
+  return candidatas.reduce((mejor, b) => {
+    const d = Math.abs(b.x - origen.x) + Math.abs(b.y - origen.y) * 1.5;
+    return d < mejor.d ? { b, d } : mejor;
+  }, { b:null, d:Infinity }).b;
 }
 
 // La huella de cualquier pieza: mesa, bloque de filas, forma, butaca suelta o escenario.
@@ -778,7 +868,7 @@ function agregarBloqueFilas(config, zona = config.zona) {
       id: config.id + '-' + (l.fila + 1) + '-' + (l.columna + 1),
       fila: LETRAS[l.fila], numero: l.columna + 1, seccion: nombre,
       bloque: config.id, filaLocal: l.fila, numeroLocal: l.columna + 1,
-      x: config.x + l.dx, y: config.y + l.dy, mira: l.mira,
+      x: config.x + l.dx, y: config.y + l.dy, mira: l.mira, libre: Boolean(config.geometria),
       zona, grupo: null, estado: 'libre',
     });
   }
@@ -866,7 +956,7 @@ function numerarFilas() {
     if (!porZona.has(b.zona)) porZona.set(b.zona, new Map());
     // Las filas laterales o de espaldas no comparten letra con una fila horizontal
     // que pasa por la misma altura. El id del bloque solo separa sus filas fisicas.
-    const clave = b.bloque && !miraDeFrente(b) ? b.bloque + ':' + b.filaLocal : 'y:' + b.y;
+    const clave = b.bloque && (b.libre || !miraDeFrente(b)) ? b.bloque + ':' + b.filaLocal : 'y:' + b.y;
     const filas = porZona.get(b.zona);
     if (!filas.has(clave)) filas.set(clave, []);
     filas.get(clave).push(b);
@@ -982,7 +1072,88 @@ function agregarSubtitulos(bandas) {
 // lo que guarda el editor para ese tipo: { bandas, mesas, bloquesFilas, bloqueadas,
 // distribucion, siguiente, siguienteBanda, siguienteBloque }. Sin plano, se usan las bandas del tipo y sus mesas (las
 // guardadas si es un mapa, las automaticas si es una plantilla).
+const CAMPOS_DE_NIVEL = ['distribucion', 'bandas', 'mesas', 'bloquesFilas', 'formas', 'butacasSueltas', 'escenario', 'lienzo', 'regionesLibres'];
+const copiarDatos = (dato) => JSON.parse(JSON.stringify(dato));
+const geometriaDeNivel = (plano) => copiarDatos(Object.fromEntries(CAMPOS_DE_NIVEL.filter((k) => plano[k] !== undefined).map((k) => [k, plano[k]])));
+const nivelesDe = (plano) => plano.niveles || [{ id: 'n1', nombre: 'Planta baja' }];
+let nivelGenerado = 'n1';
+const butacasVisibles = () => butacas.filter((b) => !b.nivel || b.nivel === nivelGenerado);
+
+// La vista no cambia el documento: al guardar se vuelve siempre al primer nivel.
+function cambiarNivelPlano(plano, id) {
+  const niveles = copiarDatos(nivelesDe(plano));
+  if (!niveles.some((n) => n.id === id)) return { motivo: 'nivel desconocido' };
+  const actual = plano.nivelEnEdicion || niveles[0].id;
+  if (actual === id) return { ...copiarPlano(plano), niveles, nivelEnEdicion: id };
+  niveles.find((n) => n.id === actual).plano = geometriaDeNivel(plano);
+  const destino = niveles.find((n) => n.id === id);
+  const nuevo = copiarPlano(plano);
+  for (const k of CAMPOS_DE_NIVEL) delete nuevo[k];
+  Object.assign(nuevo, destino.plano);
+  delete destino.plano;
+  return { ...nuevo, niveles, nivelEnEdicion: id };
+}
+
+function agregarNivel(plano, nombre) {
+  const niveles = nivelesDe(plano);
+  if (niveles.length >= 12 || typeof nombre !== 'string' || !nombre.trim() || nombre.trim().length > 40) return { motivo: 'nombre de nivel inválido o límite de 12 niveles' };
+  if (niveles.some((n) => n.nombre.toLocaleUpperCase('es') === nombre.trim().toLocaleUpperCase('es'))) return { motivo: 'ese nombre de nivel ya existe' };
+  const nuevo = copiarPlano(plano);
+  nuevo.niveles = copiarDatos(niveles);
+  const id = 'n' + (nuevo.siguienteNivel || 2);
+  nuevo.siguienteNivel = (nuevo.siguienteNivel || 2) + 1;
+  const banda = 'banda' + nuevo.siguienteBanda++;
+  nuevo.niveles.push({ id, nombre: nombre.trim(), plano: { lienzo: true, distribucion: { bloques: [30], pasillos: [] },
+    bandas: [{ id: banda, tipo: 'espacio', alto: 30 }], mesas: [], bloquesFilas: [], formas: [], butacasSueltas: [], escenario: null, regionesLibres: [] } });
+  return cambiarNivelPlano(nuevo, id);
+}
+
+function renombrarNivel(plano, id, nombre) {
+  if (!nivelesDe(plano).some((n) => n.id === id)) return { motivo: 'nivel desconocido' };
+  if (typeof nombre !== 'string' || !nombre.trim() || nombre.trim().length > 40 || nivelesDe(plano).some((n) => n.id !== id && n.nombre.toLocaleUpperCase('es') === nombre.trim().toLocaleUpperCase('es'))) return { motivo: 'nombre de nivel inválido o repetido' };
+  const nuevo = copiarPlano(plano);
+  nuevo.niveles = copiarDatos(nivelesDe(plano)).map((n) => n.id === id ? { ...n, nombre: nombre.trim() } : n);
+  return nuevo;
+}
+function eliminarNivel(plano, id) {
+  const niveles = nivelesDe(plano);
+  if (!niveles.some((n) => n.id === id)) return { motivo: 'nivel desconocido' };
+  if (niveles.length === 1) return { motivo: 'el recinto necesita al menos un nivel' };
+  const otro = niveles.find((n) => n.id !== id);
+  const nuevo = cambiarNivelPlano(plano, otro.id);
+  nuevo.niveles = nuevo.niveles.filter((n) => n.id !== id);
+  return nuevo;
+}
+
 function generarPlano(tipo, plano = null) {
+  const definicion = typeof tipo === 'string' ? TIPOS_DE_SALA[tipo] : tipo;
+  const dato = plano || definicion;
+  const niveles = nivelesDe(dato);
+  const activo = dato.nivelEnEdicion || niveles[0].id;
+  const lista = [];
+  let sala;
+  for (const n of [...niveles.filter((n) => n.id !== activo), niveles.find((n) => n.id === activo)]) {
+    const local = n.id === activo ? dato : { ...dato, ...n.plano };
+    nivelGenerado = n.id;
+    sala = generarPlanoNivel(definicion, n.id === activo && !plano ? null : local);
+    sala.nivel = n.id;
+    sala.niveles = niveles.map(({ id, nombre }) => ({ id, nombre }));
+    for (const b of butacas) { b.nivel = n.id; b.nombreNivel = n.nombre; }
+    if (niveles.length > 1 || bloquesFilas.some((p) => p.geometria)) {
+      const fallo = primeraPiezaQueNoCabe(sala);
+      if (fallo) sala.errorDeGeometria = fallo;
+    }
+    lista.push(...butacas);
+  }
+  butacas.length = 0; butacas.push(...lista);
+  nivelGenerado = activo;
+  sala.datosNiveles = { niveles: copiarDatos(niveles), nivelEnEdicion: activo,
+    siguienteNivel: dato.siguienteNivel || 2, siguienteRegion: dato.siguienteRegion || 1,
+    regionesLibres: copiarDatos(dato.regionesLibres || []) };
+  return sala;
+}
+
+function generarPlanoNivel(tipo, plano = null) {
   const definicion = typeof tipo === 'string' ? TIPOS_DE_SALA[tipo] : tipo;
   if (!definicion) throw new Error('Tipo de sala desconocido: ' + tipo);
   butacas.length = 0;
@@ -1037,6 +1208,7 @@ function generarPlano(tipo, plano = null) {
   // editor obliga a elegirle una, ver zonasObligatorias).
   const respaldo = zonaParaFilas(listaDeZonas);
   const zonaDePieza = (config) => (zonas[config.zona] && config.zona) ||
+    (plano?.regionesLibres || []).find((r) => r.id === config.region)?.zona ||
     zonaEnCelda(sala, config.x, config.y) || respaldo;
 
   const ocupadasDeMesas = definicion.mesasOcupadas || {};
@@ -1045,6 +1217,15 @@ function generarPlano(tipo, plano = null) {
   }
   for (const config of (plano && plano.bloquesFilas) || definicion.bloquesFilas || []) {
     agregarBloqueFilas(config, zonaDePieza(config));
+  }
+  const porBloque = new Map(bloquesFilas.map((p) => [p.id, p]));
+  for (const b of butacas) if (b.bloque) {
+    const p = porBloque.get(b.bloque);
+    if (p.geometria?.orientacion === 'escenario' && !escenario.ausente) {
+      const centro = centroDelEscenario();
+      const ajuste = p.ajustes?.[(b.filaLocal + 1) + '-' + b.numeroLocal];
+      b.mira = normalizarAngulo(MIRA_ESCENARIO + Math.atan2(centro.x - b.x - .5, b.y + .5 - centro.y) * 180 / Math.PI + (ajuste?.giro || 0));
+    }
   }
   for (const config of (plano && plano.formas) || definicion.formas || []) agregarForma(config);
   for (const config of (plano && plano.butacasSueltas) || definicion.butacasSueltas || []) {
@@ -1106,34 +1287,74 @@ const excluida = (excluir, id) => (excluir instanceof Set ? excluir.has(id) : id
 
 function celdasOcupadas(excluir) {
   const ocupadas = new Map();
-  for (const b of butacas) {
+  for (const b of butacasVisibles()) {
     if (b.grupo || (b.bloque && excluida(excluir, b.bloque)) || (b.suelta && excluida(excluir, b.suelta))) continue;
-    ocupadas.set(celda(b.x, b.y), (b.suelta ? 'la butaca ' + b.fila + b.numero : 'la fila ' + b.fila) + ' de ' + b.seccion);
+    ocuparRectangulo(ocupadas, { x: b.x, y: b.y, ancho: 1, alto: 1 }, (b.suelta ? 'la butaca ' + b.fila + b.numero : 'la fila ' + b.fila) + ' de ' + b.seccion);
   }
   for (const m of mesas) {
     if (excluida(excluir, m.id)) continue;
-    for (let dy = 0; dy < m.geo.alto; dy++) {
-      for (let dx = 0; dx < m.geo.ancho; dx++) ocupadas.set(celda(m.x + dx, m.y + dy), m.nombre);
-    }
+    ocuparRectangulo(ocupadas, { x: m.x, y: m.y, ancho: m.geo.ancho, alto: m.geo.alto }, m.nombre);
   }
   for (const f of formas) {
     if (excluida(excluir, f.id)) continue;
-    for (let dy = 0; dy < f.alto; dy++) {
-      for (let dx = 0; dx < f.ancho; dx++) ocupadas.set(celda(f.x + dx, f.y + dy), f.nombre);
-    }
+    ocuparRectangulo(ocupadas, f, f.nombre);
   }
   if (!excluida(excluir, 'escenario') && !escenario.ausente) {
-    for (let dy = 0; dy < escenario.alto; dy++) {
-      for (let dx = 0; dx < escenario.ancho; dx++) ocupadas.set(celda(escenario.x + dx, escenario.y + dy), 'el escenario');
-    }
+    ocuparRectangulo(ocupadas, escenario, 'el escenario');
   }
   return ocupadas;
+}
+
+const solapanRectangulos = (a, b) => a.x < b.x + b.ancho - 1e-7 && a.x + a.ancho > b.x + 1e-7 &&
+  a.y < b.y + b.alto - 1e-7 && a.y + a.alto > b.y + 1e-7;
+function celdasDeRectangulo(r) {
+  const claves = [];
+  for (let y = Math.floor(r.y + 1e-7); y < Math.ceil(r.y + r.alto - 1e-7); y++) {
+    for (let x = Math.floor(r.x + 1e-7); x < Math.ceil(r.x + r.ancho - 1e-7); x++) claves.push(celda(x, y));
+  }
+  return claves;
+}
+function ocuparRectangulo(ocupadas, r, nombre) {
+  if (!ocupadas.huellas) ocupadas.huellas = new Map();
+  for (const clave of celdasDeRectangulo(r)) {
+    ocupadas.set(clave, nombre);
+    if (!ocupadas.huellas.has(clave)) ocupadas.huellas.set(clave, []);
+    ocupadas.huellas.get(clave).push({ ...r, nombre });
+  }
+}
+function choqueDeRectangulo(ocupadas, r) {
+  for (const clave of celdasDeRectangulo(r)) {
+    if (ocupadas.huellas?.has(clave)) {
+      const choque = ocupadas.huellas.get(clave).find((a) => solapanRectangulos(r, a));
+      if (choque) return choque.nombre;
+    } else if (ocupadas.has(clave)) return ocupadas.get(clave);
+  }
+  return null;
+}
+function rectangulosDePieza(pieza) {
+  const geo = huellaDe(pieza);
+  return geo.libre ? geo.lugares.map((l) => ({ x: pieza.x + l.dx, y: pieza.y + l.dy, ancho: 1, alto: 1 }))
+    : [{ x: pieza.x, y: pieza.y, ancho: geo.ancho, alto: geo.alto }];
+}
+function ocuparPieza(ocupadas, pieza, nombre) {
+  for (const r of rectangulosDePieza(pieza)) ocuparRectangulo(ocupadas, r, nombre);
 }
 
 // Devuelve null si la pieza (una configuracion con x, y) cabe, o el motivo por el
 // que no. Una mesa nunca queda partida por un pasillo; un bloque de filas si puede
 // ocupar columnas de pasillo: sus pasillos son el espacio que se deja entre bloques.
 function motivoNoCabe(sala, ocupadas, pieza) {
+  if (pieza.geometria) {
+    const propia = new Map();
+    for (const r of rectangulosDePieza(pieza)) {
+      if (r.x < 1 - 1e-7 || r.x + r.ancho > sala.ancho + 1 + 1e-7 || r.y < sala.filas.min - 1e-7 || r.y + r.alto > sala.filas.max + 1 + 1e-7) return 'se sale de la sala';
+      if (choqueDeRectangulo(propia, r)) return 'sus butacas se solapan';
+      const choque = choqueDeRectangulo(ocupadas, r);
+      if (choque) return 'choca con ' + choque;
+      ocuparRectangulo(propia, r, 'otra butaca');
+    }
+    return null;
+  }
   const { ancho, alto } = huellaDe(pieza);
   // Solo las mesas respetan los pasillos; el resto puede cruzarlos.
   const respetaPasillos = esMesa(pieza);
@@ -1144,7 +1365,7 @@ function motivoNoCabe(sala, ocupadas, pieza) {
         return 'se sale de la sala';
       }
       if (respetaPasillos && !sala.columnas.includes(cx)) return 'cae sobre un pasillo';
-      const quien = ocupadas.get(celda(cx, cy));
+      const quien = choqueDeRectangulo(ocupadas, { x: cx, y: cy, ancho: 1, alto: 1 });
       if (quien) return 'choca con ' + quien;
     }
   }
@@ -1269,6 +1490,8 @@ function primeraPiezaQueNoCabe(sala) {
 // ---------------------------------------------------------------------------
 const copiarPlano = (plano) => ({
   ...plano, bandas: copiarBandas(plano.bandas),
+  ...(plano.niveles ? { niveles: copiarDatos(plano.niveles) } : {}),
+  regionesLibres: copiarDatos(plano.regionesLibres || []),
   ...(plano.zonas ? { zonas: copiarZonas(plano.zonas) } : {}),
   ...(plano.zonasDeAsiento ? { zonasDeAsiento: { ...plano.zonasDeAsiento } } : {}),
   ...(plano.zonasFisicasConfirmadas ? { zonasFisicasConfirmadas: { ...plano.zonasFisicasConfirmadas } } : {}),
@@ -1496,6 +1719,7 @@ function planoDesdeSala(tipo, sala) {
     } : {}),
   }));
   return sincronizarIdentidad({
+    ...(sala.datosNiveles || {}),
     bandas: limpiar(sala.bandas),
     mesas: mesas.map(configDeMesa),
     bloquesFilas: bloquesFilas.map(configDeBloque),
@@ -1562,9 +1786,10 @@ function cambiarAnchoLienzo(plano, sala, ancho) {
 }
 
 // La configuracion guardable de un bloque: sin geometria ni nombre por defecto.
-const configDeBloque = ({ id, x, y, ancho, filas, zona, giro, nombrePropio }) =>
+const configDeBloque = ({ id, x, y, ancho, filas, zona, giro, nombrePropio, geometria, ajustes, region }) =>
   ({ id, tipo: 'filas', x, y, ancho, filas, giro, ...(zona ? { zona } : {}),
-     ...(nombrePropio ? { nombre: nombrePropio } : {}) });
+     ...(geometria ? { geometria: { ...geometria }, ajustes: copiarDatos(ajustes || {}) } : {}),
+     ...(region ? { region } : {}), ...(nombrePropio ? { nombre: nombrePropio } : {}) });
 
 // Bloquea o desbloquea una butaca por id. Es parte del diseño del recinto (una
 // butaca sin visibilidad), no de la venta: por eso se guarda con el mapa.
@@ -1667,7 +1892,7 @@ function bloquearEnArea(plano, lista, area, bloquear) {
 // bandas de tipo 'espacio' (con 'guias') y el escenario ya no es banda obligatoria.
 // ---------------------------------------------------------------------------
 const FORMATO_MAPA = 'selector-asientos/mapa';
-const VERSION_MAPA = 6;
+const VERSION_MAPA = 7;
 
 // La clave del dibujo identifica una ranura del generador; el ID identifica un lugar.
 // Al retirar una ranura su ID queda registrado y una ampliacion obtiene otro.
@@ -1689,17 +1914,22 @@ function sincronizarIdentidad(plano, lista = butacas) {
   const usados = new Set([...retirados, ...Object.values(anteriores || {}).map((p) => p.id)]);
   for (const b of lista) {
     const clave = b.claveDiseno || b.id;
-    if (anteriores?.[clave]) identidad[clave] = { ...anteriores[clave] };
+    if (anteriores?.[clave]) identidad[clave] = { ...anteriores[clave], nivel: anteriores[clave].nivel || b.nivel || 'n1' };
     else {
       let id = clave;
       if (usados.has(id)) {
         do { id = 'L' + siguiente++; } while (usados.has(id));
       }
       usados.add(id);
-      identidad[clave] = { id, zona: b.zona };
+      identidad[clave] = { id, zona: b.zona, nivel: b.nivel || 'n1' };
     }
   }
   nuevo.identidadFisica = identidad;
+  for (const local of [nuevo, ...nivelesDe(nuevo).filter((n) => n.plano).map((n) => n.plano)]) {
+    for (const p of local.bloquesFilas || []) if (p.ajustes) {
+      p.ajustes = Object.fromEntries(Object.entries(p.ajustes).filter(([clave, a]) => identidad[p.id + '-' + clave]?.id === a.id));
+    }
+  }
   const activos = new Set(Object.values(identidad).map((f) => f.id));
   nuevo.bloqueadas = (nuevo.bloqueadas || []).filter((id) => activos.has(id));
   nuevo.zonasDeAsiento = Object.fromEntries(Object.entries(nuevo.zonasDeAsiento || {}).filter(([id]) => activos.has(id)));
@@ -1735,7 +1965,7 @@ function conciliarIdentidadAlRestaurar(actual, destino) {
   const retirados = new Set([...(actual.idsRetirados || []), ...(nuevo.idsRetirados || []),
     ...Object.values(actual.identidadFisica || {}).map((f) => f.id)]);
   nuevo.idsRetirados = [...retirados].filter((id) => !vivos.has(id));
-  for (const k of ['siguiente', 'siguienteBanda', 'siguienteBloque', 'siguienteButaca', 'siguienteForma', 'siguienteZona', 'siguienteLugar']) {
+  for (const k of ['siguiente', 'siguienteBanda', 'siguienteBloque', 'siguienteButaca', 'siguienteForma', 'siguienteZona', 'siguienteLugar', 'siguienteNivel', 'siguienteRegion']) {
     nuevo[k] = Math.max(actual[k] || 1, nuevo[k] || 1);
   }
   return nuevo;
@@ -1786,7 +2016,7 @@ function cambiarNumeracion(plano, modo, lista = butacas) {
   return nuevo;
 }
 
-const claveEtiquetaFisica = (f) => JSON.stringify([f.zona, f.mesa ? 'mesa' : 'fila', f.mesa || f.fila, f.numero]
+const claveEtiquetaFisica = (f) => JSON.stringify([f.nivel || 'n1', f.zona, f.mesa ? 'mesa' : 'fila', f.mesa || f.fila, f.numero]
   .map((s) => String(s).normalize('NFKC').trim().toLocaleUpperCase('es')));
 function editarEtiquetaOficial(plano, id, valores) {
   if (plano.modoNumeracion !== 'oficial') return { motivo: 'activa la numeración oficial primero' };
@@ -1848,7 +2078,7 @@ function identidadDeMapa(dato, errores, idsZona) {
     }
     if (ids.has(f.id) || retiradosSet.has(f.id)) errores.push('ID físico repetido o retirado: ' + f.id);
     ids.add(f.id);
-    resultado[clave] = { id: f.id, zona: f.zona };
+    resultado[clave] = { id: f.id, zona: f.zona, ...(f.nivel ? { nivel: f.nivel } : {}) };
     if (clave.startsWith('M') && f.mesa !== undefined) {
       const grupo = clave.split('-')[0];
       if (!etiquetaOficialValida(f.mesa)) errores.push('etiqueta de mesa inválida en ' + f.id);
@@ -1873,7 +2103,7 @@ function identidadDeMapa(dato, errores, idsZona) {
 
 // Comprobacion local de integridad, no firma de seguridad ni sustituto del servidor.
 function huellaRevision(mapa) {
-  const claves = ['distribucion', 'bandas', 'mesas', 'bloquesFilas', 'formas', 'butacasSueltas', 'escenario', 'lienzo',
+  const claves = ['niveles', 'regionesLibres', 'siguienteNivel', 'siguienteRegion', 'distribucion', 'bandas', 'mesas', 'bloquesFilas', 'formas', 'butacasSueltas', 'escenario', 'lienzo',
     'bloqueadas', 'zonasDeAsiento', 'zonasFisicasConfirmadas', 'zonas', 'identidadFisica', 'idsRetirados', 'siguienteLugar', 'modoNumeracion',
     'siguiente', 'siguienteBanda', 'siguienteBloque', 'siguienteForma', 'siguienteButaca', 'siguienteZona'];
   const texto = JSON.stringify({ revision: { recintoId: mapa.revisionFisica.recintoId, numero: mapa.revisionFisica.numero },
@@ -1937,10 +2167,13 @@ function antecedentesDeMapa(dato, errores = []) {
 // El mapa de lo que hay ahora en un tipo de sala. 'idsExistentes' limpia las
 // bloqueadas que ya no existen (de una banda o mesa eliminada).
 function mapaDesdePlano(nombre, plano, guardado, idsExistentes = null) {
+  plano = cambiarNivelPlano(plano, nivelesDe(plano)[0].id);
   generarPlano({ bandas: plano.bandas, distribucion: plano.distribucion, zonas: zonasDe(plano) }, plano);
   plano = sincronizarIdentidad(plano);
   return {
     formato: FORMATO_MAPA, version: VERSION_MAPA, nombre, guardado,
+    niveles: copiarDatos(nivelesDe(plano)), siguienteNivel: plano.siguienteNivel || 2,
+    regionesLibres: copiarDatos(plano.regionesLibres || []), siguienteRegion: plano.siguienteRegion || 1,
     distribucion: { bloques: [...plano.distribucion.bloques], pasillos: [...plano.distribucion.pasillos] },
     // Sin ocupacion de ejemplo, ni bloqueos por plantilla (ya van en la lista),
     // ni filas de mesas automaticas (las mesas van explicitas).
@@ -1987,6 +2220,7 @@ const definicionDeMapa = (mapa) => ({
   antecedentesComerciales: mapa.antecedentesComerciales,
   identidadFisica: mapa.identidadFisica, idsRetirados: mapa.idsRetirados, siguienteLugar: mapa.siguienteLugar,
   modoNumeracion: mapa.modoNumeracion, revisionFisica: mapa.revisionFisica,
+  niveles: mapa.niveles, regionesLibres: mapa.regionesLibres, siguienteNivel: mapa.siguienteNivel, siguienteRegion: mapa.siguienteRegion,
 });
 
 function registrarMapa(mapa) {
@@ -2011,7 +2245,7 @@ function nombreDeArchivo(nombre) {
 function motivoDeCabecera(dato) {
   if (!dato || typeof dato !== 'object' || Array.isArray(dato)) return 'el archivo no contiene un mapa';
   if (dato.formato !== FORMATO_MAPA) return 'no es un mapa de este selector de asientos';
-  if (![1, 2, 3, 4, 5, VERSION_MAPA].includes(dato.version)) return 'versión de mapa no compatible (' + dato.version + ')';
+  if (![1, 2, 3, 4, 5, 6, VERSION_MAPA].includes(dato.version)) return 'versión de mapa no compatible (' + dato.version + ')';
   return null;
 }
 
@@ -2195,13 +2429,19 @@ function bloquesDeMapa(dato, { errores, zonaDeFilas }) {
   return listaDeMapa(listaOpcionalDeMapa(dato, 'bloquesFilas', 'bloques de filas', errores), {
     como: 'bloque', patron: /^F[1-9]\d{0,5}$/, errores,
     limpiar: (b, queja) => {
-      if (!esEntero(b.x, 0, 999) || !esEntero(b.y, 0, 999)) queja('posición no válida');
+      if (![b.x, b.y].every((v) => Number.isFinite(v) && v >= 0 && v <= 999 && (b.geometria || Number.isInteger(v)))) queja('posición no válida');
       if (!esEntero(b.ancho, 1, ANCHO_BLOQUE_MAXIMO)) queja('butacas por fila fuera de rango');
       if (!esEntero(b.filas, 1, FILAS_MAXIMAS)) queja('número de filas fuera de rango');
       if (b.zona !== undefined && !zonaDeFilas(b.zona)) queja('zona desconocida');
-      if (![0, 90, 180, 270].includes(b.giro)) queja('giro no válido');
+      if (b.geometria) { if (motivoGeometria(b)) queja('geometría no válida'); }
+      else if (![0, 90, 180, 270].includes(b.giro)) queja('giro no válido');
       const limpio = { id: b.id, tipo: 'filas', x: b.x, y: b.y, ancho: b.ancho, filas: b.filas, giro: b.giro,
                        ...(b.zona !== undefined ? { zona: b.zona } : {}) };
+      if (b.geometria) {
+        limpio.geometria = Object.fromEntries(Object.keys(geometriaInicial()).map((k) => [k, b.geometria[k]]));
+        limpio.ajustes = ajustesDeMapa(b, queja);
+      }
+      if (b.region !== undefined) { if (!idFisicoValido(b.region)) queja('región inválida'); else limpio.region = b.region; }
       if (typeof b.nombre === 'string' && b.nombre.trim()) limpio.nombre = b.nombre.trim().slice(0, 40);
       return limpio;
     },
@@ -2274,7 +2514,148 @@ function zonasDeAsientoDeMapa(dato, errores, idsZona) {
 // Devuelve { mapa } limpio y valido, o { errores: [...] } en palabras. Genera el
 // plano para comprobar que las mesas quepan: cambia butacas, muebles y mesas, asi
 // que quien la llame debe volver a generar su sala despues.
+function ajustesDeMapa(b, queja) {
+  const ajustes = {};
+  if (b.ajustes === undefined) return ajustes;
+  if (!b.ajustes || typeof b.ajustes !== 'object' || Array.isArray(b.ajustes) || Object.keys(b.ajustes).length > b.ancho * b.filas) { queja('ajustes inválidos'); return ajustes; }
+  for (const [clave, a] of Object.entries(b.ajustes)) {
+    const partes = clave.split('-').map(Number);
+    if (!/^\d+-\d+$/.test(clave) || partes[0] < 1 || partes[0] > b.filas || partes[1] < 1 || partes[1] > b.ancho ||
+        !a || !idFisicoValido(a.id) || ![a.dx, a.dy, a.giro].every((v) => Number.isFinite(v) && Math.abs(v) <= 360)) { queja('corrección individual inválida'); continue; }
+    ajustes[clave] = { id: a.id, dx: a.dx, dy: a.dy, giro: a.giro };
+  }
+  return ajustes;
+}
+
+function regionesDeMapa(lista, idsZona, errores) {
+  if (lista === undefined) return [];
+  if (!Array.isArray(lista) || lista.length > 100) { errores.push('lista de regiones inválida'); return []; }
+  const ids = new Set();
+  const regiones = [];
+  for (const r of lista) {
+    if (!r || !idFisicoValido(r.id) || ids.has(r.id) || typeof r.nombre !== 'string' || !r.nombre.trim() || r.nombre.length > 40 ||
+        ![r.x, r.y, r.ancho, r.alto, r.giro].every(Number.isFinite) || r.x < 1 || r.y < 0 || r.ancho < 1 || r.ancho > 300 ||
+        r.alto < 1 || r.alto > 999 || r.giro < 0 || r.giro >= 360 || (r.zona !== undefined && !idsZona.has(r.zona))) { errores.push('región inválida o repetida'); continue; }
+    ids.add(r.id);
+    regiones.push({ id: r.id, nombre: r.nombre.trim(), x: r.x, y: r.y, ancho: r.ancho, alto: r.alto, giro: r.giro,
+      ...(r.zona ? { zona: r.zona } : {}) });
+  }
+  return regiones;
+}
+
 function validarMapa(dato) {
+  const cabecera = motivoDeCabecera(dato);
+  if (cabecera) return { errores: [cabecera] };
+  if (dato.version < 7) {
+    const resultado = validarMapaBase(dato);
+    if (resultado.errores) return resultado;
+    const m = resultado.mapa;
+    m.niveles = [{ id: 'n1', nombre: 'Planta baja' }]; m.siguienteNivel = 2; m.siguienteRegion = 1; m.regionesLibres = [];
+    for (const f of Object.values(m.identidadFisica)) f.nivel = 'n1';
+    if (m.revisionFisica.estado === 'publicada') m.revisionFisica.huella = huellaRevision(m);
+    generarPlano(definicionDeMapa(m));
+    return resultado;
+  }
+  const errores = [];
+  if (!Array.isArray(dato.niveles) || !dato.niveles.length || dato.niveles.length > 12) return { errores: ['se requieren de 1 a 12 niveles'] };
+  if (!esEntero(dato.siguienteNivel, 2, 1e6) || !esEntero(dato.siguienteRegion, 1, 1e6)) errores.push('contadores de nivel o región inválidos');
+  const idsNivel = new Set();
+  const nombres = new Set();
+  const idsDibujo = new Set();
+  const identidad = {};
+  const niveles = [];
+  let principal;
+  for (let i = 0; i < dato.niveles.length; i++) {
+    const n = dato.niveles[i];
+    if (!n || !/^n[1-9]\d{0,5}$/.test(n.id) || idsNivel.has(n.id) || typeof n.nombre !== 'string' || !n.nombre.trim() || n.nombre.length > 40 ||
+        nombres.has(n.nombre.trim().toLocaleUpperCase('es')) || (i > 0 && (!n.plano || typeof n.plano !== 'object'))) { errores.push('nivel inválido o repetido'); continue; }
+    idsNivel.add(n.id); nombres.add(n.nombre.trim().toLocaleUpperCase('es'));
+    const fisica = Object.fromEntries(Object.entries(dato.identidadFisica || {}).filter(([,f]) => f?.nivel === n.id));
+    const local = { ...dato };
+    for (const k of CAMPOS_DE_NIVEL) delete local[k];
+    Object.assign(local, geometriaDeNivel(i ? n.plano : dato), { niveles: undefined, version: 6,
+      identidadFisica: fisica, revisionFisica: { ...dato.revisionFisica, estado: 'borrador' } });
+    const resultado = validarMapaBase(local);
+    if (resultado.errores) { errores.push(...resultado.errores.map((e) => dato.niveles.length > 1 ? n.nombre + ': ' + e : e)); continue; }
+    const m = resultado.mapa;
+    m.regionesLibres = regionesDeMapa(local.regionesLibres, new Set(m.zonas.map((z) => z.id)), errores);
+    for (const p of m.bloquesFilas) {
+      if (p.region && !m.regionesLibres.some((r) => r.id === p.region)) errores.push('región desconocida de ' + p.id);
+      for (const [clave, a] of Object.entries(p.ajustes || {})) if (m.identidadFisica[p.id + '-' + clave]?.id !== a.id) errores.push('corrección de un ID retirado o distinto');
+    }
+    const dibujo = [...nodosDeBandas(m.bandas).map((p) => p.id), ...piezasDe(m).filter((p) => p.id).map((p) => p.id), ...m.regionesLibres.map((r) => r.id)];
+    for (const id of dibujo) { if (idsDibujo.has(id)) errores.push('ID de dibujo repetido entre niveles: ' + id); idsDibujo.add(id); }
+    for (const [k, f] of Object.entries(m.identidadFisica)) { if (identidad[k]) errores.push('clave de lugar repetida entre niveles'); identidad[k] = f; }
+    if (!i) { principal = m; niveles.push({ id: n.id, nombre: n.nombre.trim() }); }
+    else niveles.push({ id: n.id, nombre: n.nombre.trim(), plano: geometriaDeNivel(m) });
+  }
+  if (errores.length) return { errores };
+  if (Object.keys(identidad).length !== Object.keys(dato.identidadFisica || {}).length) return { errores: ['nivel físico desconocido en el inventario'] };
+  const ids = Object.values(identidad).map((f) => f.id);
+  if (new Set(ids).size !== ids.length) return { errores: ['ID físico repetido entre niveles'] };
+  const aforo = motivoDeAforo(ids.length);
+  if (aforo) return { errores: [aforo] };
+  const mapa = { ...principal, niveles, identidadFisica: identidad,
+    siguienteNivel: Math.max(dato.siguienteNivel, ...niveles.map((n) => Number(n.id.slice(1)) + 1)),
+    siguienteRegion: dato.siguienteRegion, revisionFisica: { ...dato.revisionFisica } };
+  for (const k of ['siguiente', 'siguienteBanda', 'siguienteBloque', 'siguienteForma', 'siguienteButaca']) {
+    mapa[k] = Math.max(mapa[k], ...niveles.filter((n) => n.plano).flatMap((n) => piezasDe(n.plano).map((p) => {
+      const prefijo = { siguiente: 'M', siguienteBloque: 'F', siguienteForma: 'P', siguienteButaca: 'B' }[k];
+      return prefijo && p.id?.startsWith(prefijo) ? Number(p.id.slice(1)) + 1 : 1;
+    })));
+  }
+  mapa.siguienteBanda = Math.max(mapa.siguienteBanda, ...[...idsDibujo].map((id) => Number(id.match(/^banda(\d+)$/)?.[1] || 0) + 1));
+  mapa.siguienteRegion = Math.max(mapa.siguienteRegion, ...[...idsDibujo].map((id) => Number(id.match(/^region(\d+)$/)?.[1] || 0) + 1));
+  // Las reglas por asiento pertenecen al documento completo, no a la vista local.
+  mapa.bloqueadas = [...new Set(dato.bloqueadas || [])]; mapa.zonasDeAsiento = { ...(dato.zonasDeAsiento || {}) };
+  mapa.zonasFisicasConfirmadas = { ...(dato.zonasFisicasConfirmadas || {}) };
+  if (mapa.revisionFisica.estado === 'publicada' && mapa.revisionFisica.huella !== huellaRevision(mapa)) return { errores: ['la revisión publicada fue modificada: crea un nuevo borrador'] };
+  generarPlano(definicionDeMapa(mapa));
+  return { mapa };
+}
+
+function agregarRegion(plano, nombre) {
+  if ((plano.regionesLibres || []).length >= 100 || typeof nombre !== 'string' || !nombre.trim() || nombre.trim().length > 40) return { motivo: 'nombre de región inválido o límite de 100 regiones' };
+  const nuevo = copiarPlano(plano);
+  const id = 'region' + (nuevo.siguienteRegion || 1);
+  nuevo.siguienteRegion = (nuevo.siguienteRegion || 1) + 1;
+  nuevo.regionesLibres.push({ id, nombre: nombre.trim(), x: 1, y: 0, ancho: 6, alto: 8, giro: 0 });
+  return nuevo;
+}
+
+// Region grafica: moverla transforma solo los bloques vinculados, no su zona oficial.
+function cambiarRegion(plano, sala, id, valores) {
+  const region = (plano.regionesLibres || []).find((r) => r.id === id);
+  if (!region) return { motivo: 'región desconocida' };
+  const r = { ...region, ...valores, giro: normalizarAngulo(valores.giro ?? region.giro) };
+  const errores = [];
+  regionesDeMapa([r], new Set(zonasDe(plano).map((z) => z.id)), errores);
+  if (errores.length) return { motivo: errores[0] };
+  const nuevo = copiarPlano(plano);
+  nuevo.regionesLibres = nuevo.regionesLibres.map((p) => p.id === id ? r : p);
+  const configs = plano.bloquesFilas.filter((p) => p.region === id).map((p) => {
+    const nueva = { ...p, geometria: p.geometria || { ...geometriaInicial(), separacion: 1, separacionFilas: 1 }, giro: normalizarAngulo(p.giro + r.giro - region.giro) };
+    const antes = huellaDe(p).lugares[0];
+    const despues = huellaDe(nueva).lugares[0];
+    const punto = rotarPunto(p.x + antes.dx - region.x, p.y + antes.dy - region.y, r.giro - region.giro);
+    return { ...nueva, x: r.x + punto.x - despues.dx, y: r.y + punto.y - despues.dy };
+  });
+  if (!configs.length) return nuevo;
+  // Las regiones no buscan un desplazamiento alternativo: respetan exactamente el gesto.
+  const ocupadas = celdasOcupadas(new Set(configs.map((p) => p.id)));
+  for (const p of configs) { const motivo = motivoNoCabe(sala, ocupadas, p); if (motivo) return { motivo }; ocuparPieza(ocupadas, p, p.id); }
+  nuevo.bloquesFilas = nuevo.bloquesFilas.map((p) => configs.find((c) => c.id === p.id) || p);
+  return nuevo;
+}
+
+function eliminarRegion(plano, id) {
+  const nuevo = copiarPlano(plano);
+  nuevo.regionesLibres = nuevo.regionesLibres.filter((r) => r.id !== id);
+  nuevo.bloquesFilas = nuevo.bloquesFilas.map((p) => { const copia = { ...p }; if (copia.region === id) delete copia.region; return copia; });
+  return nuevo;
+}
+
+function validarMapaBase(dato) {
   const cabecera = motivoDeCabecera(dato);
   if (cabecera) return { errores: [cabecera] };
   const errores = [];
@@ -2414,11 +2795,12 @@ function exportarLugaresDeMapa(dato) {
       continue;
     }
     const mesa = Boolean(b.grupo);
-    const clave = claveEtiquetaFisica({ zona: b.zona, numero: b.numero, ...(mesa ? { mesa: b.numeroMesa } : { fila: b.fila }) });
+    const clave = claveEtiquetaFisica({ nivel: b.nivel, zona: b.zona, numero: b.numero, ...(mesa ? { mesa: b.numeroMesa } : { fila: b.fila }) });
     if (usados.has(clave)) errores.push('etiqueta repetida: ' + usados.get(clave) + ' y ' + b.id);
     usados.set(clave, b.id);
     lugares.push({
       local_place_id: b.id,
+      level: { id: b.nivel, name: b.nombreNivel },
       physical_zone: { id: b.zona, name: zona.nombre },
       kind: mesa ? 'table_place' : 'row_seat',
       row: mesa ? null : b.fila,
@@ -2426,16 +2808,16 @@ function exportarLugaresDeMapa(dato) {
       table_id: mesa ? b.grupo.id : null,
       table_number: mesa ? b.numeroMesa : null,
       table_place_number: mesa ? b.numero : null,
-      label: mesa ? zona.nombre + ', mesa ' + b.numeroMesa + ', lugar ' + b.numero
-        : zona.nombre + ', fila ' + b.fila + ', butaca ' + b.numero,
-      x: b.x, y: b.y, blocked: b.estado === 'bloqueada',
+      label: (mapa.niveles.length > 1 ? b.nombreNivel + ', ' : '') + (mesa ? zona.nombre + ', mesa ' + b.numeroMesa + ', lugar ' + b.numero
+        : zona.nombre + ', fila ' + b.fila + ', butaca ' + b.numero),
+      x: b.x, y: b.y, orientation: b.mira, blocked: b.estado === 'bloqueada',
     });
   }
   if (errores.length) return { errores };
   return { catalogo: {
-    formato: 'selector-asientos/lugares', version: 3, mapa: mapa.nombre,
+    formato: 'selector-asientos/lugares', version: 4, mapa: mapa.nombre,
     revision: { ...mapa.revisionFisica }, modoNumeracion: mapa.modoNumeracion, idsRetirados: [...mapa.idsRetirados],
-    lugares,
+    niveles: copiarDatos(mapa.niveles).map(({ id, nombre }) => ({ id, nombre })), lugares,
   } };
 }
 
@@ -2615,10 +2997,13 @@ function copiarIdentidadesDePiezas(plano, ids) {
     let id = nueva;
     if (usados.has(id)) do { id = 'L' + copia.siguienteLugar++; } while (usados.has(id));
     usados.add(id);
-    copia.identidadFisica[nueva] = { id, zona: f.zona };
+    copia.identidadFisica[nueva] = { id, zona: f.zona, nivel: f.nivel || 'n1' };
     if (plano.bloqueadas?.includes(f.id) && !copia.bloqueadas.includes(id)) copia.bloqueadas.push(id);
     if (plano.zonasDeAsiento?.[f.id]) copia.zonasDeAsiento[id] = plano.zonasDeAsiento[f.id];
     if (plano.zonasFisicasConfirmadas?.[f.id]) copia.zonasFisicasConfirmadas[id] = plano.zonasFisicasConfirmadas[f.id];
+  }
+  for (const p of copia.bloquesFilas) if ([...ids.values()].includes(p.id) && p.ajustes) {
+    p.ajustes = Object.fromEntries(Object.entries(p.ajustes).map(([clave, a]) => [clave, { ...a, id: copia.identidadFisica[p.id + '-' + clave]?.id }]));
   }
   return copia;
 }
@@ -2763,10 +3148,7 @@ function aplicarConfigs(plano, sala, configs) {
       const destino = { ...c, x: c.x + dx, y: c.y + dy };
       const motivo = motivoNoCabe(sala, ocupadas, destino) || motivoNoCabe(sala, destinoOcupado, destino);
       if (motivo) return nombreDeConfig(c) + ' ' + motivo;
-      const { ancho, alto } = huellaDe(destino);
-      for (let y = 0; y < alto; y++) for (let x = 0; x < ancho; x++) {
-        destinoOcupado.set(celda(destino.x + x, destino.y + y), nombreDeConfig(c));
-      }
+      ocuparPieza(destinoOcupado, destino, nombreDeConfig(c));
     }
     return null;
   };
@@ -2914,12 +3296,15 @@ function duplicarBanda(plano, sala, id) {
 // Cuantas veces usan una zona las bandas y las piezas con zona propia. Una pieza que
 // hereda no cuenta: su zona ya la sujeta la banda.
 function usosDeZona(plano, id) {
-  const bandas = nodosDeBandas(plano.bandas).filter((b) => zonaDeBanda(b) === id).length;
+  const locales = [plano, ...nivelesDe(plano).filter((n) => n.plano).map((n) => n.plano)];
+  const bandas = locales.flatMap((p) => nodosDeBandas(p.bandas)).filter((b) => zonaDeBanda(b) === id).length;
   const piezas = [...(plano.mesas || []), ...(plano.bloquesFilas || []), ...(plano.butacasSueltas || [])]
     .filter((p) => p.zona === id).length;
   const asientos = Object.values(plano.zonasDeAsiento || {}).filter((z) => z === id).length;
   const fisicos = Object.values(plano.identidadFisica || {}).filter((f) => f.zona === id).length;
-  return bandas + piezas + asientos + (fisicos && !bandas && !piezas && !asientos ? 1 : 0);
+  const otrasPiezas = locales.slice(1).flatMap((p) => piezasDe(p)).filter((p) => p.zona === id).length;
+  const regiones = locales.flatMap((p) => p.regionesLibres || []).filter((r) => r.zona === id).length;
+  return bandas + piezas + otrasPiezas + regiones + asientos + (fisicos && !bandas && !piezas && !asientos ? 1 : 0);
 }
 
 // Agrega una zona fisica suelta, «Zona» y las siguientes numeradas al final de

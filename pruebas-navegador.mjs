@@ -379,6 +379,86 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       assert.equal(await protocolo.evaluar('JSON.parse(localStorage.getItem("selector-asientos:mapas"))["Oficial navegador"].revisionFisica.numero'), 1);
     });
 
+    await t.test('niveles conservan seleccion y vista; editar y guardar tres pisos no mezcla geometria', async () => {
+      await protocolo.evaluar(`(() => {
+        redibujar('mapa-en-blanco'); cambiarModo('editor'); window.confirm = () => true;
+        document.querySelector('#agregar-bloque').click();
+      })()`);
+      // Crear el primer bloque por el control que ya ofrece el editor.
+      assert.equal(await protocolo.evaluar('bloquesFilas.length'), 1);
+      await protocolo.evaluar(`(() => {
+        cambiarModo('vista'); document.querySelector('.butaca').focus(); document.querySelector('.butaca').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+        window.__seleccionNivel1 = [...elegidas][0]; cambiarModo('editor');
+        document.querySelector('#nombre-nivel').value = 'Palcos'; document.querySelector('#agregar-nivel').click();
+        document.querySelector('#agregar-bloque').click();
+        cambiarModo('vista'); document.querySelector('.butaca').focus(); document.querySelector('.butaca').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+        window.__seleccionNivel2 = [...elegidas].find(id => id !== window.__seleccionNivel1); cambiarModo('editor');
+        document.querySelector('#nombre-nivel').value = 'Galería'; document.querySelector('#agregar-nivel').click();
+      })()`);
+      assert.equal(await protocolo.evaluar('salaActual.niveles.length'), 3);
+      assert.equal(await protocolo.evaluar('elegidas.size'), 2);
+      assert.equal(await protocolo.evaluar('document.querySelectorAll(".butaca").length'), 0);
+      await protocolo.evaluar(`(() => {
+        const sel = document.querySelector('#nivel-vista'); sel.value = 'n1'; sel.dispatchEvent(new Event('change'));
+        window.__vistaNivel1 = { ...vista };
+        sel.value = 'n2'; sel.dispatchEvent(new Event('change'));
+        document.querySelector('#nombre-mapa').value = 'Tres pisos navegador'; document.querySelector('#guardar-mapa').click();
+        sel.value = 'n1'; sel.dispatchEvent(new Event('change'));
+      })()`);
+      assert.equal(await protocolo.evaluar('historiales[tipoActual].tieneCambios()'), false);
+      assert.equal(await protocolo.evaluar('elegidas.has(window.__seleccionNivel1) && elegidas.has(window.__seleccionNivel2)'), true);
+      assert.equal(await protocolo.evaluar('document.querySelector(".butaca").getAttribute("aria-label").startsWith("Planta baja")'), true);
+      assert.deepEqual(await protocolo.evaluar('vista'), await protocolo.evaluar('window.__vistaNivel1'));
+      await protocolo.evaluar('Object.values(historiales).forEach(h => h.marcarGuardado())');
+      const carga = protocolo.evento('Page.loadEventFired'); await protocolo.enviar('Page.reload',{ignoreCache:true}); await carga;
+      await protocolo.evaluar(`redibujar('mapa:Tres pisos navegador'); cambiarModo('editor'); cambiarNivelVista('n2');`);
+      assert.equal(await protocolo.evaluar('salaActual.niveles.length'),3);
+      assert.equal(await protocolo.evaluar('bloquesFilas[0].id'),'F2');
+      await protocolo.evaluar(`(() => {
+        cambiarHerramienta('bloquear'); aplicarArea({x1:0,y1:0,x2:30,y2:30});
+      })()`);
+      assert.equal(await protocolo.evaluar('butacas.filter(b => b.nivel === "n1").every(b => b.estado !== "bloqueada")'),true);
+    });
+
+    await t.test('arcos, regiones y ajustes por teclado sobreviven al guardado y rechazan solapamientos', async () => {
+      await protocolo.evaluar(`(() => {
+        cambiarHerramienta('mesas'); marcarActiva('F2'); document.querySelector('#grupo-geometria').open = true;
+        document.querySelector('#geometria-tipo').value = 'arco';
+        document.querySelector('#geometria-x').value = '4.2'; document.querySelector('#geometria-y').value = '5.1';
+        document.querySelector('#geometria-giro').value = '32'; document.querySelector('#geometria-radio').value = '8';
+        document.querySelector('#formulario-geometria').requestSubmit();
+      })()`);
+      assert.equal(await protocolo.evaluar('bloquesFilas[0].geometria.tipo'),'arco');
+      assert.equal(await protocolo.evaluar('bloquesFilas[0].giro'),32);
+      await protocolo.evaluar(`(() => {
+        document.querySelector('#nombre-region').value = 'Lateral izquierdo'; document.querySelector('#agregar-region').click();
+        document.querySelector('#geometria-region').value = document.querySelector('#region-activa').value;
+        document.querySelector('#formulario-geometria').requestSubmit();
+        document.querySelector('#herramienta-ajustar').click(); document.querySelector('.butaca').focus();
+        window.__ajustada = document.querySelector('.butaca').dataset.id;
+      })()`);
+      await protocolo.tecla('ArrowRight','ArrowRight',39);
+      assert.notEqual(await protocolo.evaluar('document.activeElement.dataset.id'),await protocolo.evaluar('window.__ajustada'));
+      await protocolo.tecla('Enter','Enter',13);
+      assert.equal(await protocolo.evaluar('document.activeElement.id'),'ajuste-dx');
+      await protocolo.evaluar(`(() => {
+        document.querySelector('#ajuste-dx').value = '.1'; document.querySelector('#ajuste-giro').value = '7';
+        document.querySelector('#formulario-ajuste').requestSubmit(); window.__idAjuste = document.querySelector('#id-lugar-ajuste').value;
+        document.querySelector('#guardar-mapa').click();
+      })()`);
+      assert.equal(await protocolo.evaluar('Object.values(planoEditable().bloquesFilas[0].ajustes)[0].giro'),7);
+      await protocolo.evaluar(`(() => {
+        cambiarHerramienta('mesas'); marcarActiva('F2');
+        document.querySelector('#geometria-x').value = '29.9'; document.querySelector('#formulario-geometria').requestSubmit();
+      })()`);
+      assert.match(await protocolo.evaluar('document.querySelector("#estado").textContent'),/sale de la sala/);
+      assert.equal(await protocolo.evaluar('planoEditable().bloquesFilas[0].x'),4.2);
+      const guardado = await protocolo.evaluar('JSON.parse(localStorage.getItem("selector-asientos:mapas"))["Tres pisos navegador"]');
+      await protocolo.evaluar(`(() => { const leido = validarMapa(${JSON.stringify(guardado)}); const clave = registrarMapa(leido.mapa); delete planos[clave]; redibujar(clave); cambiarNivelVista('n2'); })()`);
+      assert.equal(await protocolo.evaluar('bloquesFilas[0].geometria.tipo'),'arco');
+      assert.equal(await protocolo.evaluar('Object.values(bloquesFilas[0].ajustes)[0].giro'),7);
+    });
+
     assert.deepEqual(protocolo.excepciones, [], 'errores JavaScript en el navegador');
   } finally {
     protocolo?.socket.close();

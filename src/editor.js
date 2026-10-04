@@ -9,7 +9,7 @@ let mesaActiva = null;     // id de la mesa sobre la que actuan los botones y at
 const piezasActivas = new Set();
 let herramienta = 'mesas'; // en el editor: 'mesas' (colocar), 'bloquear' o 'zona' (butacas)
 // Las herramientas que trabajan sobre butacas: las butacas responden y se recorren.
-const conButacas = () => ['bloquear', 'zona', 'numeracion'].includes(herramienta);
+const conButacas = () => ['bloquear', 'zona', 'numeracion', 'ajustar'].includes(herramienta);
 let bandaActiva = null;    // id de la banda, vertical o franja seleccionada (excluye a mesaActiva)
 let tipoActual, salaActual;
 // Plano guardado por tipo de sala: { 'mixta-ambos': { bandas, mesas, siguiente,
@@ -119,6 +119,7 @@ const aplica = (accion, p) => ACCIONES_DE[tipoDePieza(p)].has(accion);
 
 function actualizarControles() {
   actualizarIdentidadControles();
+  actualizarControlesGeometria();
   const m = mesaActiva && piezaPorId(mesaActiva);
   const varias = piezasActivas.size > 1;
   const todas = [...piezasActivas].map((id) => piezaPorId(id)).filter(Boolean);
@@ -287,8 +288,11 @@ function moverMesaConTeclado(id, flecha) {
 // que se edita.
 function fotoDelPlano() {
   const plano = planos[tipoActual] || null;
+  const canonico = plano ? cambiarNivelPlano(plano, nivelesDe(plano)[0].id) : null;
+  if (canonico) delete canonico.nivelEnEdicion;
   return { plano: plano ? JSON.stringify(plano) : null,
-           firma: JSON.stringify(plano || planoDesdeSala(tipoActual, salaActual)) };
+           firma: JSON.stringify(canonico || planoDesdeSala(tipoActual, salaActual), (k,v) => v && typeof v === 'object' && !Array.isArray(v)
+             ? Object.fromEntries(Object.keys(v).sort().map((key) => [key,v[key]])) : v) };
 }
 
 function actualizarEstadoEdicion() {
@@ -444,6 +448,15 @@ const HECHO_EN_GRUPO = {
 // Transforma todas las seleccionadas a la vez: cada una sobre su propio sitio (girar
 // sobre su centro, alargar desde su ancla), y todo o nada. Aquí ninguna se desplaza para
 // caber: mover una del grupo desbarataría su distancia con las demás.
+function confirmarRetiroDeFilas(configs) {
+  const retiradas = [];
+  for (const c of configs.filter((c) => c.tipo === 'filas' && c.geometria)) {
+    const claves = new Set(geometriaBloqueFilas(c).lugares.map((l) => c.id + '-' + (l.fila + 1) + '-' + (l.columna + 1)));
+    retiradas.push(...butacasVisibles().filter((b) => b.bloque === c.id && !claves.has(b.claveDiseno)));
+  }
+  return !retiradas.length || confirm('Se retirarán ' + retiradas.length + ' lugares: ' + retiradas.slice(0, 5).map((b) => b.id + ' (' + etiquetaDe(b) + ')').join('; ') + '. Sus IDs no se reutilizarán. ¿Continuar?');
+}
+
 function transformarPiezasActivas(accion) {
   const t = TRANSFORMACIONES[accion];
   const piezas = [...piezasActivas].map((id) => piezaPorId(id)).filter(Boolean);
@@ -456,6 +469,7 @@ function transformarPiezasActivas(accion) {
     }
     configs.push(nueva);
   }
+  if (!confirmarRetiroDeFilas(configs)) return;
   const resultado = aplicarConfigs(planoEditable(), salaActual, configs);
   if (resultado.motivo) {
     anunciar('No se pudo: ' + resultado.motivo + '.');
@@ -477,6 +491,7 @@ function transformarMesa(id, accion) {
     anunciar(m.nombre + ' ya tiene ' + (typeof t.tope === 'function' ? t.tope(m) : t.tope) + '.');
     return;
   }
+  if (!confirmarRetiroDeFilas([nueva])) return;
   const colocada = colocarCerca(salaActual, celdasOcupadas(id), nueva);
   if (colocada.motivo) {
     anunciar(t.fallo(m) + ': ' + colocada.motivo + '.');
@@ -854,6 +869,7 @@ function cambiarModo(nuevo) {
   document.getElementById('grupo-mapa').hidden = !editando;
   document.getElementById('pista').textContent = PISTAS[modo];
   document.getElementById('herramienta-numeracion').setAttribute('aria-pressed', 'false');
+  document.getElementById('herramienta-ajustar').setAttribute('aria-pressed', 'false');
   herramienta = 'mesas';
   svg.classList.remove('bloqueando', 'pintando', 'numerando');
   document.getElementById('herramienta-bloquear').setAttribute('aria-pressed', 'false');
@@ -884,8 +900,9 @@ function cambiarHerramienta(nueva) {
   herramienta = nueva;
   const bloqueando = herramienta === 'bloquear';
   const pintando = herramienta === 'zona';
-  svg.classList.toggle('numerando', herramienta === 'numeracion');
+  svg.classList.toggle('numerando', ['numeracion', 'ajustar'].includes(herramienta));
   document.getElementById('herramienta-numeracion').setAttribute('aria-pressed', String(herramienta === 'numeracion'));
+  document.getElementById('herramienta-ajustar').setAttribute('aria-pressed', String(herramienta === 'ajustar'));
   svg.classList.toggle('bloqueando', bloqueando);
   svg.classList.toggle('pintando', pintando);
   document.getElementById('herramienta-bloquear').setAttribute('aria-pressed', String(bloqueando));
@@ -894,6 +911,7 @@ function cambiarHerramienta(nueva) {
   if (pintando) llenarPincel();
   document.getElementById('pista').textContent = herramienta === 'numeracion'
     ? 'Haz clic en un lugar o pulsa Enter para editar su etiqueta oficial. Las flechas recorren los lugares.'
+    : herramienta === 'ajustar' ? 'Haz clic o pulsa Enter en una butaca de bloque libre para ajustar su posición y orientación.'
     : PISTAS[bloqueando ? 'bloquear' : pintando ? 'zona' : modo];
   actualizarAccesoButacas();
   marcarActivas([]);
@@ -1079,7 +1097,7 @@ function terminarArrastreTirador(aplicar, e) {
 let areaTeclado = null;   // { desde, hasta } en celdas, mientras se extiende con Mayus
 
 // Las butacas de un area que la operacion puede tocar (las ocupadas nunca).
-const libresEnArea = (area) => butacasEnArea(butacas, area).filter((b) => b.estado !== 'ocupada');
+const libresEnArea = (area) => butacasEnArea(butacasVisibles(), area).filter((b) => b.estado !== 'ocupada');
 
 // 'etiqueta' cambia el conteo: con las herramientas de butacas son las butacas que
 // abarca, y con la marquesina de piezas, las piezas.
@@ -1107,8 +1125,8 @@ function aplicarArea(area, devolver) {
   const pincel = document.getElementById('zona-pincel').value;
   const pintando = herramienta === 'zona';
   const resultado = pintando
-    ? asignarZonaEnArea(plano, butacas, area, devolver ? '' : pincel)
-    : bloquearEnArea(plano, butacas, area, !devolver);
+    ? asignarZonaEnArea(plano, butacasVisibles(), area, devolver ? '' : pincel)
+    : bloquearEnArea(plano, butacasVisibles(), area, !devolver);
   const { cambiadas, ocupadas } = resultado;
   if (!cambiadas.length && !ocupadas.length) {
     anunciar('El área no tiene butacas.');
@@ -1202,6 +1220,126 @@ document.getElementById('agregar-forma-barra').addEventListener('click', () => a
 for (const boton of botonesDeMesa()) {
   boton.addEventListener('click', () => ejecutarAccion(boton.dataset.accion));
 }
+
+const vistasDeNiveles = Object.create(null);
+function cambiarNivelVista(id) {
+  const plano = planoEditable();
+  const clave = tipoActual + ':' + salaActual.nivel;
+  vistasDeNiveles[clave] = { ...vista };
+  const nuevo = cambiarNivelPlano(plano, id);
+  if (nuevo.motivo) { anunciar(nuevo.motivo); return; }
+  if (arrastreMesa) terminarArrastreMesa(false);
+  limpiarArea(); marcarActivas([]); bandaActiva = null;
+  planos[tipoActual] = nuevo;
+  salaActual = generarPlano(tipoActual, nuevo);
+  dibujarTodo(); actualizarResumen(); actualizarAforo(salaActual); actualizarControles();
+  reencuadrar();
+  const anterior = vistasDeNiveles[tipoActual + ':' + id];
+  if (anterior) { Object.assign(vista, anterior); aplicarVista(); }
+  historiales[tipoActual]?.actualizarActual(fotoDelPlano()); actualizarEstadoEdicion();
+  anunciar('Nivel ' + salaActual.niveles.find((n) => n.id === id).nombre + '. Se conserva la selección de todo el recinto.');
+}
+document.getElementById('nivel-vista').addEventListener('change', (e) => cambiarNivelVista(e.target.value));
+document.getElementById('agregar-nivel').addEventListener('click', () => {
+  const nuevo = agregarNivel(planoEditable(), document.getElementById('nombre-nivel').value);
+  if (nuevo.motivo) { anunciar(nuevo.motivo); return; }
+  planos[tipoActual] = nuevo; marcarActivas([]); limpiarArea(); regenerar('Nivel agregado.'); reencuadrar();
+});
+document.getElementById('renombrar-nivel').addEventListener('click', () => {
+  const nuevo = renombrarNivel(planoEditable(), salaActual.nivel, document.getElementById('nombre-nivel').value);
+  if (nuevo.motivo) { anunciar(nuevo.motivo); return; }
+  planos[tipoActual] = nuevo; regenerar('Nivel renombrado.');
+});
+document.getElementById('eliminar-nivel').addEventListener('click', () => {
+  const afectados = butacasVisibles();
+  if (afectados.length && !confirm('Se retirarán ' + afectados.length + ' lugares de este nivel: ' + afectados.slice(0, 5).map(etiquetaDe).join('; ') + '. ¿Eliminarlo?')) return;
+  const nuevo = eliminarNivel(planoEditable(), salaActual.nivel);
+  if (nuevo.motivo) { anunciar(nuevo.motivo); return; }
+  planos[tipoActual] = nuevo; marcarActivas([]); limpiarArea(); regenerar('Nivel eliminado; sus IDs quedan retirados.'); reencuadrar();
+});
+
+function actualizarControlesGeometria() {
+  if (!salaActual) return;
+  const plano = planos[tipoActual] || TIPOS_DE_SALA[tipoActual];
+  const selectorNivel = document.getElementById('nivel-vista');
+  selectorNivel.textContent = '';
+  for (const n of salaActual.niveles) selectorNivel.appendChild(new Option(n.nombre, n.id));
+  selectorNivel.value = salaActual.nivel;
+  document.getElementById('eliminar-nivel').disabled = salaActual.niveles.length === 1;
+  const p = piezaPorId(mesaActiva);
+  const bloque = piezasActivas.size === 1 && esBloqueFilas(p) ? p : null;
+  const g = { ...geometriaInicial(), ...bloque?.geometria };
+  for (const campo of document.getElementById('formulario-geometria').elements) campo.disabled = !bloque;
+  for (const [k,v] of Object.entries(g)) document.getElementById('geometria-' + k).value = v;
+  for (const k of ['x','y','giro']) document.getElementById('geometria-' + k).value = bloque?.[k] ?? 0;
+  const regionBloque = document.getElementById('geometria-region');
+  regionBloque.textContent = ''; regionBloque.appendChild(new Option('Sin región', ''));
+  const regionActiva = document.getElementById('region-activa');
+  const activa = regionActiva.value;
+  regionActiva.textContent = '';
+  for (const r of plano.regionesLibres || []) { regionBloque.appendChild(new Option(r.nombre,r.id)); regionActiva.appendChild(new Option(r.nombre,r.id)); }
+  regionBloque.value = bloque?.region || '';
+  if ([...regionActiva.options].some((o) => o.value === activa)) regionActiva.value = activa;
+  llenarRegionActiva();
+  document.getElementById('herramienta-ajustar').disabled = !bloque?.geometria && herramienta !== 'ajustar';
+  const existe = butacasVisibles().some((b) => b.id === document.getElementById('id-lugar-ajuste').value && b.bloque);
+  for (const campo of document.getElementById('formulario-ajuste').elements) campo.disabled = !existe;
+}
+function llenarRegionActiva() {
+  const r = planos[tipoActual]?.regionesLibres?.find((r) => r.id === document.getElementById('region-activa').value);
+  for (const campo of document.getElementById('formulario-region').elements) campo.disabled = !r;
+  document.getElementById('eliminar-region').disabled = !r;
+  if (!r) return;
+  document.getElementById('nombre-region').value = r.nombre;
+  for (const k of ['x','y','ancho','alto','giro']) document.getElementById('region-' + k).value = r[k];
+}
+document.getElementById('region-activa').addEventListener('change', llenarRegionActiva);
+document.getElementById('agregar-region').addEventListener('click', () => {
+  const nuevo = agregarRegion(planoEditable(), document.getElementById('nombre-region').value || 'Región ' + (planoEditable().siguienteRegion || 1));
+  if (nuevo.motivo) { anunciar(nuevo.motivo); return; }
+  planos[tipoActual] = nuevo; regenerar('Región agregada.');
+  document.getElementById('region-activa').value = nuevo.regionesLibres.at(-1).id; llenarRegionActiva();
+});
+document.getElementById('formulario-region').addEventListener('submit', (e) => {
+  e.preventDefault(); const valores = { nombre: document.getElementById('nombre-region').value };
+  for (const k of ['x','y','ancho','alto','giro']) valores[k] = Number(document.getElementById('region-' + k).value);
+  const nuevo = cambiarRegion(planoEditable(), salaActual, document.getElementById('region-activa').value, valores);
+  if (nuevo.motivo) { anunciar('No se cambió la región: ' + nuevo.motivo); return; }
+  planos[tipoActual] = nuevo; regenerar('Región y bloques vinculados actualizados.'); calcularEncuadre();
+});
+document.getElementById('eliminar-region').addEventListener('click', () => {
+  planos[tipoActual] = eliminarRegion(planoEditable(), document.getElementById('region-activa').value);
+  regenerar('Región eliminada; sus bloques y lugares se conservan.');
+});
+document.getElementById('formulario-geometria').addEventListener('submit', (e) => {
+  e.preventDefault(); const geometria = {};
+  for (const k of Object.keys(geometriaInicial())) geometria[k] = ['tipo','orientacion'].includes(k) ? document.getElementById('geometria-' + k).value : Number(document.getElementById('geometria-' + k).value);
+  const valores = { geometria };
+  for (const k of ['x','y','giro']) valores[k] = Number(document.getElementById('geometria-' + k).value);
+  const nuevo = cambiarGeometriaBloque(planoEditable(), salaActual, mesaActiva, valores);
+  if (nuevo.motivo) { anunciar('No se cambió la geometría: ' + nuevo.motivo); return; }
+  const bloque = nuevo.bloquesFilas.find((p) => p.id === mesaActiva);
+  const region = document.getElementById('geometria-region').value;
+  if (region) bloque.region = region; else delete bloque.region;
+  planos[tipoActual] = nuevo; regenerar('Geometría aplicada; IDs y etiquetas oficiales conservados.'); calcularEncuadre();
+});
+document.getElementById('herramienta-ajustar').addEventListener('click', () => cambiarHerramienta(herramienta === 'ajustar' ? 'mesas' : 'ajustar'));
+function elegirLugarAjuste(elemento) {
+  const b = porNodo(elemento);
+  if (!b?.bloque || !piezaPorId(b.bloque)?.geometria) { anunciar('Elige una butaca de un bloque con geometría libre.'); return; }
+  const ajuste = piezaPorId(b.bloque).ajustes?.[(b.filaLocal + 1) + '-' + b.numeroLocal] || { dx:0, dy:0, giro:0 };
+  document.getElementById('id-lugar-ajuste').value = b.id;
+  actualizarControlesGeometria();
+  for (const k of ['dx','dy','giro']) document.getElementById('ajuste-' + k).value = ajuste[k];
+  document.getElementById('ajuste-dx').focus(); anunciar('Ajuste relativo de ' + etiquetaDe(b));
+}
+document.getElementById('formulario-ajuste').addEventListener('submit', (e) => {
+  e.preventDefault(); const valores = {};
+  for (const k of ['dx','dy','giro']) valores[k] = Number(document.getElementById('ajuste-' + k).value);
+  const nuevo = ajustarLugar(planoEditable(), salaActual, document.getElementById('id-lugar-ajuste').value, valores);
+  if (nuevo.motivo) { anunciar('No se aplicó el ajuste: ' + nuevo.motivo); return; }
+  planos[tipoActual] = nuevo; regenerar('Ajuste guardado. Viajará y girará con su fila.');
+});
 
 function actualizarIdentidadControles() {
   const plano = planos[tipoActual];

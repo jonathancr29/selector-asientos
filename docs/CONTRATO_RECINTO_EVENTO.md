@@ -1,8 +1,9 @@
 # Contrato de recinto, evento y conector
 
-Estado: contrato acordado en fase 1. La fase 3 implementa identidad por lugar, numeracion
-explicita y revisiones locales. Niveles, sectores, entidades de fila, palcos y conexion de venta
-siguen pendientes. Este documento distingue requisitos futuros de lo implementado.
+Estado: contrato acordado en fase 1. Las fases 3 y 4 implementan identidad por lugar, numeracion
+explicita, revisiones locales, niveles, regiones y bloques rectos o en arco con correcciones.
+Sectores, entidades de fila, palcos y conexion de venta siguen pendientes. Los vinculos graficos
+de region transforman bloques; no determinan pertenencias fisicas ni modalidades comerciales.
 Complementa el contrato de lugares para Sin Taquilla y prevalece sobre sus reglas comerciales
 anteriores cuando haya diferencias. Los nombres de campos siguientes son un contrato logico,
 no tablas SQL ni endpoints definitivos.

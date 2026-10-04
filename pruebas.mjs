@@ -82,6 +82,211 @@ test('contrato: referencias cruzadas, fila compartida y conjunto no comprable', 
   assert.deepEqual(conjuntos.map((g) => g.id), esperado.conjuntosComprables);
 });
 
+const lienzoLibre = (api) => {
+  const sala = api.generarPlano('mapa-en-blanco');
+  const plano = api.planoDesdeSala('mapa-en-blanco', sala);
+  plano.distribucion = { bloques: [40], pasillos: [] };
+  plano.bandas = [{ id: 'libre', tipo: 'espacio', alto: 40 }];
+  plano.escenario = null;
+  plano.bloquesFilas = [{ id: 'F1', tipo: 'filas', x: 5, y: 7, ancho: 5, filas: 2, giro: 45, zona: 'luneta', geometria: api.geometriaInicial() }];
+  plano.siguienteBloque = 2;
+  api.generarPlano('mapa-en-blanco', plano);
+  return api.sincronizarIdentidad(plano);
+};
+
+test('fase 4: tres niveles conservan seleccion, IDs, etiquetas repetidas entre pisos y revision canonica', () => {
+  const api = cargar();
+  let plano = lienzoLibre(api);
+  plano = api.cambiarNumeracion(plano, 'oficial');
+  const id1 = Object.values(plano.identidadFisica)[0].id;
+  api.elegidas.add(id1);
+  plano = api.agregarNivel(plano, 'Palcos');
+  plano.bloquesFilas = [{ id: 'F2', tipo: 'filas', x: 4, y: 5, ancho: 5, filas: 1, giro: 0, zona: 'luneta' }];
+  plano.siguienteBloque = 3;
+  api.generarPlano('mapa-en-blanco', plano); plano = api.sincronizarIdentidad(plano);
+  const id2 = Object.values(plano.identidadFisica).find((f) => f.nivel === 'n2').id;
+  plano = api.cambiarNumeracion(plano, 'oficial');
+  plano = api.editarEtiquetaOficial(plano, id1, { fila: 'A', numero: '01' });
+  plano = api.editarEtiquetaOficial(plano, id2, { fila: 'A', numero: '01' });
+  assert.equal(plano.motivo, undefined);
+  api.elegidas.add(id2);
+  plano = api.agregarNivel(plano, 'Galería');
+  api.generarPlano('mapa-en-blanco', plano);
+  assert.deepEqual(api.conciliarSeleccion(api.elegidas, api.butacas), { ausentes: [], noLibres: [] });
+  assert.equal(api.butacasVisibles().length, 0);
+  const mapa = api.mapaDesdePlano('Tres pisos', plano, null);
+  const validado = api.validarMapa(mapa);
+  assert.equal(validado.errores, undefined);
+  const desconocidos = structuredClone(mapa);
+  desconocidos.niveles[1].plano.zonas = [{id:'otra',nombre:'Otra'}];
+  desconocidos.niveles[1].plano.revisionFisica = { estado:'publicada' };
+  const limpio = api.validarMapa(desconocidos);
+  assert.equal(limpio.errores, undefined);
+  assert.equal('zonas' in limpio.mapa.niveles[1].plano, false);
+  const exportacion = api.exportarLugaresDeMapa(mapa);
+  assert.equal(exportacion.errores, undefined);
+  assert.equal(exportacion.catalogo.niveles.length, 3);
+  assert.equal(exportacion.catalogo.lugares.find((p) => p.local_place_id === id2).level.id, 'n2');
+  const primero = api.cambiarNivelPlano(plano, 'n1');
+  assert.equal(api.huellaRevision(api.mapaDesdePlano('Tres pisos', primero, null)), api.huellaRevision(mapa));
+  const congelado = api.publicarRevisionFisica(mapa);
+  assert.equal(congelado.errores, undefined);
+  assert.equal(api.validarMapa(congelado.mapa).errores, undefined);
+});
+
+test('fase 4: recta diagonal y arco conservan correcciones relativas e identidad al regenerar', () => {
+  const api = cargar();
+  let plano = lienzoLibre(api);
+  let sala = api.generarPlano('mapa-en-blanco', plano);
+  const id = api.butacas.find((b) => b.claveDiseno === 'F1-1-2').id;
+  plano = api.ajustarLugar(plano, sala, id, { dx: .15, dy: -.2, giro: 12 });
+  assert.equal(plano.motivo, undefined);
+  sala = api.generarPlano('mapa-en-blanco', plano);
+  const antes = api.butacas.find((b) => b.id === id);
+  assert.equal(antes.mira, 237);
+  plano = api.cambiarGeometriaBloque(plano, sala, 'F1', { giro: 31, geometria: { tipo: 'arco', radio: 10, apertura: 110 } });
+  assert.equal(plano.motivo, undefined);
+  assert.deepEqual(plano.bloquesFilas[0].ajustes['1-2'], { id, dx:.15, dy:-.2, giro:12 });
+  api.generarPlano('mapa-en-blanco', plano);
+  const geo = api.geometriaBloqueFilas(plano.bloquesFilas[0]);
+  const sin = api.geometriaBloqueFilas({ ...plano.bloquesFilas[0], ajustes: {} });
+  const diferencia = geo.lugares[1].mira - sin.lugares[1].mira;
+  assert.ok(Math.abs(diferencia - 12) < 1e-7);
+  const correccion = api.rotarPunto(.15,-.2,31);
+  assert.ok(Math.abs((geo.lugares[1].dx-geo.lugares[0].dx)-(sin.lugares[1].dx-sin.lugares[0].dx)-correccion.x)<1e-7);
+  assert.ok(Math.abs((geo.lugares[1].dy-geo.lugares[0].dy)-(sin.lugares[1].dy-sin.lugares[0].dy)-correccion.y)<1e-7);
+  const mapa = api.mapaDesdePlano('Curvo', plano, null);
+  assert.equal(api.validarMapa(mapa).errores, undefined);
+  const despues = api.butacas.find((b) => b.id === id);
+  assert.ok(Number.isFinite(despues.x) && !Number.isInteger(despues.x));
+  assert.equal(despues.zona, antes.zona);
+  const copia = api.duplicarPieza(plano, api.generarPlano('mapa-en-blanco', plano), 'F1');
+  assert.equal(copia.motivo, undefined);
+  const bloqueCopia = copia.bloquesFilas.at(-1);
+  assert.ok(bloqueCopia.ajustes['1-2']);
+  assert.notEqual(bloqueCopia.ajustes['1-2'].id, id);
+  assert.equal(api.validarMapa(api.mapaDesdePlano('Copia curva', copia, null)).errores, undefined);
+});
+
+test('fase 4: orientar hacia escenario o manualmente no altera geometria ni etiquetas', () => {
+  const api=cargar();
+  let plano=lienzoLibre(api);
+  plano.escenario={x:12,y:0,ancho:4,alto:2};
+  let sala=api.generarPlano('mapa-en-blanco',plano);
+  const posiciones=api.butacas.map(({id,x,y})=>({id,x,y}));
+  plano=api.cambiarGeometriaBloque(plano,sala,'F1',{geometria:{orientacion:'escenario'}});
+  sala=api.generarPlano('mapa-en-blanco',plano);
+  assert.deepEqual(api.butacas.map(({id,x,y})=>({id,x,y})),posiciones);
+  for(const b of api.butacas) {
+    const esperado=api.normalizarAngulo(api.MIRA_ESCENARIO+Math.atan2(14-b.x-.5,b.y+.5-1)*180/Math.PI);
+    assert.ok(Math.abs(b.mira-esperado)<1e-7);
+  }
+  plano=api.cambiarGeometriaBloque(plano,sala,'F1',{geometria:{orientacion:'manual',anguloButacas:23}});
+  api.generarPlano('mapa-en-blanco',plano);
+  assert.ok(api.butacas.every(b=>b.mira===248));
+});
+
+test('fase 4: el arco respeta radio, apertura y filas concentricas', () => {
+  const api=cargar();
+  const g=api.geometriaBloqueFilas({ancho:5,filas:2,giro:0,geometria:{...api.geometriaInicial(),tipo:'arco',radio:10,apertura:90}});
+  assert.ok(Math.abs(g.lugares[4].dx-g.lugares[0].dx-20*Math.sin(Math.PI/4))<1e-7);
+  assert.ok(Math.abs(g.lugares[7].dy-g.lugares[2].dy-1.5)<1e-7);
+  assert.equal(g.lugares[0].mira,225);
+  assert.equal(g.lugares[4].mira,135);
+});
+
+test('fase 4: teclado sigue fila curva aunque la siguiente coordenada retroceda', () => {
+  const api=cargar();
+  const origen={id:'a',nivel:'n1',bloque:'F1',filaLocal:0,numeroLocal:3,libre:true,x:10,y:4};
+  const siguiente={...origen,id:'b',numeroLocal:4,x:9,y:5};
+  const otro={...origen,id:'c',filaLocal:1,x:10,y:6};
+  const oculto={...origen,id:'d',nivel:'n2',numeroLocal:4,x:10.1};
+  assert.equal(api.vecinoDeLugar([origen,oculto,siguiente,otro],origen,1,0)?.id,'b');
+  assert.equal(api.vecinoDeLugar([origen,oculto,siguiente,otro],origen,0,1)?.id,'c');
+});
+
+test('fase 4: colisiones fraccionarias y autocruces se rechazan sin modificar el plano', () => {
+  const api = cargar();
+  const plano = lienzoLibre(api);
+  const sala = api.generarPlano('mapa-en-blanco', plano);
+  const p = plano.bloquesFilas[0];
+  const id = 'F1-1-2';
+  assert.match(api.ajustarLugar(plano, sala, id, { dx:-1.5,dy:0,giro:0 }).motivo, /solapan/);
+  assert.equal(plano.bloquesFilas[0].ajustes, undefined);
+  const m = new Map();
+  api.ocuparRectangulo(m, { x: 2.1, y: 3.2, ancho:1, alto:1 }, 'asiento');
+  assert.equal(api.choqueDeRectangulo(m, { x:2.9,y:3.2,ancho:1,alto:1 }), 'asiento');
+  assert.equal(api.choqueDeRectangulo(m, { x:3.1,y:3.2,ancho:1,alto:1 }), null);
+  assert.match(api.cambiarGeometriaBloque(plano,sala,p.id,{x:39.9}).motivo,/sale/);
+  assert.match(api.cambiarGeometriaBloque(plano,sala,p.id,{geometria:{radio:NaN}}).motivo,/inválida/);
+});
+
+test('fase 4: regiones independientes transforman sus bloques y conservan pertenencias', () => {
+  const api = cargar();
+  let plano = lienzoLibre(api);
+  plano = api.agregarRegion(plano,'Lateral izquierdo');
+  plano = api.agregarRegion(plano,'Lateral derecho');
+  plano.bloquesFilas[0].region = 'region1';
+  const sala = api.generarPlano('mapa-en-blanco',plano);
+  const antes = api.butacas.map((b) => ({id:b.id,x:b.x,y:b.y}));
+  const identidad = JSON.stringify(plano.identidadFisica);
+  const nuevo = api.cambiarRegion(plano,sala,'region1',{x:3,y:2,giro:15,ancho:9});
+  assert.equal(nuevo.motivo,undefined);
+  assert.equal(nuevo.bloquesFilas[0].giro,60);
+  assert.equal(JSON.stringify(nuevo.identidadFisica),identidad);
+  assert.equal(nuevo.regionesLibres[1].x,1);
+  api.generarPlano('mapa-en-blanco',nuevo);
+  for (const b of api.butacas) {
+    const origen = antes.find((a) => a.id === b.id);
+    const esperado = api.rotarPunto(origen.x - 1, origen.y, 15);
+    assert.ok(Math.abs(b.x - esperado.x - 3)<1e-7);
+    assert.ok(Math.abs(b.y - esperado.y - 2)<1e-7);
+  }
+  assert.match(api.cambiarRegion(plano,sala,'region1',{x:40}).motivo,/sale/);
+  const limpio = api.eliminarRegion(nuevo,'region1');
+  assert.equal(limpio.bloquesFilas.length,1);
+  assert.equal(limpio.bloquesFilas[0].region,undefined);
+  assert.equal(api.validarMapa(api.mapaDesdePlano('Asimétrico',nuevo,null)).errores,undefined);
+});
+
+test('fase 4: retirar lugares y niveles no restaura correcciones ni reutiliza IDs', () => {
+  const api = cargar();
+  let plano = lienzoLibre(api);
+  let sala = api.generarPlano('mapa-en-blanco',plano);
+  const id = 'F1-2-5';
+  plano = api.ajustarLugar(plano,sala,id,{dx:.2,dy:0,giro:5});
+  plano.bloquesFilas[0].ancho = 4;
+  api.generarPlano('mapa-en-blanco',plano); plano = api.sincronizarIdentidad(plano);
+  assert.ok(plano.idsRetirados.includes(id));
+  assert.equal(plano.bloquesFilas[0].ajustes['2-5'],undefined);
+  plano.bloquesFilas[0].ancho = 5;
+  api.generarPlano('mapa-en-blanco',plano); plano = api.sincronizarIdentidad(plano);
+  assert.notEqual(plano.identidadFisica[id].id,id);
+  plano = api.agregarNivel(plano,'Temporal');
+  plano.bloquesFilas=[{id:'F2',tipo:'filas',x:3,y:4,ancho:2,filas:1,giro:0}];
+  plano.siguienteBloque=3;
+  api.generarPlano('mapa-en-blanco',plano); plano = api.sincronizarIdentidad(plano);
+  plano = api.eliminarNivel(plano,'n2');
+  api.generarPlano('mapa-en-blanco',plano); plano = api.sincronizarIdentidad(plano);
+  assert.ok(plano.idsRetirados.includes('F2-1-1'));
+  plano = api.agregarNivel(plano,'Otro');
+  assert.equal(plano.nivelEnEdicion,'n3');
+});
+
+test('fase 4: importar rechaza pisos, pertenencias, geometria y ajustes incoherentes', () => {
+  const api=cargar();
+  const plano=lienzoLibre(api);
+  const mapa=api.mapaDesdePlano('Bueno',plano,null);
+  const con=(cambio)=>{const m=structuredClone(mapa); cambio(m); return api.validarMapa(m).errores || [];};
+  assert.match(con((m)=>m.niveles.push({...m.niveles[0],nombre:'Duplicado',plano:{}})).join(' '),/nivel inválido/);
+  assert.match(con((m)=>m.identidadFisica['F1-1-1'].nivel='n99').join(' '),/inventario/);
+  assert.match(con((m)=>m.bloquesFilas[0].geometria.radio=-1).join(' '),/geometría/);
+  assert.match(con((m)=>m.bloquesFilas[0].region='noexiste').join(' '),/región desconocida/);
+  assert.match(con((m)=>m.bloquesFilas[0].ajustes={'1-1':{id:'retirado',dx:0,dy:0,giro:0}}).join(' '),/corrección/);
+  assert.equal(api.renombrarNivel(plano,'n1','').motivo,'nombre de nivel inválido o repetido');
+  assert.match(api.eliminarNivel(plano,'n1').motivo,/al menos/);
+});
+
 test('fase 3: mover conserva zona fisica y reasignar cambia solo los lugares pedidos', () => {
   const api = cargar();
   const { plano } = planoDe(api, 'mixta-ambos');
@@ -817,7 +1022,7 @@ test('un mapa guarda el diseño y las bloqueadas, pero no la ocupacion', () => {
   const mapa = api.mapaDesdePlano('Salón Jardín', editado, '2026-09-16T18:30:00Z', ids);
 
   assert.equal(mapa.formato, api.FORMATO_MAPA);
-  assert.equal(mapa.version, 6);
+  assert.equal(mapa.version, 7);
   assert.deepEqual(mapa.distribucion, { bloques: [4, 4, 4], pasillos: [1, 1] });
   assert.equal(mapa.pasillos, undefined);
   const texto = JSON.stringify(mapa);
@@ -859,7 +1064,7 @@ test('validarMapa rechaza archivos que no son mapas o traen datos no validos', (
   assert.deepEqual(api.validarMapa(null).errores, ['el archivo no contiene un mapa']);
   assert.deepEqual(api.validarMapa([1, 2]).errores, ['el archivo no contiene un mapa']);
   assert.deepEqual(con((m) => { m.formato = 'otra-cosa'; }), ['no es un mapa de este selector de asientos']);
-  assert.deepEqual(con((m) => { m.version = 7; }), ['versión de mapa no compatible (7)']);
+  assert.deepEqual(con((m) => { m.version = 8; }), ['versión de mapa no compatible (8)']);
   assert.ok(con((m) => { m.nombre = '   '; }).includes('el nombre debe tener entre 1 y 80 caracteres'));
   assert.ok(con((m) => { m.distribucion.pasillos = [1]; }).includes('columnas: con 3 bloques hacen falta 2 anchos de pasillo'));
   assert.ok(con((m) => { delete m.distribucion; }).includes('columnas: faltan los bloques o los pasillos'));
@@ -1076,7 +1281,7 @@ test('un mapa guarda las columnas y un mapa de la version 1 se sigue leyendo', (
   delete viejo.distribucion;
   const { mapa: convertido, errores } = api.validarMapa(viejo);
   assert.equal(errores, undefined);
-  assert.equal(convertido.version, 6);
+  assert.equal(convertido.version, 7);
   assert.deepEqual(convertido.distribucion, { bloques: [4, 9], pasillos: [1] });
   assert.equal(convertido.pasillos, undefined);
 });
@@ -1791,7 +1996,7 @@ test('mapas version 3: lienzo, sin escenario y espacios con guias, y se validan 
   const { plano } = conLienzo(api, (p) => api.agregarBanda(api.alternarGuias(p, 'espacio'), 'espacio', 20));
   const mapa = JSON.parse(JSON.stringify(api.mapaDesdePlano('Salón de eventos', plano, null)));
   assert.deepEqual([mapa.version, mapa.lienzo, mapa.escenario, mapa.bandas],
-    [6, true, null, [{ id: 'espacio', tipo: 'espacio', alto: 10, guias: true }, { id: 'banda1', tipo: 'espacio', alto: 4 }]]);
+    [7, true, null, [{ id: 'espacio', tipo: 'espacio', alto: 10, guias: true }, { id: 'banda1', tipo: 'espacio', alto: 4 }]]);
   const { mapa: leido, errores } = api.validarMapa(mapa);
   assert.equal(errores, undefined);
   assert.deepEqual([leido.lienzo, leido.escenario, leido.bandas[0].guias], [true, null, true]);
@@ -2004,7 +2209,7 @@ test('migracion v1-v4 conserva identidad y antecedentes sin activar tarifas ni c
     const esperado = plano.mesas.map((m) => [m.id, m.x, m.y]);
     const salida = api.validarMapa(viejo);
     assert.equal(salida.errores, undefined);
-    assert.equal(salida.mapa.version, 6);
+    assert.equal(salida.mapa.version, 7);
     assert.deepEqual(salida.mapa.mesas.map((m) => [m.id, m.x, m.y]), esperado);
     assert.ok(salida.mapa.zonas.every((z) => !('precio' in z)));
     assert.ok(salida.mapa.mesas.every((m) => !('completa' in m)));
@@ -2017,7 +2222,7 @@ test('migracion v1-v4 conserva identidad y antecedentes sin activar tarifas ni c
     const reexportado = api.mapaDesdePlano('Anterior', api.planoDesdeSala('mapa:Anterior', sala), null);
     assert.deepEqual(api.validarMapa(reexportado).mapa, salida.mapa);
     const catalogo = api.exportarLugaresDeMapa(reexportado).catalogo;
-    assert.equal(catalogo.version, 3);
+    assert.equal(catalogo.version, 4);
     assert.ok(catalogo.lugares.every((l) => !('preview_price_cents' in l) && !('preview_currency' in l)));
     assert.equal('antecedentesComerciales' in catalogo, false);
   }
@@ -2544,7 +2749,7 @@ test('mapas version 4: la zona de una mesa y la de una banda de mesas son opcion
   // Un mapa de la version 3: sus mesas no traian zona y pasan a heredar la de su banda.
   const viejo = { ...JSON.parse(JSON.stringify(api.mapaDesdePlano('Viejo', plano, null))), version: 3 };
   const leidoViejo = api.validarMapa(viejo).mapa;
-  assert.equal(leidoViejo.version, 6);
+  assert.equal(leidoViejo.version, 7);
   api.generarPlano(api.registrarMapa(leidoViejo));
   assert.equal(api.butacas.find((b) => b.id === 'M1-N1').zona, 'mesas');
 });
