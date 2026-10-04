@@ -4,9 +4,30 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Bandas y zonas físicas independientes (fase 2)
+## Sin publicar — Identidad física, numeración oficial y revisiones (fase 3)
 
-Rama `claude/separar-zonas`, basada en la fase 1 aún pendiente de fusión.
+Rama `claude/identidad-oficial`, desde `main` tras fusionar los PR #46, #47 y #48.
+
+- Herencia al crear lugares; mover y girar conservan su zona física. Reasignación explícita
+  por pieza, asiento o área, con aviso de diferencias respecto a la región de dibujo.
+- Inventario separado de las claves del generador. Retirar y volver a ampliar crea nuevos
+  IDs sin recuperar bloqueos; las copias conservan zonas y reciben identidades nuevas.
+- Numeración automática u oficial explícita, con confirmación del cambio de modo y edición
+  por lugar mediante clic o teclado. Conserva letras, números y ceros iniciales al transformar.
+- Mapa versión 6 y catálogo versión 3: revisión, inventario e IDs retirados. Migración v1–v5.
+- Congelar/exportar una revisión local cierra su edición. Un nuevo borrador conserva el
+  recinto y las identidades, incrementa la revisión y deja intacta la anterior.
+- Importación hasta 8 MB para conservar el inventario del aforo máximo. Sin cambios comerciales.
+- Verificado: 163 pruebas de lógica y 11 de navegador; 33 mapas v1–v5 comparados sin diferencias
+  físicas ni de estados, 18 mutaciones detectadas y los 8 recorridos anteriores sobre fase 2.
+  HTML sincronizado, revisión visual de controles y sin errores JavaScript en navegador.
+
+## 2026-10-03 — PR #48: Bandas y zonas físicas independientes (fase 2)
+
+[PR #48](https://github.com/jonathancr29/selector-asientos/pull/48), fusionado en `main` con el
+commit `9cb0679`.
+
+Rama `claude/separar-zonas`.
 
 - Paneles separados de distribución y zonas físicas, con nombres independientes.
 - Agregar o eliminar bandas no crea ni elimina zonas; agregar zona no crea espacio.
@@ -19,9 +40,12 @@ Rama `claude/separar-zonas`, basada en la fase 1 aún pendiente de fusión.
 - Verificado: 154 pruebas de lógica, 9 de navegador, 26 mapas antiguos comparados y
   10 mutaciones deliberadas detectadas. HTML sincronizado.
 
-## Cambio anterior pendiente — Contrato de recinto y evento (fase 1)
+## 2026-10-03 — PR #47: Contrato de recinto y evento (fase 1)
 
-Rama `claude/contrato-recinto`, basada en `claude/identidad-por-zona` aún pendiente de fusión.
+[PR #47](https://github.com/jonathancr29/selector-asientos/pull/47), fusionado en `main` con el
+commit `1103126`.
+
+Rama `claude/contrato-recinto`.
 
 - Contrato de identidades físicas, numeración oficial, geometría gradual, herencia y revisiones.
 - Tarifas y habilitación por evento en Sin Taquilla; venta agrupada común para mesas y palcos.
@@ -29,7 +53,10 @@ Rama `claude/contrato-recinto`, basada en `claude/identidad-por-zona` aún pendi
 - La implementación de niveles, palcos y conector queda para las fases siguientes.
 - Verificado: 151 pruebas de lógica y 8 de navegador, y HTML sincronizado.
 
-## Cambio anterior pendiente — Identidad y numeración por zona física
+## 2026-10-03 — PR #46: Identidad y numeración por zona física
+
+[PR #46](https://github.com/jonathancr29/selector-asientos/pull/46), fusionado en `main` con el
+commit `3cc1f94`.
 
 Rama `claude/identidad-por-zona`.
 

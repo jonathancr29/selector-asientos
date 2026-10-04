@@ -60,12 +60,14 @@ function actualizarAforo(sala) {
 function redibujar(tipo) {
   if (arrastreMesa) terminarArrastreMesa(false);
   tipoActual = tipo;
+  if (TIPOS_DE_SALA[tipo].revisionFisica?.estado === 'publicada' && modo === 'editor') cambiarModo('vista');
   marcarActivas([]);
   bandaActiva = null;
   const esMapa = TIPOS_DE_SALA[tipo].grupo === GRUPO_MAPAS;
   document.getElementById('nombre-mapa').value = esMapa ? TIPOS_DE_SALA[tipo].nombre : '';
   document.getElementById('eliminar-mapa').hidden = !esMapa;
   salaActual = generarPlano(tipo, planos[tipo]);
+  if (!planos[tipo]) planos[tipo] = planoDesdeSala(tipo, salaActual);
   if (!historiales[tipo]) historiales[tipo] = crearHistorial(fotoDelPlano());
   // Antes de dibujar: asi el DOM nace ya con la seleccion que sobrevive.
   const { ausentes, noLibres } = conciliarSeleccion(elegidas, butacas);
@@ -152,6 +154,9 @@ function guardarMapa() {
     return;
   }
   const clave = claveDeMapa(nombre);
+  if (TIPOS_DE_SALA[clave]?.revisionFisica?.estado === 'publicada') {
+    anunciar('La revisión publicada se conserva. Guarda el borrador con otro nombre.'); return;
+  }
   if (TIPOS_DE_SALA[clave] && clave !== tipoActual &&
       !confirm('Ya hay un mapa llamado «' + nombre + '». ¿Sobrescribirlo?')) return;
   const mapa = mapaDesdePlano(nombre, planoEditable(), new Date().toISOString(), idsActuales());
@@ -169,9 +174,49 @@ function guardarMapa() {
   anunciar('Mapa «' + nombre + '» guardado en este navegador.');
 }
 
+function descargarDocumento(dato, nombre) {
+  const enlace = document.createElement('a');
+  enlace.href = URL.createObjectURL(new Blob([JSON.stringify(dato, null, 2) + '\n'], { type: 'application/json' }));
+  enlace.download = nombre;
+  document.body.appendChild(enlace); enlace.click(); enlace.remove();
+  setTimeout(() => URL.revokeObjectURL(enlace.href), 0);
+}
+
+document.getElementById('publicar-revision').addEventListener('click', () => {
+  const nombre = campoNombre.value.trim() || TIPOS_DE_SALA[tipoActual].nombre;
+  if (TIPOS_DE_SALA[claveDeMapa(nombre)]?.revisionFisica?.estado === 'publicada') {
+    anunciar('Ese nombre identifica una revisión publicada. Usa otro nombre.'); return;
+  }
+  const candidato = mapaDesdePlano(nombre, planoEditable(), new Date().toISOString(), idsActuales());
+  const resultado = publicarRevisionFisica(candidato);
+  salaActual = generarPlano(tipoActual, planos[tipoActual]); dibujarTodo();
+  if (resultado.errores) { anunciar('No se congeló la revisión: ' + resultado.errores.slice(0, 3).join('; ') + '.'); return; }
+  if (!confirm('Congelar la revisión ' + candidato.revisionFisica.numero + ' con ' + resultado.catalogo.lugares.length +
+      ' lugares. Sus IDs y ubicación quedarán cerrados; para editar crearás otra revisión. ¿Continuar?')) return;
+  const almacen = leerAlmacen();
+  if (almacen) { almacen[nombre] = resultado.mapa; if (!escribirAlmacen(almacen)) { anunciar('No se pudo guardar la revisión. Exporta el borrador y vuelve a intentar.'); return; } }
+  const clave = registrarMapa(resultado.mapa);
+  historiales[tipoActual].marcarGuardado(); delete planos[clave]; delete historiales[clave];
+  descargarDocumento(resultado.mapa, nombreDeArchivo(nombre).replace('.json', '-revision-' + candidato.revisionFisica.numero + '.json'));
+  construirSelector(clave); redibujar(clave);
+  anunciar('Revisión ' + candidato.revisionFisica.numero + ' congelada y exportada. No se ha publicado en Sin Taquilla.');
+});
+
+document.getElementById('nuevo-borrador').addEventListener('click', () => {
+  const origen = planoEditable();
+  const nuevo = nuevaRevisionFisica(origen);
+  const conocidas = Object.values(TIPOS_DE_SALA).map((d) => d.revisionFisica).filter((r) => r?.recintoId === origen.revisionFisica.recintoId);
+  nuevo.revisionFisica.numero = Math.max(origen.revisionFisica.numero, ...conocidas.map((r) => r.numero)) + 1;
+  const nombre = (TIPOS_DE_SALA[tipoActual].nombre.slice(0, 50) + ' · borrador ' + nuevo.revisionFisica.numero);
+  const mapa = mapaDesdePlano(nombre, nuevo, null);
+  const clave = registrarMapa(mapa); construirSelector(clave); redibujar(clave); cambiarModo('editor');
+  anunciar('Nuevo borrador creado; la revisión anterior se conserva. Guarda este borrador cuando termines.');
+});
+
 function exportarMapa() {
   const nombre = campoNombre.value.trim() || TIPOS_DE_SALA[tipoActual].nombre;
   const mapa = mapaDesdePlano(nombre, planoEditable(), new Date().toISOString(), idsActuales());
+  salaActual = generarPlano(tipoActual, planos[tipoActual]); dibujarTodo();
   const archivo = new Blob([JSON.stringify(mapa, null, 2) + '\n'], { type: 'application/json' });
   const enlace = document.createElement('a');
   enlace.href = URL.createObjectURL(archivo);
@@ -227,11 +272,11 @@ function exportarCatalogoLugares() {
 
 // Un mapa real ocupa pocos KB: un archivo mayor no se lee, para no bloquear la pestaña
 // leyendo y validando algo que no es un mapa razonable.
-const ARCHIVO_MAXIMO = 1024 * 1024;
+const ARCHIVO_MAXIMO = 8 * 1024 * 1024;
 
 async function importarMapa(archivo) {
   if (archivo.size > ARCHIVO_MAXIMO) {
-    anunciar('No se pudo importar ' + archivo.name + ': es demasiado grande para ser un mapa (pasa de 1 MB).');
+    anunciar('No se pudo importar ' + archivo.name + ': es demasiado grande para ser un mapa (pasa de 8 MB).');
     return;
   }
   let dato;
@@ -251,6 +296,9 @@ async function importarMapa(archivo) {
     return;
   }
   const clave = claveDeMapa(mapa.nombre);
+  if (TIPOS_DE_SALA[clave]?.revisionFisica?.estado === 'publicada') {
+    anunciar('No se sobrescribe una revisión publicada. Usa otro nombre para importar el borrador.'); return;
+  }
   if (TIPOS_DE_SALA[clave] && !confirm('Ya hay un mapa llamado «' + mapa.nombre + '». ¿Sobrescribirlo?')) return;
   const almacen = leerAlmacen();
   const guardado = Boolean(almacen) && ((almacen[mapa.nombre] = mapa), escribirAlmacen(almacen));

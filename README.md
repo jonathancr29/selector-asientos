@@ -217,13 +217,15 @@ Las usadas no se eliminan, y se conservan la zona de mesas y al menos una zona p
 El mapa físico no configura precios ni venta completa. Sin un evento conectado, el resumen
 muestra **Precio no disponible**. Cero no se inventa: los importes llegarán desde Sin Taquilla.
 Las herramientas de venta agrupada siguen como base interna para fases posteriores, sin controles
-comerciales en el editor. El conector, niveles y numeración oficial aún no están implementados.
+comerciales en el editor. El conector y los niveles aún no están implementados.
 
 ### La zona se hereda de la banda
 
 **Cada banda le da su zona física a las piezas que heredan:** mesas, bloques y butacas sueltas.
-La herencia dinámica actual se conserva; la separación entre mover y reasignar pertenencias
-oficiales se implementará en fase 3.
+La herencia resuelve la zona al crear el lugar. Su identidad física guarda esa pertenencia:
+mover o girar conserva la zona, incluso al cruzar a otra banda. El aviso señala diferencias
+entre ubicación física y región de dibujo. Cambiar la zona de la banda afecta a lugares nuevos;
+reasignar los existentes se hace expresamente con *Asignar zona* o el selector de la pieza.
 
 De lo más concreto a lo más general, manda:
 
@@ -234,7 +236,8 @@ De lo más concreto a lo más general, manda:
    pieza nunca se guarda sin zona física.
 
 En *Editar*, el selector de zona empieza en **«Hereda: ⟨zona de la banda⟩»**; elegir una
-zona concreta la fija y volver a *Hereda* la suelta. Las piezas nuevas nacen heredando.
+zona concreta reasigna sus lugares y volver a *Hereda* toma expresamente la zona actual de la región.
+Las piezas nuevas nacen heredando, sin cambiar las pertenencias de las existentes.
 
 **Asignar zona a cada asiento.** El botón **Asignar zona** del grupo *Sala* (como *Bloquear butacas*)
 abre un selector con todas las zonas. Eliges una y haces clic en las butacas, o Enter sobre ellas, para
@@ -664,7 +667,7 @@ cero, por ejemplo un salón de eventos. Al elegirla se abre directamente el modo
   fila, para ubicarse. No son butacas ni se venden.
 - **Escenario:** el botón **Agregar escenario** de la barra lo pone en el primer hueco libre: a todo
   el ancho si cabe, si no de 8 o de 4 columnas. Después se mueve y cambia de tamaño como siempre.
-- **Guardar:** con un nombre, en «Mis mapas», como cualquier mapa (versión 4 del formato).
+- **Guardar:** con un nombre, en «Mis mapas», como cualquier mapa (versión 6 del formato).
 
 ### Butacas sueltas y formas
 
@@ -737,7 +740,7 @@ butacas bloqueadas, **zonas físicas con sus nombres** y los contadores de ids. 
 **Límites:** una sala tiene como máximo **20.000 butacas** (contando las de mesas, bloques y butacas
 sueltas). Más harían lento el dibujo del plano. El editor no aplica un cambio que pase de ahí (agregar
 o alargar bandas, piezas, columnas, duplicar) y lo explica; un mapa importado o guardado que lo supere
-no se carga. Un archivo de más de **1 MB** no se importa: un mapa real ocupa pocos KB.
+no se carga. Un archivo de más de **8 MB** no se importa; el inventario físico agrega un registro por lugar.
 
 ```json
 {
@@ -767,10 +770,29 @@ guarda `formas` y `butacasSueltas` (listas opcionales) con sus contadores `sigui
 
 **Versión 4** añadió herencia de zona opcional en piezas y bandas.
 
-**Versión 5** (actual) separa zonas físicas y datos comerciales. Zonas guardan ID y nombre,
+**Versión 5** separó zonas físicas y datos comerciales. Zonas guardan ID y nombre,
 y mesas no guardan venta completa activa. Los precios y mesas completas de mapas v1–v4 se
 conservan en antecedentes comerciales pendientes de revisión. Se mantienen al guardar y abrir,
 pero no activan precios ni selección conjunta. No se fusionan zonas ni se adivina su significado.
+
+**Versión 6** (actual) añade identidad física por lugar, IDs retirados, numeración oficial y revisión.
+La clave del generador identifica una posición dentro de una pieza; el ID identifica el lugar.
+Acortar y volver a ampliar da IDs nuevos a los lugares retirados, sin recuperar sus bloqueos.
+Los mapas v1–v5 se materializan conservando sus IDs, coordenadas, zonas y etiquetas actuales.
+El archivo de importación admite hasta **8 MB** para el inventario de hasta **20.000 lugares**.
+
+**Numeración oficial.** En el editor, *Numeración oficial* permite cambiar deliberadamente entre
+automática y explícita. La confirmación indica cuántos lugares se afectan y muestra ejemplos de sus etiquetas. Al activar la oficial
+se capturan las etiquetas visibles; *Elegir lugar para numerar* permite seleccionar con clic o
+Enter y editar fila/butaca o mesa/lugar. Admite letras, ceros iniciales, pares, impares y saltos.
+Mover y girar conservan etiquetas oficiales. Las copias y los lugares nuevos requieren asignación
+antes de exportar un catálogo oficial. Una etiqueta repetida se rechaza sin aplicar el cambio.
+
+**Revisiones.** *Congelar y exportar revisión* valida el catálogo y entrega un mapa cerrado con
+ID del recinto, número de revisión y comprobación local de integridad. Al abrirlo, la edición
+queda cerrada; *Crear nueva revisión en borrador* conserva la anterior y sus IDs para continuar.
+El borrador se guarda con otro nombre. La comprobación detecta cambios accidentales, no constituye
+una firma de seguridad. Esta publicación es local: aún no configura eventos en Sin Taquilla.
 
 **Catálogo de lugares.** En *Mapa → Exportar lugares* se valida el diseño y se descarga un JSON
 con un registro por lugar: ID local estable, zona física, fila/butaca o mesa/lugar, etiqueta,
@@ -780,7 +802,7 @@ los lugares de una mesa estén en la misma zona física. Una zona llamada *Zona*
 provisional. Los mapas viejos se siguen abriendo; si tienen `zonasDeAsiento`, antes de exportar el
 catálogo hay que revisar esas asignaciones con *Revisar zonas físicas asignadas*. La confirmación
 se guarda como `zonasFisicasConfirmadas`, asociada al ID y al valor de zona; cambiar la zona vuelve
-a exigir revisión. El catálogo físico es versión 2 y Sin Taquilla decidirá categoría, importe y modalidad al configurar
+a exigir revisión. El catálogo físico es versión 3, incluye revisión e IDs retirados, y Sin Taquilla decidirá categoría, importe y modalidad al configurar
 el evento. Aún no publica el mapa ni conecta la venta.
 
 Los mapas de la versión 1 (que guardaban `"pasillos": "ambos"`) se siguen leyendo: se convierten a
@@ -818,7 +840,7 @@ node --test pruebas-navegador.mjs
 
 Cubren la rejilla, el reparto de mesas, el aforo de la tabla anterior, la conciliación de la
 selección al cambiar de sala, los tipos de sala y las bandas, y las reglas del editor: geometría de las mesas, hacia dónde
-mira cada silla, dónde caben, girar, alargar, cabeceras, un solo lado y sitio para mesas nuevas; también el mapa en blanco (lienzo, espacios, guías, escenario opcional y mapas versión 4), butacas sueltas y formas, duplicar piezas y bandas, renombrar bandas, subtítulos y selección de bandas por clic. No hay copia del código: `pruebas.mjs` lee `index.html` y
+mira cada silla, dónde caben, girar, alargar, cabeceras, un solo lado y sitio para mesas nuevas; también el mapa en blanco (lienzo, espacios, guías, escenario opcional y mapas versión 6), butacas sueltas y formas, duplicar piezas y bandas, renombrar bandas, subtítulos y selección de bandas por clic. No hay copia del código: `pruebas.mjs` lee `index.html` y
 evalúa la parte del script anterior a la marca *«Fin de la parte sin DOM»*, así que se prueba el
 HTML que se entrega, y la API que ven las pruebas se escanea del propio archivo: una
 función nueva se prueba sin tocar el arnés. Requiere Node 18 o posterior.
