@@ -276,6 +276,59 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       assert.equal(await protocolo.evaluar('document.querySelector(".butaca[data-pieza=M1]") === null'), true);
     });
 
+    await t.test('bandas y zonas independientes sin tarifas; migracion y recarga', async () => {
+      await protocolo.evaluar(`(() => {
+        redibujar('mixta-ambos');
+        cambiarModo('editor');
+        window.__bandasAntes = planoEditable().bandas.length;
+        document.querySelector('#agregar-zona').click();
+      })()`);
+      assert.equal(await protocolo.evaluar('planoEditable().bandas.length === window.__bandasAntes'), true);
+      assert.equal(await protocolo.evaluar('document.querySelectorAll("#lista-zonas input").length === Object.keys(zonas).length'), true);
+      assert.equal(await protocolo.evaluar('document.querySelector(".precio-zona, #venta-mesa, #completa-todas") === null'), true);
+      const nombres = await protocolo.evaluar(`(() => {
+        const campo = document.querySelector('#lista-bandas input[data-banda="luneta"]');
+        campo.value = 'Bloque izquierdo';
+        campo.dispatchEvent(new Event('change', { bubbles: true }));
+        const nombreZona = document.querySelector('#lista-zonas input[data-zona="luneta"]');
+        nombreZona.value = 'Preferente';
+        nombreZona.dispatchEvent(new Event('change', { bubbles: true }));
+        return [bandaDe(salaActual, 'luneta').nombre, zonas.luneta.nombre, etiquetaDe(butacas.find(b => b.id === 'luneta-A1'))];
+      })()`);
+      assert.equal(nombres[0], 'Bloque izquierdo');
+      assert.equal(nombres[1], 'Preferente');
+      assert.match(nombres[2], /Preferente/);
+      await protocolo.evaluar(`(() => {
+        const antes = Object.keys(zonas).length;
+        document.querySelector('#agregar-banda-filas').click();
+        window.__sinZonaNueva = Object.keys(zonas).length === antes;
+        document.querySelector('#lista-bandas button[data-op="eliminar"][data-banda="luneta"]').click();
+      })()`);
+      assert.equal(await protocolo.evaluar('window.__sinZonaNueva && zonas.luneta.nombre === "Preferente"'), true);
+      await protocolo.evaluar(`(() => {
+        const mapa = mapaDesdePlano('Migrado', planoEditable(), null);
+        mapa.version = 4;
+        mapa.zonas.forEach(z => { z.precio = 12300; });
+        mapa.mesas[0].completa = true;
+        const clave = registrarMapa(validarMapa(mapa).mapa);
+        redibujar(clave);
+        document.querySelector('#guardar-mapa').click();
+      })()`);
+      assert.equal(await protocolo.evaluar('butacas.every(b => !b.grupo?.completa)'), true);
+      assert.match(await protocolo.evaluar('document.querySelector("#antecedentes-comerciales").textContent'), /pendientes de revisión/);
+      assert.equal(await protocolo.evaluar('document.querySelector("#total").textContent'), 'Precio no disponible');
+      assert.equal(await protocolo.evaluar('historiales[tipoActual].tieneCambios()'), false);
+      // Otros mapas editados por recorridos anteriores no deben bloquear esta recarga.
+      await protocolo.evaluar('Object.entries(historiales).filter(([tipo]) => tipo !== tipoActual).forEach(([, h]) => h.marcarGuardado())');
+      const recarga = protocolo.evento('Page.loadEventFired');
+      await protocolo.enviar('Page.reload', { ignoreCache: true });
+      await recarga;
+      await protocolo.evaluar(`redibujar('mapa:Migrado'); cambiarModo('editor');`);
+      assert.equal(await protocolo.evaluar('planoEditable().antecedentesComerciales.mesasCompletas[0]'), 'M1');
+      assert.equal(await protocolo.evaluar('document.querySelector("#antecedentes-comerciales").hidden'), false);
+      assert.equal(await protocolo.evaluar('planoEditable().zonas.every(z => !("precio" in z)) && butacas.every(b => !b.grupo?.completa)'), true);
+    });
+
     assert.deepEqual(protocolo.excepciones, [], 'errores JavaScript en el navegador');
   } finally {
     protocolo?.socket.close();

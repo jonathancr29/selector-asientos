@@ -4,9 +4,8 @@
 function actualizarResumen() {
   // En orden de plano, no de clic: el detalle sale estable.
   const lista = butacas.filter((b) => elegidas.has(b.id));
-  const total = lista.reduce((s, b) => s + zonas[b.zona].precio, 0);
   document.getElementById('cuenta').textContent = String(lista.length);
-  document.getElementById('total').textContent = dinero(total);
+  document.getElementById('total').textContent = 'Precio no disponible';
   document.getElementById('vacio').hidden = lista.length > 0;
   document.getElementById('detalle-vacio').hidden = lista.length > 0;
 
@@ -26,8 +25,7 @@ function actualizarResumen() {
     const cuantos = (items[0].grupo && items[0].grupo.completa ? 'mesa completa, ' : '') +
                     (items.length === 1 ? '1 lugar' : items.length + ' lugares');
     const cuales = items.map((b) => (b.grupo ? b.numero : b.fila + b.numero)).join(', ');
-    const importe = items.reduce((s, b) => s + zonas[b.zona].precio, 0);
-    li.textContent = nombre + ' · ' + cuantos + ' (' + cuales + ') · ' + dinero(importe);
+    li.textContent = nombre + ' · ' + cuantos + ' (' + cuales + ')';
     detalle.appendChild(li);
   }
 }

@@ -157,15 +157,9 @@ function actualizarControles() {
   botonEscenario.querySelector('use').setAttribute('href', escenario.ausente ? '#i-escenario-agregar' : '#i-escenario-quitar');
   // Venta por mesa o por butacas: solo para mesas. Con varias, «Venta mixta» cuando no
   // coinciden; elegir una opción la aplica a todas.
-  const venta = document.getElementById('venta-mesa');
+
   const soloMesas = todas.length > 0 && todas.every((p) => esMesa(p) && !esEscenario(p));
   const deMesa = varias ? soloMesas : Boolean(m) && esMesa(m) && !esEscenario(m);
-  venta.disabled = !deMesa;
-  const mixta = varias && deMesa && comun((p) => Boolean(p.completa)) === undefined;
-  venta.querySelector('option[value="mixta"]')?.remove();
-  if (mixta) venta.insertBefore(new Option('Venta mixta', 'mixta'), venta.firstChild);
-  venta.value = mixta ? 'mixta' : (deMesa && (varias ? comun((p) => Boolean(p.completa)) : m.completa) ? 'mesa' : 'butacas');
-  document.getElementById('completa-todas').disabled = !deMesa;
   // Zona: mesas, bloques y butacas sueltas (lo que tiene butacas). Nombre: bloques y
   // formas. No se pisa lo que se esta escribiendo.
   const zona = document.getElementById('zona-pieza');
@@ -333,7 +327,7 @@ const fotoDeButacas = () => butacas.map((b) => ({ id: b.id, estado: b.estado }))
 function regenerar(mensaje, antes = fotoDeButacas()) {
   salaActual = generarPlano(tipoActual, planos[tipoActual]);
   // Una pieza que quedo fuera de toda banda con zona no tiene de quien heredar: se le
-  // escribe la suya y se dice, que cambia su precio.
+  // escribe la suya y se anuncia la ubicacion fisica resuelta.
   let sueltas = { fijadas: [] };
   if (planos[tipoActual]) {
     sueltas = fijarZonasSueltas(planos[tipoActual], salaActual);
@@ -695,7 +689,7 @@ document.getElementById('zona-pieza').addEventListener('change', (e) => {
     regenerar('');
     const zona = zonas[e.target.value];
     anunciar(plural(ids.length, 'pieza', 'piezas') +
-             (zona ? ' a la zona ' + zona.nombre + ', ' + dinero(zona.precio) + '.'
+             (zona ? ' a la zona ' + zona.nombre + '.'
                    : ' heredan la zona de su banda.'));
     return;
   }
@@ -709,7 +703,7 @@ document.getElementById('zona-pieza').addEventListener('change', (e) => {
   const despues = piezaPorId(pieza.id);
   const zona = zonas[e.target.value] || zonas[zonaEnCelda(salaActual, despues.x, despues.y)];
   anunciar(pieza.nombre + (e.target.value ? ' pasa a la zona ' : ' hereda la zona de su banda: ') +
-           zona.nombre + ', ' + dinero(zona.precio) + '.');
+           zona.nombre + '.');
 });
 function aplicarNombreDeBloque() {
   const b = piezaPorId(mesaActiva);
@@ -917,13 +911,13 @@ document.getElementById('herramienta-bloquear').addEventListener('click', () =>
 document.getElementById('herramienta-zona').addEventListener('click', () =>
   cambiarHerramienta(herramienta === 'zona' ? 'mesas' : 'zona'));
 
-// Las opciones del pincel: todas las zonas de la sala, con su precio. Conserva la
+// Las opciones del pincel: todas las zonas fisicas de la sala. Conserva la
 // elegida si sigue existiendo; si no, General o la primera.
 function llenarPincel() {
   const select = document.getElementById('zona-pincel');
   const antes = select.value;
   select.textContent = '';
-  for (const [id, { nombre, precio }] of Object.entries(zonas)) select.appendChild(new Option(nombre + ' · ' + dinero(precio), id));
+  for (const [id, { nombre }] of Object.entries(zonas)) select.appendChild(new Option(nombre, id));
   select.value = zonas[antes] ? antes : zonas.general ? 'general' : Object.keys(zonas)[0];
 }
 document.getElementById('zona-pincel').addEventListener('change', () => {
@@ -944,7 +938,7 @@ function pintarZona(elemento) {
   planos[tipoActual] = asignarZonaAsiento(planoEditable(), b.id, zona, b.zonaOriginal);
   regenerar('');
   const nueva = porId.get(b.id);
-  anunciar(etiquetaDe(nueva) + ': zona ' + zonas[nueva.zona].nombre + ', ' + dinero(zonas[nueva.zona].precio) +
+  anunciar(etiquetaDe(nueva) + ': zona ' + zonas[nueva.zona].nombre +
            (nueva.zona === nueva.zonaOriginal ? ' (la de siempre).' : '.'));
   if (nueva) nueva.nodo.focus({ preventScroll: true });
 }
@@ -1110,7 +1104,7 @@ function aplicarArea(area, devolver) {
   const una = cambiadas.length === 1;
   regenerar(!cambiadas.length ? 'Ninguna butaca del área cambió.'
     : plural(cambiadas.length, 'butaca', 'butacas') + (pintando
-      ? (zona ? ' a la zona ' + zona.nombre + ', ' + dinero(zona.precio) + '.' : ' de vuelta a su zona de siempre.')
+      ? (zona ? ' a la zona ' + zona.nombre + '.' : ' de vuelta a su zona de siempre.')
       : (devolver ? (una ? ' desbloqueada.' : ' desbloqueadas.')
                   : (una ? ' bloqueada.' : ' bloqueadas.'))));
   const aviso = document.getElementById('aviso');
@@ -1184,28 +1178,6 @@ document.getElementById('alternar-escenario').addEventListener('click', () => {
 document.getElementById('agregar-lados').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('lados')));
 document.getElementById('agregar-cruz').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('cruz')));
 document.getElementById('agregar-barra').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('barra')));
-document.getElementById('venta-mesa').addEventListener('change', (e) => {
-  if (e.target.value === 'mixta') return;
-  if (piezasActivas.size > 1) {
-    const ids = [...piezasActivas];
-    const completa = e.target.value === 'mesa';
-    planos[tipoActual] = marcarVentaDeMesas(planoEditable(), ids, completa);
-    regenerar(plural(ids.length, 'mesa', 'mesas') + (completa ? ' se venden por mesa.' : ' se venden por butacas.'));
-    return;
-  }
-  const m = piezaPorId(mesaActiva);
-  if (!m) return;
-  const completa = e.target.value === 'mesa';
-  planos[tipoActual] = marcarMesaCompleta(planoEditable(), m.id, completa);
-  regenerar(completa
-    ? m.nombre + ' se vende por mesa: sus lugares se eligen juntos y se cobra la suma de todos.'
-    : m.nombre + ' se vende por butacas.');
-});
-document.getElementById('completa-todas').addEventListener('click', () => {
-  const completa = document.getElementById('venta-mesa').value === 'mesa';
-  planos[tipoActual] = marcarTodasLasMesas(planoEditable(), completa);
-  regenerar(completa ? 'Todas las mesas se venden por mesa.' : 'Todas las mesas se venden por butacas.');
-});
 document.getElementById('agregar-redonda').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('redonda')));
 document.getElementById('agregar-bloque').addEventListener('click', () => conTopeDeAforo(agregarBloqueNuevo));
 document.getElementById('agregar-butaca').addEventListener('click', () => conTopeDeAforo(agregarButacaNueva));

@@ -4,7 +4,22 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Contrato de recinto y evento (fase 1)
+## Sin publicar — Bandas y zonas físicas independientes (fase 2)
+
+Rama `claude/separar-zonas`, basada en la fase 1 aún pendiente de fusión.
+
+- Paneles separados de distribución y zonas físicas, con nombres independientes.
+- Agregar o eliminar bandas no crea ni elimina zonas; agregar zona no crea espacio.
+- Formato de mapa versión 5 y catálogo físico versión 2 sin tarifas activas.
+- Importación v1–v4 conserva precios y venta completa como antecedentes validados, pendientes
+  de revisión. Guardado y recarga los conservan; no activan selección conjunta ni tarifas.
+- El resumen muestra «Precio no disponible»; se retiran los controles comerciales del editor.
+- Se conserva la herencia dinámica de zona. Pertenencias oficiales, niveles y conector quedan
+  para fases posteriores según el contrato.
+- Verificado: 154 pruebas de lógica, 9 de navegador, 26 mapas antiguos comparados y
+  10 mutaciones deliberadas detectadas. HTML sincronizado.
+
+## Cambio anterior pendiente — Contrato de recinto y evento (fase 1)
 
 Rama `claude/contrato-recinto`, basada en `claude/identidad-por-zona` aún pendiente de fusión.
 

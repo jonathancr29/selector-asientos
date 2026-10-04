@@ -269,25 +269,13 @@ comentarios `// ----`.
   `zonasFisicasConfirmadas` guarda el valor revisado de cada asignación para el catálogo; las
   asignaciones heredadas sin esa confirmación no son publicables porque podían ser solo tarifa.
   La herramienta es `herramienta === 'zona'`; `conButacas()` agrupa las que trabajan sobre butacas.
-- **El panel de bandas es el de las zonas** («Zonas y precios»): cada fila lleva el color, el nombre,
-  el precio y la zona de su banda, y un **✓** que guarda nombre y precio de una vez. El ✓ lee los dos
-  campos **antes** de aplicar nada: el primer cambio rehace la lista y se llevaria por delante lo
-  escrito en el otro (paso). Al final de la lista, en `#lista-zonas`, van las zonas que no son de
-  ninguna banda. Si la zona es suya en exclusiva (`zonaExclusivaDeBanda`), el campo de nombre **renombra la
-  zona** (`editarZona`) y no la banda: son lo mismo para quien edita. Si la comparte, vuelve a ser el
-  nombre propio de la banda. `zonaNuevaParaBanda` es la opción «Zona nueva». El grupo *Otras zonas*
-  (`dibujarZonas`) solo lista las zonas que no son de ninguna banda, para que sigan siendo editables:
-  las de una pieza con zona propia, las pintadas y las que no usa nadie.
-- **Venta por mesa o por butacas:** `marcarVenta(plano, completa, quiere)` es **el unico sitio donde
-  se escribe `completa`**; las cuatro formas de pedirlo solo cambian en el filtro que le pasan:
-  `marcarMesaCompleta` (una), `marcarVentaDeMesas` (varias), `marcarMesasDeBanda` (las de una banda,
-  con `mesasDeBanda`) y `marcarTodasLasMesas` (todas). Si añades otra forma, pasa por ahi. En la
-  interfaz son el selector `#venta-mesa` de la pieza, el selector de la fila de la banda y «Aplicar
-  a todas las mesas».
-- **Mesa completa (`completa: true`)**: sus lugares llevan `grupo.completa`. Elegir pasa siempre por
-  `alternarEleccion` (todos sus lugares libres a la vez), y `completarMesasElegidas` corrige las
-  selecciones parciales al regenerar. El precio no se guarda: es la suma de los lugares libres, cada
-  uno al de su zona (la que herede la mesa, o la propia del lugar). En `generarPlano`, si un lugar está ocupado, los demás libres pasan a ocupados.
+- **Bandas y zonas físicas son independientes:** el panel de distribución modifica bandas,
+  y el de zonas lista todo el catálogo. Renombrar banda no renombra zona. Agregar o eliminar banda
+  no crea ni elimina zonas; agregar zona no crea espacio. Herencia dinámica se conserva hasta
+  fase 3. No reintroducir precios en el editor: pertenecen al evento de Sin Taquilla.
+- **Venta agrupada:** los ayudantes puros de mesas se conservan para generalizar en fases
+  posteriores. No hay controles comerciales en el editor y los mapas nuevos no activan completa.
+  El contrato exige reservar conjuntos sin recortarlos automáticamente y tarifas desde el evento.
 - **Una mesa redonda solo guarda sus lugares** (un número par de 2 a 16); el diámetro sale de
   `diametroRedonda` (los lugares entre cuatro, hacia arriba) y las sillas van por parejas en cada
   lado, sin esquinas (`ladosDeRedonda`, `geometriaMesaRedonda`). `cambiarLugaresRedonda` recibe pasos
@@ -487,23 +475,18 @@ comentarios `// ----`.
   id (`zonaN`, saltando los que ya existen aunque el contador se haya quedado corto) y el nombre
   (numerado si choca: «General 2»), y no toca el plano. Lo usan `agregarZona` (una zona suelta) y
   `zonaNuevaParaBanda` (la que nace atada a una banda).
-- **Una zona es una banda:** `agregarBanda` y `agregarBandaEnVertical` pasan por `conZonaPropia`, que
-  le da a la banda nueva su zona (nombre a partir de la de partida, numerado, y precio 0). Los
-  **espacios y las franjas nacen sin zona** (un hueco no da precio a nada); al espacio se le da la
-  suya con el boton de la etiqueta, que crea espacio + zona. `eliminarBanda` se lleva la zona si no la
-  usa nadie mas (`usosDeZona`), nunca la de mesas ni la ultima. El nombre por defecto de una banda es
-  el de su zona (`nombreDe` en `disponerBandas`), asi que renombrar la zona renombra la banda.
+- **Crear zona es explícito:** las bandas de filas nuevas usan una zona existente; las de mesas
+  conservan su zona efectiva de mesas. Eliminar una banda conserva el catálogo físico.
 - **El color es de la zona:** `colorDeCapa` indexa la paleta por la zona de la banda, y solo cae al
   orden del arbol (`capasDe`) para las que no tienen. Dos bandas que comparten zona se ven del mismo
   color, en el panel y en el plano.
-- **Las zonas son del plano:** `plano.zonas` es una lista `[{ id, nombre, precio }]` (precio en
-  centavos). `generarPlano` la vuelca en el índice `zonas` con `usarZonas` antes de disponer las
+- **Las zonas son del plano:** `plano.zonas` es una lista `[{ id, nombre }]`, sin tarifas. `generarPlano` la vuelca en el índice `zonas` con `usarZonas` antes de disponer las
   bandas, así que `zonas[id]` siempre es de la sala actual. `validarMapa` también llama a
   `usarZonas` antes de `disponerBandas`. No escribas ids de zona fijos (`'luneta'`, `'general'`):
   valida contra la lista y usa `zonaParaFilas` para las filas nuevas. La zona `mesas` es la que toman
   las zonas de mesas que no llevan otra: siempre existe y no se asigna a filas. `usosDeZona` cuenta
   las bandas (por su zona efectiva) y las piezas con zona **propia**: lo que hereda no cuenta, porque
-  ya lo sujeta su banda. El tope es `ZONAS_MAXIMAS` (40), porque cada banda trae la suya.
+  ya lo sujeta su banda. El tope es `ZONAS_MAXIMAS` (40), independiente del número de bandas.
 - **Aforo máximo: `BUTACAS_MAXIMAS` (20.000).** `validarMapa` lo comprueba con `motivoDeAforo`;
   `aplicarBandas` lo trata como un error de bandas y revierte; los cambios de piezas (agregar,
   transformar, duplicar) pasan por `conTopeDeAforo`, que copia el plano antes y lo restaura si se
@@ -524,7 +507,8 @@ comentarios `// ----`.
   descartan los campos desconocidos y se comprueba que las mesas quepan. No se confía en el archivo.
 - **Las bloqueadas son una lista de ids** (`plano.bloqueadas`). `bloqueadasAlFinal` de las plantillas
   solo se usa si no hay lista.
-- **Formato del mapa, versión 4:** `zona` es opcional en mesas, bloques y butacas sueltas (sin ella,
+- **Formato del mapa, versión 5:** sin precios activos ni venta completa activa; conserva
+  antecedentes comerciales validados de mapas antiguos. En versión 4, `zona` es opcional en mesas, bloques y butacas sueltas (sin ella,
   heredan) y las bandas que no son de filas pueden llevarla. La versión 3 añadió `lienzo`,
   `escenario: null` y bandas `espacio` (con `guias`), y el escenario dejó de ser banda obligatoria;
   hasta la versión 2 se exige el escenario como primera banda y no se admiten espacios. La versión 2
@@ -626,10 +610,8 @@ Y en todos los casos, el repaso de siempre:
      Esc, flechas, girar, alargar y acortar, cabeceras, agregar Lados y Cruz, eliminar,
      «Restablecer sala», y que la selección se conserve. Deshacer y rehacer por botón y atajo,
      una edición tras deshacer, aviso de cambios pendientes, guardado y confirmación al restablecer.
-   - **Zonas y precios:** nombre, precio y el ✓ que guarda los dos; zona («Zona nueva» y compartir con
-     otra banda, que iguala el color); el boton de la etiqueta, que crea un espacio con su zona; venta
-     de las mesas de una zona de mesas; que al eliminar una banda se vaya su zona; que las zonas sin
-     banda queden al final de la lista; y los dos botones de informacion.
+   - **Zonas físicas:** renombrar todas las zonas, compartir desde bandas, crear sin espacio,
+     conservar al eliminar banda y rechazar eliminación de zonas usadas. Sin campos de precio.
    - **Bandas:** − / +, zona, subir y bajar, eliminar, agregar; que no se aplique un cambio que deja
      una mesa sin caber, y que el foco vuelva al mismo control.
    - **Mapa en blanco:** elegirlo abre el editor; ancho del lienzo, agregar espacios y guías, agregar

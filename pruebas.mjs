@@ -652,7 +652,7 @@ test('un mapa guarda el diseño y las bloqueadas, pero no la ocupacion', () => {
   const mapa = api.mapaDesdePlano('Salón Jardín', editado, '2026-09-16T18:30:00Z', ids);
 
   assert.equal(mapa.formato, api.FORMATO_MAPA);
-  assert.equal(mapa.version, 4);
+  assert.equal(mapa.version, 5);
   assert.deepEqual(mapa.distribucion, { bloques: [4, 4, 4], pasillos: [1, 1] });
   assert.equal(mapa.pasillos, undefined);
   const texto = JSON.stringify(mapa);
@@ -694,7 +694,7 @@ test('validarMapa rechaza archivos que no son mapas o traen datos no validos', (
   assert.deepEqual(api.validarMapa(null).errores, ['el archivo no contiene un mapa']);
   assert.deepEqual(api.validarMapa([1, 2]).errores, ['el archivo no contiene un mapa']);
   assert.deepEqual(con((m) => { m.formato = 'otra-cosa'; }), ['no es un mapa de este selector de asientos']);
-  assert.deepEqual(con((m) => { m.version = 5; }), ['versión de mapa no compatible (5)']);
+  assert.deepEqual(con((m) => { m.version = 6; }), ['versión de mapa no compatible (6)']);
   assert.ok(con((m) => { m.nombre = '   '; }).includes('el nombre debe tener entre 1 y 80 caracteres'));
   assert.ok(con((m) => { m.distribucion.pasillos = [1]; }).includes('columnas: con 3 bloques hacen falta 2 anchos de pasillo'));
   assert.ok(con((m) => { delete m.distribucion; }).includes('columnas: faltan los bloques o los pasillos'));
@@ -826,9 +826,9 @@ test('un recinto ancho: 249 columnas, miles de butacas y el escenario cruzando l
     // El escenario cruza la sala entera: antes no podia pasar de 60 columnas.
     escenario: { x: 1, y: 0, ancho: 249, alto: 2 },
     bloqueadas: [], zonasDeAsiento: {},
-    zonas: [{ id: 'mesas', nombre: 'Mesas', precio: 0 },
-            { id: 'luneta', nombre: 'Luneta', precio: 150000 },
-            { id: 'general', nombre: 'General', precio: 70000 }],
+    zonas: [{ id: 'mesas', nombre: 'Mesas' },
+            { id: 'luneta', nombre: 'Luneta' },
+            { id: 'general', nombre: 'General' }],
     siguiente: 1, siguienteBanda: 4, siguienteBloque: 1, siguienteForma: 1,
     siguienteZona: 1, siguienteButaca: 1,
   };
@@ -911,7 +911,7 @@ test('un mapa guarda las columnas y un mapa de la version 1 se sigue leyendo', (
   delete viejo.distribucion;
   const { mapa: convertido, errores } = api.validarMapa(viejo);
   assert.equal(errores, undefined);
-  assert.equal(convertido.version, 4);
+  assert.equal(convertido.version, 5);
   assert.deepEqual(convertido.distribucion, { bloques: [4, 9], pasillos: [1] });
   assert.equal(convertido.pasillos, undefined);
 });
@@ -1509,7 +1509,7 @@ test('subtitulos: las bandas de la sala en el margen, las verticales en su borde
   // Una segunda banda dentro de una vertical lleva su propio subtitulo.
   api.generarPlano('mixta-ambos', api.agregarBandaEnVertical(plano, sala, 'banda4', 'mesas'));
   assert.deepEqual(api.muebles.filter((m) => m.tipo === 'subtitulo').at(-1),
-    { tipo: 'subtitulo', lugar: 'borde', banda: 'banda6', texto: 'Mesas 2', x: 8, y: 22 });
+    { tipo: 'subtitulo', lugar: 'borde', banda: 'banda6', texto: 'Mesas 3', x: 8, y: 22 });
 });
 
 test('capas y seleccion de bandas por celda: clic a clic se sube por el arbol', () => {
@@ -1626,7 +1626,7 @@ test('mapas version 3: lienzo, sin escenario y espacios con guias, y se validan 
   const { plano } = conLienzo(api, (p) => api.agregarBanda(api.alternarGuias(p, 'espacio'), 'espacio', 20));
   const mapa = JSON.parse(JSON.stringify(api.mapaDesdePlano('Salón de eventos', plano, null)));
   assert.deepEqual([mapa.version, mapa.lienzo, mapa.escenario, mapa.bandas],
-    [4, true, null, [{ id: 'espacio', tipo: 'espacio', alto: 10, guias: true }, { id: 'banda1', tipo: 'espacio', alto: 4 }]]);
+    [5, true, null, [{ id: 'espacio', tipo: 'espacio', alto: 10, guias: true }, { id: 'banda1', tipo: 'espacio', alto: 4 }]]);
   const { mapa: leido, errores } = api.validarMapa(mapa);
   assert.equal(errores, undefined);
   assert.deepEqual([leido.lienzo, leido.escenario, leido.bandas[0].guias], [true, null, true]);
@@ -1814,51 +1814,100 @@ test('una franja nueva trae dos verticales con un espacio vacio cada una, sin bu
 
 // --- Zonas editables ---------------------------------------------------------------
 
-test('las zonas de un plano cambian nombres, precios y etiquetas de su sala', () => {
+test('zonas fisicas: nombre y etiquetas sin tarifas activas', () => {
   const api = cargar();
   const { plano } = planoDe(api, 'mixta-ambos');
-  assert.deepEqual(plano.zonas, [
-    { id: 'luneta', nombre: 'Luneta', precio: 35000 }, { id: 'mesas', nombre: 'Mesas', precio: 50000 },
-    { id: 'general', nombre: 'General', precio: 20000 }]);
-  let nuevo = api.editarZona(plano, 'luneta', { nombre: '  Preferente ', precio: 125050 });
-  nuevo = api.editarZona(nuevo, 'mesas', { precio: 0 });
-  const sala = api.generarPlano('mixta-ambos', nuevo);
-  assert.deepEqual(api.zonas.luneta, { nombre: 'Preferente', precio: 125050 });
+  const nuevo = api.editarZona(plano, 'luneta', { nombre: ' Preferente ' });
+  api.generarPlano('mixta-ambos', nuevo);
+  assert.deepEqual(api.zonas.luneta, { nombre: 'Preferente' });
   assert.equal(etiqueta(api, 'luneta-A1'), 'Preferente A1');
-  assert.equal(sala.bandas[1].nombre, 'Preferente');   // el nombre por defecto sigue a la zona
-  assert.equal(api.zonas.mesas.precio, 0);
-  // Otra sala generada sin zonas propias vuelve a las de siempre.
-  api.generarPlano('solo-filas');
-  assert.equal(api.zonas.luneta.nombre, 'Luneta');
-  // No se toca el plano de entrada.
   assert.equal(plano.zonas[0].nombre, 'Luneta');
+  assert.equal('precio' in nuevo.zonas[0], false);
 });
 
-test('editarZona valida nombre y precio', () => {
+test('migracion v1-v4 conserva identidad y antecedentes sin activar tarifas ni completa', () => {
+  for (const version of [1, 2, 3, 4]) {
+    const api = cargar();
+    const { plano } = planoDe(api, 'mixta-ambos');
+    const viejo = api.mapaDesdePlano('Anterior', plano, null);
+    viejo.version = version;
+    if (version === 1) viejo.pasillos = 'ambos';
+    delete viejo.antecedentesComerciales;
+    viejo.zonas.forEach((z, i) => { z.precio = i * 10000; });
+    viejo.mesas[0].completa = true;
+    const esperado = plano.mesas.map((m) => [m.id, m.x, m.y]);
+    const salida = api.validarMapa(viejo);
+    assert.equal(salida.errores, undefined);
+    assert.equal(salida.mapa.version, 5);
+    assert.deepEqual(salida.mapa.mesas.map((m) => [m.id, m.x, m.y]), esperado);
+    assert.ok(salida.mapa.zonas.every((z) => !('precio' in z)));
+    assert.ok(salida.mapa.mesas.every((m) => !('completa' in m)));
+    assert.deepEqual(salida.mapa.antecedentesComerciales, {
+      preciosPorZona: [{ zona: 'luneta', precio: 0 }, { zona: 'mesas', precio: 10000 }, { zona: 'general', precio: 20000 }],
+      mesasCompletas: ['M1'],
+    });
+    const sala = api.generarPlano(api.registrarMapa(salida.mapa));
+    assert.ok(api.butacas.every((b) => !b.grupo?.completa));
+    const reexportado = api.mapaDesdePlano('Anterior', api.planoDesdeSala('mapa:Anterior', sala), null);
+    assert.deepEqual(api.validarMapa(reexportado).mapa, salida.mapa);
+    const catalogo = api.exportarLugaresDeMapa(reexportado).catalogo;
+    assert.equal(catalogo.version, 2);
+    assert.ok(catalogo.lugares.every((l) => !('preview_price_cents' in l) && !('preview_currency' in l)));
+    assert.equal('antecedentesComerciales' in catalogo, false);
+  }
+});
+
+test('antecedentes comerciales se validan y se limpian como datos no confiables', () => {
   const api = cargar();
   const { plano } = planoDe(api, 'mixta-ambos');
-  assert.deepEqual(api.editarZona(plano, 'general', { nombre: 'luneta' }), { motivo: 'ya hay una zona llamada «luneta»' });
-  assert.deepEqual(api.editarZona(plano, 'general', { nombre: '   ' }), { motivo: 'el nombre de la zona debe tener entre 1 y 40 caracteres' });
-  assert.deepEqual(api.editarZona(plano, 'general', { precio: -1 }), { motivo: 'el precio debe ser de 0 a 1,000,000.00' });
-  assert.deepEqual(api.editarZona(plano, 'general', { precio: 12.5 }), { motivo: 'el precio debe ser de 0 a 1,000,000.00' });
-  assert.deepEqual(api.editarZona(plano, 'vip', { precio: 1 }), { motivo: 'esa zona ya no existe' });
-  assert.equal(api.editarZona(plano, 'general', { nombre: 'General' }).zonas[2].nombre, 'General');   // el suyo, si
-  assert.deepEqual(['350', '350.5', '$1,200.00', ' 0 ', '1000000', '1000000.01', '12.345', 'abc', '-5', ''].map(api.leerPrecio),
-    [35000, 35050, 120000, 0, 100000000, null, null, null, null, null]);
+  const mapa = api.mapaDesdePlano('Recinto', plano, null);
+  for (const antecedentes of [null, [], { preciosPorZona: 'x' }, { mesasCompletas: ['M0'] },
+    { preciosPorZona: [{ zona: '__proto__', precio: 0 }] }, { preciosPorZona: [{ zona: 'luneta', precio: -1 }] }]) {
+    assert.ok(api.validarMapa({ ...mapa, antecedentesComerciales: antecedentes }).errores);
+  }
+  assert.doesNotThrow(() => api.validarMapa({ ...mapa, zonas: 'invalido' }));
+  const antecedentes = { preciosPorZona: [{ zona: 'luneta', precio: 0, inyectado: true }], mesasCompletas: ['M1', 'M1'], desconocido: true };
+  assert.deepEqual(api.validarMapa({ ...mapa, antecedentesComerciales: antecedentes }).mapa.antecedentesComerciales,
+    { preciosPorZona: [{ zona: 'luneta', precio: 0 }], mesasCompletas: ['M1'] });
+});
+
+test('nombres propios de banda y catalogo de zonas tienen ciclos independientes', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const banda = api.renombrarBanda(plano, 'luneta', 'Bloque izquierdo');
+  assert.equal(banda.zonas[0].nombre, 'Luneta');
+  const zona = api.editarZona(banda, 'luneta', { nombre: 'Preferente' });
+  const sala = api.generarPlano('mixta-ambos', zona);
+  assert.equal(sala.bandas[1].nombre, 'Bloque izquierdo');
+  assert.equal(etiqueta(api, 'luneta-A1'), 'Preferente A1');
+  const sinBanda = api.eliminarBanda(zona, sala, 'luneta');
+  assert.deepEqual(sinBanda.zonas, zona.zonas);
+  const masZona = api.agregarZona(sinBanda);
+  assert.deepEqual(masZona.bandas, sinBanda.bandas);
+});
+
+test('editarZona valida nombres y rechaza configurar tarifas en el mapa', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  assert.match(api.editarZona(plano, 'general', { nombre: 'luneta' }).motivo, /ya hay/);
+  assert.match(api.editarZona(plano, 'general', { nombre: ' ' }).motivo, /entre 1 y 40/);
+  assert.match(api.editarZona(plano, 'general', { nombre: 'x'.repeat(41) }).motivo, /entre 1 y 40/);
+  assert.match(api.editarZona(plano, 'general', { precio: 0 }).motivo, /Sin Taquilla/);
+  assert.match(api.editarZona(plano, 'inexistente', { nombre: 'X' }).motivo, /no existe/);
 });
 
 test('agregar y eliminar zonas: las nuevas sirven para filas, las usadas no se eliminan', () => {
   const api = cargar();
   const { plano, sala } = planoDe(api, 'mixta-ambos');
-  const conVip = api.editarZona(api.agregarZona(plano), 'zona1', { nombre: 'VIP', precio: 90000 });
-  assert.deepEqual([conVip.zonas.at(-1), conVip.siguienteZona], [{ id: 'zona1', nombre: 'VIP', precio: 90000 }, 2]);
+  const conVip = api.editarZona(api.agregarZona(plano), 'zona1', { nombre: 'VIP' });
+  assert.deepEqual([conVip.zonas.at(-1), conVip.siguienteZona], [{ id: 'zona1', nombre: 'VIP' }, 2]);
   // El contador puede quedarse corto (un plano escrito a mano, o una zona eliminada y
   // vuelta a crear): el id salta los que ya existen en vez de repetir uno vivo.
   const atrasado = api.agregarZona({ ...conVip, siguienteZona: 1 });
   assert.deepEqual(atrasado.zonas.map((z) => z.id).filter((id) => id.startsWith('zona')), ['zona1', 'zona2']);
   const vip = api.cambiarZonaBanda(conVip, 'luneta', 'zona1');
   api.generarPlano('mixta-ambos', vip);
-  assert.deepEqual([etiqueta(api, 'luneta-C12'), api.zonas[api.butacas.find((b) => b.id === 'luneta-C12').zona].precio], ['VIP C12', 90000]);
+  assert.equal(etiqueta(api, 'luneta-C12'), 'VIP C12');
 
   assert.deepEqual(api.eliminarZona(vip, 'zona1'), { motivo: 'VIP está en uso (1 banda o pieza); cámbialas de zona antes' });
   assert.deepEqual(api.eliminarZona(vip, 'mesas'), { motivo: 'la zona de mesas no se puede eliminar' });
@@ -1878,7 +1927,7 @@ test('agregar y eliminar zonas: las nuevas sirven para filas, las usadas no se e
   // partida: sin General, esa es Luneta, asi que la suya es «Luneta 2».
   const sinGen = api.eliminarZona(api.agregarZona(lienzo), 'general');
   const conFilas = api.agregarBanda(sinGen, 'filas');
-  assert.deepEqual([conFilas.bandas.at(-1).zona, conFilas.zonas.at(-1).nombre], ['zona2', 'Luneta 2']);
+  assert.deepEqual([conFilas.bandas.at(-1).zona, conFilas.zonas.at(-1).nombre], ['luneta', 'Zona']);
   let lleno = plano;
   for (let i = 0; i < 37; i++) lleno = api.agregarZona(lleno);
   assert.deepEqual(api.agregarZona(lleno), { motivo: 'ya hay el máximo de zonas (40)' });
@@ -1888,22 +1937,22 @@ test('agregar y eliminar zonas: las nuevas sirven para filas, las usadas no se e
 test('los mapas guardan y validan las zonas; sin ellas, las de siempre', () => {
   const api = cargar();
   const { plano } = planoDe(api, 'mixta-ambos');
-  const nuevo = api.cambiarZonaBanda(api.editarZona(api.agregarZona(plano), 'zona1', { nombre: 'VIP', precio: 90000 }), 'general', 'zona1');
+  const nuevo = api.cambiarZonaBanda(api.editarZona(api.agregarZona(plano), 'zona1', { nombre: 'VIP' }), 'general', 'zona1');
   const mapa = JSON.parse(JSON.stringify(api.mapaDesdePlano('Con VIP', nuevo, null)));
-  assert.deepEqual([mapa.zonas.at(-1), mapa.siguienteZona], [{ id: 'zona1', nombre: 'VIP', precio: 90000 }, 2]);
+  assert.deepEqual([mapa.zonas.at(-1), mapa.siguienteZona], [{ id: 'zona1', nombre: 'VIP' }, 2]);
   const { mapa: leido, errores } = api.validarMapa(mapa);
   assert.equal(errores, undefined);
   const sala = api.generarPlano(api.registrarMapa(leido));
-  assert.deepEqual([sala.bandas.at(-1).nombre, etiqueta(api, 'general-A1'), api.zonas.zona1.precio], ['VIP', 'VIP A1', 90000]);
+  assert.deepEqual([sala.bandas.at(-1).nombre, etiqueta(api, 'general-A1')], ['VIP', 'VIP A1']);
   assert.deepEqual(api.planoDesdeSala(api.registrarMapa(leido), sala).zonas, mapa.zonas);
 
   const con = (cambio) => { const m = JSON.parse(JSON.stringify(mapa)); cambio(m); return api.validarMapa(m).errores || []; };
   assert.ok(con((m) => { m.zonas = m.zonas.filter((z) => z.id !== 'mesas'); }).includes('falta la zona de mesas'));
   assert.ok(con((m) => { m.zonas[3].nombre = 'luneta'; }).includes('zona 4: nombre repetido'));
-  assert.ok(con((m) => { m.zonas[3].precio = -5; }).includes('zona 4: precio no válido'));
+  assert.ok(con((m) => { m.version = 4; m.zonas[3].precio = -5; }).includes('zona 4: precio no válido'));
   assert.ok(con((m) => { m.zonas[3].id = 'Zona 1'; }).includes('zona 4: id no válido o repetido'));
   assert.ok(con((m) => { m.zonas = []; }).includes('debe haber de 1 a 40 zonas'));
-  assert.ok(con((m) => { m.zonas = [{ id: 'mesas', nombre: 'Mesas', precio: 1 }]; }).includes('falta una zona para filas'));
+  assert.ok(con((m) => { m.zonas = [{ id: 'mesas', nombre: 'Mesas' }]; }).includes('falta una zona para filas'));
   assert.ok(con((m) => { m.bandas[1].zona = 'mesas'; }).includes('banda 2: zona desconocida'));
   // Sin zonas en el archivo (mapas anteriores): Luneta, Mesas y General de siempre.
   const viejo = api.validarMapa({ ...mapa, zonas: undefined, bandas: mapa.bandas.map((b) => (b.zona === 'zona1' ? { ...b, zona: 'general' } : b)) });
@@ -2089,7 +2138,8 @@ test('los mapas guardan y validan las mesas completas', () => {
   const mapa = JSON.parse(JSON.stringify(api.mapaDesdePlano('Completas', extraido, null)));
   const { mapa: leido, errores } = api.validarMapa(mapa);
   assert.equal(errores, undefined);
-  assert.deepEqual(leido.mesas.filter((m) => m.completa).map((m) => m.id), ['M3', 'M7']);
+  assert.deepEqual(leido.mesas.filter((m) => m.completa), []);
+  assert.deepEqual(leido.antecedentesComerciales.mesasCompletas, ['M3', 'M7']);
   const con = (cambio) => { const m = JSON.parse(JSON.stringify(mapa)); cambio(m); return api.validarMapa(m).errores || []; };
   assert.ok(con((m) => { m.mesas[0].completa = 'si'; }).includes('M1: completa debe ser true o false'));
 });
@@ -2098,7 +2148,7 @@ test('los mapas guardan y validan las mesas completas', () => {
 
 const conVip = (api) => {
   const { plano } = planoDe(api, 'mixta-ambos');
-  return api.editarZona(api.agregarZona(plano), 'zona1', { nombre: 'VIP', precio: 90000 });
+  return api.editarZona(api.agregarZona(plano), 'zona1', { nombre: 'VIP' });
 };
 
 test('asignar zona fisica renumera el lugar sin cambiar su id', () => {
@@ -2122,7 +2172,7 @@ test('un lugar de mesa tambien puede tener otra zona, y una mesa completa suma s
   api.generarPlano('mixta-ambos', vip);
   const lugares = api.butacas.filter((b) => b.grupo && b.grupo.id === 'M1');
   assert.deepEqual(lugares.map((b) => b.zona), ['zona1', 'mesas', 'mesas', 'mesas']);
-  assert.equal(lugares.reduce((s, b) => s + api.zonas[b.zona].precio, 0), 90000 + 3 * 50000);
+  assert.ok(lugares.every((b) => !('precio' in api.zonas[b.zona])));
   // Una zona asignada que ya no existe se ignora.
   api.generarPlano('mixta-ambos', { ...vip, zonasDeAsiento: { 'M1-N2': 'fantasma' } });
   assert.equal(api.butacas.find((b) => b.id === 'M1-N2').zona, 'mesas');
@@ -2229,7 +2279,7 @@ test('las mesas heredan la zona de su banda, y la suya manda sobre ella', () => 
   const deLuneta = api.cambiarZonaBanda(plano, 'mesas', 'luneta');
   api.generarPlano('mixta-ambos', deLuneta);
   assert.deepEqual(api.mesas.map((m) => m.zonaEfectiva), api.mesas.map(() => 'luneta'));
-  assert.equal(api.zonas[api.butacas.find((b) => b.id === 'M1-N1').zona].precio, 35000);
+  assert.equal(api.butacas.find((b) => b.id === 'M1-N1').zona, 'luneta');
   // Una mesa con zona propia no hereda: se queda en la suya.
   const propia = { ...deLuneta, mesas: deLuneta.mesas.map((m) => (m.id === 'M1' ? { ...m, zona: 'general' } : m)) };
   api.generarPlano('mixta-ambos', propia);
@@ -2249,7 +2299,7 @@ test('un bloque y una butaca suelta sin zona heredan la de la banda donde caen',
   api.generarPlano('mixta-ambos', sinZona);
   // La zona de mesas agregada trae su propia zona («Mesas 2»), y es la que heredan.
   assert.deepEqual([api.butacas.find((b) => b.id === 'F1-1-1').zona, api.butacas.find((b) => b.id === 'B1').zona],
-    ['zona1', 'zona1']);
+    ['mesas', 'mesas']);
   // Con zona propia, la suya; y planoDesdeSala solo guarda la propia.
   const conPropia = { ...sinZona,
     bloquesFilas: [{ ...sinZona.bloquesFilas[0], zona: 'general' }],
@@ -2294,7 +2344,7 @@ test('el editor no deja una pieza fuera de toda zona: fijarZonasSueltas le escri
 test('una zona que solo usa una mesa esta en uso; la que solo se hereda, no', () => {
   const api = cargar();
   const { plano } = planoDe(api, 'mixta-ambos');
-  const vip = api.editarZona(api.agregarZona(plano), 'zona1', { nombre: 'VIP', precio: 90000 });
+  const vip = api.editarZona(api.agregarZona(plano), 'zona1', { nombre: 'VIP' });
   assert.equal(api.usosDeZona(vip, 'zona1'), 0);
   const conMesaVip = { ...vip, mesas: vip.mesas.map((m) => (m.id === 'M1' ? { ...m, zona: 'zona1' } : m)) };
   assert.equal(api.usosDeZona(conMesaVip, 'zona1'), 1);
@@ -2310,7 +2360,7 @@ test('mapas version 4: la zona de una mesa y la de una banda de mesas son opcion
                   mesas: plano.mesas.map((m) => (m.id === 'M1' ? { ...m, zona: 'general' } : m)) };
   const mapa = JSON.parse(JSON.stringify(api.mapaDesdePlano('Herencia', nuevo, null)));
   assert.deepEqual([mapa.version, mapa.mesas[0].zona, mapa.mesas[1].zona, mapa.bandas[2].zona],
-    [4, 'general', undefined, 'luneta']);
+    [5, 'general', undefined, 'luneta']);
   const { mapa: leido, errores } = api.validarMapa(mapa);
   assert.equal(errores, undefined);
   api.generarPlano(api.registrarMapa(leido));
@@ -2322,7 +2372,7 @@ test('mapas version 4: la zona de una mesa y la de una banda de mesas son opcion
   // Un mapa de la version 3: sus mesas no traian zona y pasan a heredar la de su banda.
   const viejo = { ...JSON.parse(JSON.stringify(api.mapaDesdePlano('Viejo', plano, null))), version: 3 };
   const leidoViejo = api.validarMapa(viejo).mapa;
-  assert.equal(leidoViejo.version, 4);
+  assert.equal(leidoViejo.version, 5);
   api.generarPlano(api.registrarMapa(leidoViejo));
   assert.equal(api.butacas.find((b) => b.id === 'M1-N1').zona, 'mesas');
 });
@@ -2351,14 +2401,14 @@ test('zonaNuevaParaBanda le da a la banda una zona propia con su nombre', () => 
   const compartida = api.cambiarZonaBanda(plano, 'general', 'luneta');
   const propia = api.zonaNuevaParaBanda(compartida, 'general', 'Luneta');
   // El nombre choca con el de la zona Luneta, asi que se numera.
-  assert.deepEqual([propia.zonas.at(-1), propia.siguienteZona], [{ id: 'zona1', nombre: 'Luneta 2', precio: 0 }, 2]);
+  assert.deepEqual([propia.zonas.at(-1), propia.siguienteZona], [{ id: 'zona1', nombre: 'Luneta 2' }, 2]);
   const sala = api.generarPlano('mixta-ambos', propia);
   assert.equal(sala.bandas.at(-1).nombre, 'Luneta 2');
   assert.equal(api.butacas.find((b) => b.id === 'general-A1').zona, 'zona1');
   assert.equal(api.zonaExclusivaDeBanda(propia, 'general'), 'zona1');
   // El nombre puesto a mano se va: ahora el nombre vive en la zona.
   const conNombre = api.renombrarBanda(compartida, 'general', 'Balcón');
-  assert.equal('nombre' in api.zonaNuevaParaBanda(conNombre, 'general', 'Balcón').bandas.at(-1), false);
+  assert.equal(api.zonaNuevaParaBanda(conNombre, 'general', 'Balcón').bandas.at(-1).nombre, 'Balcón');
   assert.deepEqual(api.zonaNuevaParaBanda(plano, 'fantasma', 'X'), { motivo: 'esa banda ya no existe' });
   let lleno = plano;
   for (let i = 0; i < 37; i++) lleno = api.agregarZona(lleno);
@@ -2698,36 +2748,28 @@ test('la zona y la venta se pueden cambiar en varias piezas a la vez', () => {
 
 // --- Una zona es una banda ----------------------------------------------------------
 
-test('una banda nueva nace con su zona, y un espacio sin ninguna', () => {
+test('bandas nuevas reutilizan zonas fisicas sin crear otras', () => {
   const api = cargar();
   const { plano } = planoDe(api, 'mixta-ambos');
-  // Filas: su zona sale de la que le toca de partida (General), numerada.
-  const conFilas = api.agregarBanda(plano, 'filas');
-  assert.deepEqual([conFilas.bandas.at(-1).zona, conFilas.zonas.at(-1), conFilas.siguienteZona],
-    ['zona1', { id: 'zona1', nombre: 'General 2', precio: 0 }, 2]);
-  // Mesas: la suya sale de la de mesas.
-  const conMesas = api.agregarBanda(conFilas, 'mesas');
-  assert.deepEqual([conMesas.bandas.at(-1).zona, conMesas.zonas.at(-1).nombre], ['zona2', 'Mesas 2']);
-  // Un espacio es un hueco: no da precio a nada, así que nace sin zona.
-  const conEspacio = api.agregarBanda(conMesas, 'espacio');
-  assert.equal('zona' in conEspacio.bandas.at(-1), false);
-  assert.equal(conEspacio.zonas.length, conMesas.zonas.length);
-  // Una franja tampoco, y sus bandas de dentro sí.
+  const filas = api.agregarBanda(plano, 'filas');
+  assert.equal(filas.bandas.at(-1).zona, 'general');
+  assert.deepEqual(filas.zonas, plano.zonas);
+  assert.equal(filas.siguienteZona, plano.siguienteZona);
+  const mesas = api.agregarBanda(filas, 'mesas');
+  assert.deepEqual(mesas.zonas, plano.zonas);
   const { plano: franja, sala } = conFranja(api);
   const dentro = api.agregarBandaEnVertical(franja, sala, 'banda2', 'filas');
-  const banda = api.ubicar(dentro.bandas, 'banda6').item;
-  assert.deepEqual([banda.zona, dentro.zonas.at(-1).nombre], ['zona1', 'General 2']);
-  // La banda se llama como su zona: son la misma cosa.
-  const salaConFilas = api.generarPlano('mixta-ambos', conFilas);
-  assert.equal(salaConFilas.bandas.at(-1).nombre, 'General 2');
+  assert.equal(api.ubicar(dentro.bandas, 'banda6').item.zona, 'general');
+  assert.deepEqual(dentro.zonas, franja.zonas);
+  assert.equal('zona' in api.agregarBanda(mesas, 'espacio').bandas.at(-1), false);
 });
 
-test('eliminar una banda se lleva su zona, salvo que alguien más la use', () => {
+test('eliminar una banda conserva su zona aunque quede sin usos', () => {
   const api = cargar();
   const { plano, sala } = planoDe(api, 'mixta-ambos');
   // La zona de la Luneta es solo suya: se va con ella.
   const sinLuneta = api.eliminarBanda(plano, sala, 'luneta');
-  assert.deepEqual(sinLuneta.zonas.map((z) => z.id), ['mesas', 'general']);
+  assert.deepEqual(sinLuneta.zonas.map((z) => z.id), ['luneta', 'mesas', 'general']);
   assert.deepEqual(plano.zonas.map((z) => z.id), ['luneta', 'mesas', 'general']);   // no toca el de entrada
   // Compartida con otra banda, la zona se queda.
   const compartida = api.cambiarZonaBanda(plano, 'general', 'luneta');

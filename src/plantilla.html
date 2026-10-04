@@ -116,7 +116,8 @@
           <button type="button" class="icono" id="eliminar-mapa" aria-label="Eliminar el mapa guardado" data-tooltip="Eliminar mapa" hidden><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-eliminar-mapa"></use></svg></button>
         </div>
         <button type="button" id="confirmar-zonas-fisicas">Revisar zonas físicas asignadas</button>
-        <p class="pista">El catálogo contiene lugares y precios de referencia; Sin Taquilla asignará las tarifas de venta.</p>
+        <p class="pista">El catálogo contiene ubicación e identidad física. Sin Taquilla proporcionará las tarifas del evento.</p>
+        <p class="pista" id="antecedentes-comerciales" hidden></p>
         <input type="file" id="archivo-mapa" accept=".json,application/json" hidden>
       </div>
     </details>
@@ -159,25 +160,24 @@
             </div>
           </div>
       </details>
-      <!-- Una zona y una banda son lo mismo: cada fila lleva el color, el nombre y el
-           precio de la suya. Al final, las zonas que no son de ninguna banda. -->
       <details class="grupo" open>
-        <summary>Zonas y precios<button type="button" class="icono info-grupo" id="info-zonas" aria-expanded="false" aria-controls="ayuda-de-zonas" aria-label="Cómo funcionan las zonas y los precios" data-tooltip="Información"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button></summary>
-        <div id="ayuda-de-zonas" hidden>
-          <p class="pista">
-            El precio es por lugar, en pesos, y se lo da a todo lo que cae dentro de la banda. Dos
-            bandas con la misma zona comparten precio y numeración; «Zona nueva» le da una propia.
-          </p>
-        </div>
+        <summary>Distribución del plano</summary>
+        <p class="pista">Las bandas organizan el espacio. Sus nombres son independientes de las zonas físicas.</p>
         <ol id="lista-bandas"></ol>
-        <ol class="zonas" id="lista-zonas" hidden aria-label="Zonas sin banda"></ol>
           <div class="rejilla-iconos herramientas">
-            <button type="button" class="icono" id="agregar-zona" aria-label="Agregar una zona nueva, con su espacio" data-tooltip="Zona nueva"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar-zona"></use></svg></button>
             <button type="button" class="icono" id="agregar-banda-filas" aria-label="Agregar una banda de filas al final" data-tooltip="Banda de filas"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar-filas"></use></svg></button>
             <button type="button" class="icono" id="agregar-banda-mesas" aria-label="Agregar una zona de mesas al final" data-tooltip="Zona de mesas"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar-mesas"></use></svg></button>
             <button type="button" class="icono" id="agregar-espacio" aria-label="Agregar un espacio sin zona al final" data-tooltip="Espacio sin zona"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar-espacio"></use></svg></button>
             <button type="button" class="icono" id="agregar-division" aria-label="Agregar una franja con bandas verticales al final" data-tooltip="Franja con bandas verticales"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar-division"></use></svg></button>
           </div>
+      </details>
+      <details class="grupo" open>
+        <summary>Zonas físicas<button type="button" class="icono info-grupo" id="info-zonas" aria-expanded="false" aria-controls="ayuda-de-zonas" aria-label="Cómo funcionan las zonas físicas" data-tooltip="Información"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button></summary>
+        <div id="ayuda-de-zonas" hidden><p class="pista">Las zonas identifican dónde están los lugares. Varias bandas pueden compartir una zona. Los precios y la venta por conjunto se configuran por evento en Sin Taquilla.</p></div>
+        <ol class="zonas" id="lista-zonas" aria-label="Zonas físicas"></ol>
+        <div class="herramientas">
+          <button type="button" class="icono" id="agregar-zona" aria-label="Agregar una zona física" data-tooltip="Zona nueva"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-agregar-zona"></use></svg></button>
+        </div>
       </details>
     </section>
     <details class="grupo" open>
@@ -281,7 +281,7 @@
       </div>
       <div class="resumen-pie">
         <p class="resumen" aria-live="polite">
-          Seleccionadas: <strong id="cuenta">0</strong> · Total <strong id="total">$0.00</strong>
+          Seleccionadas: <strong id="cuenta">0</strong> · <strong id="total">Precio no disponible</strong>
           <span id="vacio">— ninguna butaca seleccionada.</span>
         </p>
         <button type="button" class="icono" id="boton-detalle" aria-expanded="false" aria-controls="panel-detalle"
@@ -336,15 +336,7 @@
           <label class="campo" for="nombre-pieza" data-tooltip="Nombre"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-nombre"></use></svg><span class="solo-lector">Nombre</span></label>
           <input type="text" id="nombre-pieza" maxlength="40" autocomplete="off" disabled placeholder="Ej.: Lateral izquierdo">
         </div>
-        <!-- Solo para mesas: por mesa es un solo precio, la suma de sus lugares libres. -->
-        <div class="herramientas campo-ancho">
-          <label class="campo" for="venta-mesa" data-tooltip="Venta"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mesa-lados"></use></svg><span class="solo-lector">Venta</span></label>
-          <select id="venta-mesa" disabled>
-            <option value="butacas">Venta por butacas</option>
-            <option value="mesa">Venta por mesa</option>
-          </select>
-        </div>
-        <button type="button" class="ancho-completo" id="completa-todas" disabled>Aplicar a todas las mesas</button>
+        <p class="pista">La modalidad de venta se configura por evento en Sin Taquilla.</p>
       </details>
       <details class="grupo" open>
         <summary>Sala</summary>

@@ -4,7 +4,11 @@ Las decisiones nuevas de separación física/comercial y venta agrupada se recog
 [Contrato de recinto, evento y conector](CONTRATO_RECINTO_EVENTO.md), que prevalece en esas
 materias. Las secciones siguientes conservan el contexto histórico de la integración inicial.
 
-**Estado:** contrato de diseño; el selector ya exporta un catálogo validado de lugares. Todavía no hay integración ni migración de datos en Sin Taquilla.
+**Estado actual:** el selector exporta un catálogo físico versión 2 sin precios y mapas versión 5
+con zonas independientes de bandas. Precios y venta completa anteriores son antecedentes de
+migración, no políticas activas. Todavía no hay integración ni migración de datos en Sin Taquilla.
+Las secciones numeradas siguientes describen el contrato histórico; para las decisiones vigentes,
+incluidas mesas y palcos completos, consultar el contrato de recinto, evento y conector.
 **Revisado contra:** este selector en `f9be0cb` y la copia local de Sin Taquilla en
 `cac1455a` (rama `docs/variantes-selector-asientos`, 25 de septiembre de 2026).
 
