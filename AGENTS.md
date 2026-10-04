@@ -209,6 +209,18 @@ comentarios `// ----`.
 
 ## Reglas que no se deben romper
 
+- **Laterales conservan el centro:** `agregarLateral` amplía solo el nivel visible, conserva
+  los IDs de bandas y lugares y materializa el escenario con sus medidas anteriores. Añadir
+  por la izquierda traslada también piezas y regiones existentes; nunca cambia su pertenencia
+  física ni genera lugares. Las bandas centrales conservan el ancho dentro de verticales.
+  La ampliación izquierda cambia el origen común del dibujo en 7 columnas, una excepción
+  deliberada al reanclaje por región de las operaciones habituales sobre bandas.
+  No anidar divisiones dentro de verticales: el formato no lo admite. Los límites se rechazan
+  antes de consumir IDs y las revisiones publicadas requieren borrador.
+- **Pestañas de niveles:** los botones se conservan por ID al actualizar los controles para
+  mantener el foco. Flechas e Inicio/Fin solo mueven el foco; Enter/Espacio activan. Cambiar de
+  piso conserva selección de compra, vista e historial, y no modifica la revisión física.
+
 - **Entrega autónoma, sin dependencias.** `index.html` debe abrirse con doble clic. Las fuentes se
   unen con `construir.mjs`; el script de la aplicación no usa librerías, CDN ni módulos ES. Incluye
   siempre el HTML generado y pasa `node construir.mjs --check`.

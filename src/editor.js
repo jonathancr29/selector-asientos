@@ -1236,6 +1236,7 @@ for (const boton of botonesDeMesa()) {
 
 const vistasDeNiveles = Object.create(null);
 function cambiarNivelVista(id) {
+  if (id === salaActual.nivel) return;
   const plano = planoEditable();
   const clave = tipoActual + ':' + salaActual.nivel;
   vistasDeNiveles[clave] = { ...vista };
@@ -1253,7 +1254,42 @@ function cambiarNivelVista(id) {
   historiales[tipoActual]?.actualizarActual(fotoDelPlano()); actualizarEstadoEdicion();
   anunciar('Nivel ' + salaActual.niveles.find((n) => n.id === id).nombre + '. Se conserva la selección de todo el recinto.');
 }
-document.getElementById('nivel-vista').addEventListener('change', (e) => cambiarNivelVista(e.target.value));
+const pestanasNiveles = document.getElementById('nivel-vista');
+pestanasNiveles.addEventListener('click', (e) => {
+  const tab = e.target.closest('[role="tab"]');
+  if (tab) cambiarNivelVista(tab.dataset.nivel);
+});
+pestanasNiveles.addEventListener('keydown', (e) => {
+  const tabs = [...pestanasNiveles.querySelectorAll('[role="tab"]')];
+  const i = tabs.indexOf(e.target);
+  if (i >= 0 && ['Enter', ' '].includes(e.key)) { e.preventDefault(); tabs[i].click(); return; }
+  if (i < 0 || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+  e.preventDefault();
+  const destino = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 :
+    (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+  for (const tab of tabs) tab.tabIndex = -1;
+  tabs[destino].tabIndex = 0;
+  tabs[destino].focus();
+  tabs[destino].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+});
+
+function actualizarPestanasNiveles() {
+  const ids = new Set(salaActual.niveles.map((n) => n.id));
+  for (const tab of [...pestanasNiveles.children]) if (!ids.has(tab.dataset.nivel)) tab.remove();
+  for (const [i, n] of salaActual.niveles.entries()) {
+    let tab = [...pestanasNiveles.children].find((t) => t.dataset.nivel === n.id);
+    if (!tab) {
+      tab = document.createElement('button'); tab.type = 'button'; tab.setAttribute('role', 'tab');
+      tab.dataset.nivel = n.id; tab.id = 'pestana-' + n.id; tab.setAttribute('aria-controls', 'panel-nivel');
+      pestanasNiveles.appendChild(tab);
+    }
+    if (pestanasNiveles.children[i] !== tab) pestanasNiveles.insertBefore(tab, pestanasNiveles.children[i]);
+    tab.textContent = n.nombre;
+    tab.setAttribute('aria-selected', String(n.id === salaActual.nivel));
+    tab.tabIndex = n.id === salaActual.nivel ? 0 : -1;
+  }
+  document.getElementById('panel-nivel').setAttribute('aria-labelledby', 'pestana-' + salaActual.nivel);
+}
 document.getElementById('agregar-nivel').addEventListener('click', () => {
   const nuevo = agregarNivel(planoEditable(), document.getElementById('nombre-nivel').value);
   if (nuevo.motivo) { anunciar(nuevo.motivo); return; }
@@ -1275,10 +1311,7 @@ document.getElementById('eliminar-nivel').addEventListener('click', () => {
 function actualizarControlesGeometria() {
   if (!salaActual) return;
   const plano = planos[tipoActual] || TIPOS_DE_SALA[tipoActual];
-  const selectorNivel = document.getElementById('nivel-vista');
-  selectorNivel.textContent = '';
-  for (const n of salaActual.niveles) selectorNivel.appendChild(new Option(n.nombre, n.id));
-  selectorNivel.value = salaActual.nivel;
+  actualizarPestanasNiveles();
   document.getElementById('eliminar-nivel').disabled = salaActual.niveles.length === 1;
   const p = piezaPorId(mesaActiva);
   const bloque = piezasActivas.size === 1 && esBloqueFilas(p) ? p : null;
@@ -1314,6 +1347,17 @@ document.getElementById('agregar-region').addEventListener('click', () => {
   planos[tipoActual] = nuevo; regenerar('Región agregada.');
   document.getElementById('region-activa').value = nuevo.regionesLibres.at(-1).id; llenarRegionActiva();
 });
+
+for (const lado of ['izquierdo', 'derecho']) {
+  document.getElementById('agregar-lateral-' + lado).addEventListener('click', () => {
+    const nuevo = agregarLateral(planoEditable(), salaActual, lado);
+    if (nuevo.motivo) { anunciar('No se agregó el lateral: ' + nuevo.motivo); return; }
+    planos[tipoActual] = nuevo;
+    regenerar('Lateral ' + lado + ' agregado. Se conservan el escenario y las pertenencias físicas.');
+    document.getElementById('region-activa').value = nuevo.regionesLibres.at(-1).id;
+    llenarRegionActiva(); reencuadrar();
+  });
+}
 document.getElementById('formulario-region').addEventListener('submit', (e) => {
   e.preventDefault(); const valores = { nombre: document.getElementById('nombre-region').value };
   for (const k of ['x','y','ancho','alto','giro']) valores[k] = Number(document.getElementById('region-' + k).value);

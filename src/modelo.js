@@ -2829,6 +2829,50 @@ function agregarRegion(plano, nombre) {
   return nuevo;
 }
 
+// Amplia solo el piso visible. Cada banda central conserva su ancho y sus IDs;
+// las nuevas verticales vacias reservan el espacio lateral sin generar lugares.
+function agregarLateral(plano, sala, lado) {
+  if (!['izquierdo', 'derecho'].includes(lado)) return { motivo: 'lado desconocido' };
+  if (plano.revisionFisica?.estado === 'publicada') return { motivo: 'crea un borrador para modificar una revisión publicada' };
+  if (sala.alto > 999) return { motivo: 'la región lateral supera el alto máximo de 999 celdas' };
+  if (plano.bandas.some((b) => esDivision(b) && b.verticales.length >= VERTICALES_MAXIMAS)) return { motivo: 'una franja ya tiene el máximo de bandas verticales (' + VERTICALES_MAXIMAS + ')' };
+  const izquierda = lado === 'izquierdo';
+  const ancho = 6;
+  const margen = ancho + 1;
+  const distribucion = distribucionDeSala(sala);
+  const nuevaDistribucion = sala.lienzo ? { bloques: [sala.ancho + margen], pasillos: [] } : {
+    bloques: izquierda ? [ancho, ...distribucion.bloques] : [...distribucion.bloques, ancho],
+    pasillos: izquierda ? [1, ...distribucion.pasillos] : [...distribucion.pasillos, 1],
+  };
+  const motivo = motivoDistribucion(nuevaDistribucion);
+  if (motivo) return { motivo };
+  const nuevo = agregarRegion(plano, 'Lateral ' + lado);
+  if (nuevo.motivo) return nuevo;
+  nuevo.distribucion = nuevaDistribucion;
+  const idBanda = () => 'banda' + nuevo.siguienteBanda++;
+  nuevo.bandas = nuevo.bandas.map((b) => {
+    if (b.tipo === 'escenario') return b;
+    const lateral = { id: idBanda(), nombre: 'Lateral ' + lado, ancho: margen, bandas: [] };
+    if (esDivision(b)) {
+      const colocada = sala.bandas.find((p) => p.id === b.id);
+      const centrales = b.verticales.map((v, i) => ({ ...v, ancho: colocada.verticales[i].anchoOcupado }));
+      return { ...b, verticales: izquierda ? [lateral, ...centrales] : [...centrales, lateral] };
+    }
+    const central = { id: idBanda(), ancho: sala.ancho, bandas: [b] };
+    return { id: idBanda(), tipo: 'division', verticales: izquierda ? [lateral, central] : [central, lateral] };
+  });
+  const dx = izquierda ? margen : 0;
+  for (const { lista } of LISTAS_DE_PIEZAS) nuevo[lista] = nuevo[lista].map((p) => ({ ...p, x: p.x + dx }));
+  const franja = sala.bandas.find((b) => b.tipo === 'escenario');
+  const escenarioAnterior = plano.escenario === undefined ? { x: 1, y: franja?.y || 0, ancho: sala.ancho, alto: franja?.alto || 2 } : plano.escenario;
+  nuevo.escenario = escenarioAnterior ? { ...escenarioAnterior, x: escenarioAnterior.x + dx } : null;
+  const region = nuevo.regionesLibres.at(-1);
+  nuevo.regionesLibres = nuevo.regionesLibres.map((r) => r.id === region.id ? {
+    ...r, x: izquierda ? 1 : sala.ancho + 2, y: 0, ancho, alto: sala.alto,
+  } : { ...r, x: r.x + dx });
+  return nuevo;
+}
+
 // Region grafica: moverla transforma solo los bloques vinculados, no su zona oficial.
 function cambiarRegion(plano, sala, id, valores) {
   const region = (plano.regionesLibres || []).find((r) => r.id === id);

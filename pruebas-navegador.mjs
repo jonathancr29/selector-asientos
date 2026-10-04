@@ -103,7 +103,7 @@ class ProtocoloChrome {
   }
 }
 
-test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad', { timeout: 60000 }, async (t) => {
+test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad', { timeout: 120000 }, async (t) => {
   const chrome = chromeDisponible();
   assert.ok(chrome, 'Chrome o Edge no esta instalado; fija CHROME_BIN');
   let eventoServidor = structuredClone(ejemploEvento.evento);
@@ -418,11 +418,11 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       assert.equal(await protocolo.evaluar('elegidas.size'), 2);
       assert.equal(await protocolo.evaluar('document.querySelectorAll(".butaca").length'), 0);
       await protocolo.evaluar(`(() => {
-        const sel = document.querySelector('#nivel-vista'); sel.value = 'n1'; sel.dispatchEvent(new Event('change'));
+        const elegir = (id) => document.querySelector('#nivel-vista [data-nivel="' + id + '"]').click(); elegir('n1');
         window.__vistaNivel1 = { ...vista };
-        sel.value = 'n2'; sel.dispatchEvent(new Event('change'));
+        elegir('n2');
         document.querySelector('#nombre-mapa').value = 'Tres pisos navegador'; document.querySelector('#guardar-mapa').click();
-        sel.value = 'n1'; sel.dispatchEvent(new Event('change'));
+        elegir('n1');
       })()`);
       assert.equal(await protocolo.evaluar('historiales[tipoActual].tieneCambios()'), false);
       assert.equal(await protocolo.evaluar('elegidas.has(window.__seleccionNivel1) && elegidas.has(window.__seleccionNivel2)'), true);
@@ -476,6 +476,83 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       await protocolo.evaluar(`(() => { const leido = validarMapa(${JSON.stringify(guardado)}); const clave = registrarMapa(leido.mapa); delete planos[clave]; redibujar(clave); cambiarNivelVista('n2'); })()`);
       assert.equal(await protocolo.evaluar('bloquesFilas[0].geometria.tipo'),'arco');
       assert.equal(await protocolo.evaluar('Object.values(bloquesFilas[0].ajustes)[0].giro'),7);
+    });
+
+    await t.test('pestanas de niveles: foco, activacion manual, nombres y seleccion compartida', async () => {
+      await protocolo.evaluar(`(() => {
+        cambiarModo('vista'); document.querySelector('#pestana-n2').focus();
+        window.__compraTabs=[...elegidas]; window.__huellaTabs=huellaRevision(mapaDesdePlano(tipoActual,planoEditable()));
+      })()`);
+      await protocolo.tecla('ArrowRight','ArrowRight',39);
+      assert.equal(await protocolo.evaluar('document.activeElement.id'),'pestana-n3');
+      assert.equal(await protocolo.evaluar('salaActual.nivel'),'n2');
+      await protocolo.tecla('Enter','Enter',13);
+      assert.equal(await protocolo.evaluar('salaActual.nivel'),'n3');
+      assert.equal(await protocolo.evaluar('document.activeElement.id'),'pestana-n3');
+      await protocolo.tecla('ArrowRight','ArrowRight',39);
+      assert.equal(await protocolo.evaluar('document.activeElement.id'),'pestana-n1');
+      await protocolo.tecla('End','End',35);
+      assert.equal(await protocolo.evaluar('document.activeElement.id'),'pestana-n3');
+      await protocolo.tecla('Home','Home',36);
+      await protocolo.tecla(' ','Space',32);
+      assert.equal(await protocolo.evaluar('salaActual.nivel'),'n1');
+      assert.equal(await protocolo.evaluar('document.querySelectorAll("#nivel-vista [aria-selected=true]").length'),1);
+      assert.equal(await protocolo.evaluar('document.querySelector("#panel-nivel").getAttribute("aria-labelledby")'),'pestana-n1');
+      assert.deepEqual(await protocolo.evaluar('[...elegidas]'),await protocolo.evaluar('__compraTabs'));
+      assert.equal(await protocolo.evaluar('huellaRevision(mapaDesdePlano(tipoActual,planoEditable()))'),await protocolo.evaluar('__huellaTabs'));
+      await protocolo.evaluar(`cambiarModo('editor'); document.querySelector('#nombre-nivel').value='Luneta principal'; document.querySelector('#renombrar-nivel').click();`);
+      assert.equal(await protocolo.evaluar('document.querySelector("#pestana-n1").textContent'),'Luneta principal');
+    });
+
+    await t.test('laterales amplian solo el piso actual, conservan lugares y se deshacen y guardan', async () => {
+      await protocolo.evaluar(`(() => {
+        delete planos['mapa-en-blanco']; delete historiales['mapa-en-blanco']; redibujar('mapa-en-blanco'); cambiarModo('editor');
+        document.querySelector('#agregar-bloque').click();
+        planos[tipoActual].escenario={x:8,y:0,ancho:8,alto:2}; regenerar('');
+        window.__anchoLateral=salaActual.ancho;
+        window.__lugaresLateral=butacas.map(b=>({id:b.id,x:b.x,y:b.y,zona:b.zona,fila:b.fila,numero:b.numero}));
+        window.__escenarioLateral={...configDeEscenario(escenario)};
+        document.querySelector('#nombre-nivel').value='Segundo piso'; document.querySelector('#agregar-nivel').click();
+        document.querySelector('#pestana-n1').click(); document.querySelector('#grupo-niveles').open=true;
+        document.querySelector('#agregar-lateral-izquierdo').click(); document.querySelector('#agregar-lateral-derecho').click();
+      })()`);
+      assert.equal(await protocolo.evaluar('salaActual.ancho'),(await protocolo.evaluar('__anchoLateral'))+14);
+      assert.deepEqual(await protocolo.evaluar('butacasVisibles().map(b=>({id:b.id,x:b.x,y:b.y,zona:b.zona,fila:b.fila,numero:b.numero}))'),
+        (await protocolo.evaluar('__lugaresLateral')).map(b=>({...b,x:b.x+7})));
+      assert.deepEqual(await protocolo.evaluar('configDeEscenario(escenario)'),{...(await protocolo.evaluar('__escenarioLateral')),x:15});
+      assert.equal(await protocolo.evaluar('document.querySelector("#region-activa").value'),'region2');
+      assert.equal(await protocolo.evaluar('document.querySelectorAll(".region-libre").length'),2);
+      await protocolo.evaluar(`document.querySelector('#deshacer').click()`);
+      assert.equal(await protocolo.evaluar('salaActual.ancho'),(await protocolo.evaluar('__anchoLateral'))+7);
+      assert.equal(await protocolo.evaluar('planoEditable().regionesLibres.length'),1);
+      await protocolo.evaluar(`document.querySelector('#rehacer').click(); document.querySelector('#pestana-n2').click()`);
+      assert.equal(await protocolo.evaluar('salaActual.ancho'),30);
+      assert.equal(await protocolo.evaluar('planoEditable().regionesLibres.length'),0);
+      await protocolo.evaluar(`document.querySelector('#pestana-n1').click(); document.querySelector('#nombre-mapa').value='Laterales navegador'; document.querySelector('#guardar-mapa').click();`);
+      await protocolo.evaluar(`(() => { const guardado=JSON.parse(localStorage.getItem('selector-asientos:mapas'))['Laterales navegador'];
+        const r=validarMapa(guardado); if(r.errores)throw Error(r.errores.join(';')); const clave=registrarMapa(r.mapa); delete planos[clave]; redibujar(clave); cambiarModo('editor'); })()`);
+      assert.equal(await protocolo.evaluar('salaActual.ancho'),(await protocolo.evaluar('__anchoLateral'))+14);
+      assert.equal(await protocolo.evaluar('planoEditable().regionesLibres.length'),2);
+      await protocolo.enviar('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+      await protocolo.evaluar(`reencuadrar();window.scrollTo(0,0);document.querySelector('#grupo-niveles').open=true;`);
+      if (process.env.SELECTOR_CAPTURA_NIVELES) {
+        const escritorio = await protocolo.enviar('Page.captureScreenshot', { format: 'png' });
+        await writeFile(process.env.SELECTOR_CAPTURA_NIVELES + '-escritorio.png', Buffer.from(escritorio.data, 'base64'));
+      }
+      await protocolo.enviar('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+      await protocolo.evaluar(`reencuadrar();document.querySelector('#pestana-n2').click();document.querySelector('#pestana-n1').click();document.querySelector('#nivel-vista').scrollIntoView({block:'start'});`);
+      assert.equal(await protocolo.evaluar('document.querySelectorAll("#nivel-vista [role=tab]").length'),2);
+      assert.equal(await protocolo.evaluar('document.documentElement.scrollWidth <= innerWidth'),true);
+      if (process.env.SELECTOR_CAPTURA_NIVELES) {
+        const movil = await protocolo.enviar('Page.captureScreenshot', { format: 'png' });
+        await writeFile(process.env.SELECTOR_CAPTURA_NIVELES + '-movil.png', Buffer.from(movil.data, 'base64'));
+      }
+      await protocolo.enviar('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+      await protocolo.evaluar('reencuadrar()');
+      await protocolo.evaluar(`planos[tipoActual].distribucion={bloques:[60],pasillos:[]}; regenerar('');window.__rechazoLateral=JSON.stringify(planoEditable());document.querySelector('#agregar-lateral-derecho').click();`);
+      assert.equal(await protocolo.evaluar('JSON.stringify(planoEditable())'),await protocolo.evaluar('__rechazoLateral'));
+      assert.match(await protocolo.evaluar('document.querySelector("#estado").textContent'),/No se agregó el lateral/);
+      await protocolo.evaluar('Object.values(historiales).forEach(h=>h.marcarGuardado());actualizarEstadoEdicion()');
     });
 
     await t.test('estructura fisica se crea y asigna por teclado sin cambiar seleccion de compra', async () => {
