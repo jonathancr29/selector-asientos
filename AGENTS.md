@@ -229,7 +229,8 @@ comentarios `// ----`.
   zona de cada mesa, bloque y butaca suelta: manda la propia de la pieza, si no la heredada, si no
   `zonaParaFilas`. La pieza generada guarda `zonaEfectiva` (para mostrar) y `zona` solo si es propia
   (es lo que guardan `configDeMesa`, `configDeBloque` y `configDeButaca`): **nunca escribas la zona
-  heredada en el plano**, o dejaría de seguir a su banda. Lo que muestra la zona de una pieza usa
+  heredada en la configuración geométrica de la pieza**. Desde fase 3, la pertenencia inicial
+  se materializa por lugar en el inventario y mover no la cambia. Lo que muestra la zona de una pieza usa
   `zonaEfectiva`, no `zona`.
 - **Ninguna pieza con butacas se queda sin zona:** si no cae dentro de ninguna banda con zona,
   `fijarZonasSueltas` (que llama `regenerar`) le escribe la suya y el aviso lo dice. Si añades una
@@ -271,8 +272,8 @@ comentarios `// ----`.
   La herramienta es `herramienta === 'zona'`; `conButacas()` agrupa las que trabajan sobre butacas.
 - **Bandas y zonas físicas son independientes:** el panel de distribución modifica bandas,
   y el de zonas lista todo el catálogo. Renombrar banda no renombra zona. Agregar o eliminar banda
-  no crea ni elimina zonas; agregar zona no crea espacio. Herencia dinámica se conserva hasta
-  fase 3. No reintroducir precios en el editor: pertenecen al evento de Sin Taquilla.
+  no crea ni elimina zonas; agregar zona no crea espacio. La herencia se materializa al crear;
+  mover conserva pertenencias y reasignar es explícito. No reintroducir precios en el editor.
 - **Venta agrupada:** los ayudantes puros de mesas se conservan para generalizar en fases
   posteriores. No hay controles comerciales en el editor y los mapas nuevos no activan completa.
   El contrato exige reservar conjuntos sin recortarlos automáticamente y tarifas desde el evento.
@@ -300,10 +301,11 @@ comentarios `// ----`.
 - **Las mesas pueden ir en cualquier hueco libre de la sala**, no solo en una zona de mesas.
 - **Ningún cambio de bandas o columnas deja una pieza que no cabe:** `aplicarBandas` genera,
   comprueba con `primeraPiezaQueNoCabe` (mesas y bloques) y, si falla, vuelve al plano anterior.
-- **Id estable, etiqueta calculada.** `id` no depende de la posición: la selección, las reservas y
+- **Id estable, numeración con dos modos.** `id` no depende de la posición: la selección, las reservas y
   las bloqueadas usan solo el id. `fila`, `numero` y `seccion` se recalculan en `numerarFilas` por
-  zona, también para bloques girados. `numerarMesas` asigna el número visible por zona y posición;
-  `M…` sigue siendo el id. Nunca uses la etiqueta como clave.
+  zona en modo automático, también para bloques girados. `numerarMesas` asigna el número visible
+  por zona y posición; en modo oficial, `aplicarNumeracionOficial` repone las etiquetas del inventario.
+  Nunca uses la etiqueta como clave. Los lugares retirados reciben otra identidad si se recrean.
 - **Una mesa respeta los pasillos; un bloque de filas y el escenario no:** en un bloque, los pasillos
   son el espacio entre bloques.
 - **Las bandas son un árbol:** la sala apila bandas; una `division` reparte su ancho en verticales, y
@@ -419,7 +421,7 @@ comentarios `// ----`.
     Un icono de Material Symbols nuevo se añade a `NOTICE`.
   - `tabindex` móvil: una sola parada de tabulación por capa, gestionada en `focusin`.
   - **Disposición:** `<div class="app">` con el `<aside class="lateral">` de la **sala** a la izquierda
-    (Vista, tipo de sala, Mapa, Columnas, Zonas y precios, Leyenda), `<main>` (encabezado, plano,
+    (Vista, tipo de sala, Mapa, Columnas, Bandas, Zonas físicas, Leyenda), `<main>` (encabezado, plano,
     `.barra-estado` y pie) y `<aside id="lateral-configuracion">` con las **piezas** a la derecha
     (Agregar, Editar, Sala), que `cambiarModo` muestra solo en el editor junto con la clase
     `editando` de `#app` (tercera columna de la rejilla). En el editor la columna ancha es la izquierda.
@@ -469,7 +471,8 @@ comentarios `// ----`.
   `mesasOcupadas`).
 - **El historial registra cambios confirmados:** solo después de `regenerar`, nunca al calcular un
   destino o al fallar `aplicarBandas`. Al añadir una acción nueva del editor, pasa por `regenerar`;
-  deshacer debe restaurar también contadores, bloqueos y zonas. La selección de compra y el foco
+  deshacer restaura bloqueos, zonas e identidades anteriores; los contadores nunca retroceden y
+  los IDs descartados permanecen retirados para impedir su reutilización. La selección de compra y el foco
   no forman parte de las versiones. Guardar o exportar marca la versión actual como guardada.
 - **Una zona nueva se estrena en un solo sitio:** `zonaNueva(lista, siguiente, nombreBase)` decide el
   id (`zonaN`, saltando los que ya existen aunque el contador se haya quedado corto) y el nombre
@@ -485,13 +488,13 @@ comentarios `// ----`.
   `usarZonas` antes de `disponerBandas`. No escribas ids de zona fijos (`'luneta'`, `'general'`):
   valida contra la lista y usa `zonaParaFilas` para las filas nuevas. La zona `mesas` es la que toman
   las zonas de mesas que no llevan otra: siempre existe y no se asigna a filas. `usosDeZona` cuenta
-  las bandas (por su zona efectiva) y las piezas con zona **propia**: lo que hereda no cuenta, porque
-  ya lo sujeta su banda. El tope es `ZONAS_MAXIMAS` (40), independiente del número de bandas.
+  las bandas, piezas con zona propia, asignaciones por asiento e inventario materializado. Una
+  zona con lugares físicos no se elimina aunque su banda cambie. El tope es `ZONAS_MAXIMAS` (40).
 - **Aforo máximo: `BUTACAS_MAXIMAS` (20.000).** `validarMapa` lo comprueba con `motivoDeAforo`;
   `aplicarBandas` lo trata como un error de bandas y revierte; los cambios de piezas (agregar,
   transformar, duplicar) pasan por `conTopeDeAforo`, que copia el plano antes y lo restaura si se
   pasa. Si añades una acción que agrega butacas, envuélvela igual. `importarMapa` rechaza archivos de
-  más de `ARCHIVO_MAXIMO` (1 MB) antes de leerlos.
+  más de `ARCHIVO_MAXIMO` (8 MB) antes de leerlos.
 - **Nada de recorridos anidados sobre todas las butacas** en lo que corre al generar (`generarPlano`,
   `numerarFilas`): agrupa antes con un `Map`. Filtrar la lista dentro de otro recorrido llegó a tardar
   6 s con 100.000 butacas; hay una prueba de tiempo que lo detecta.
@@ -507,7 +510,8 @@ comentarios `// ----`.
   descartan los campos desconocidos y se comprueba que las mesas quepan. No se confía en el archivo.
 - **Las bloqueadas son una lista de ids** (`plano.bloqueadas`). `bloqueadasAlFinal` de las plantillas
   solo se usa si no hay lista.
-- **Formato del mapa, versión 5:** sin precios activos ni venta completa activa; conserva
+- **Formato del mapa, versión 6:** inventario físico, numeración oficial, IDs retirados y revisiones.
+  La versión 5 quitó precios activos y venta completa activa; conserva
   antecedentes comerciales validados de mapas antiguos. En versión 4, `zona` es opcional en mesas, bloques y butacas sueltas (sin ella,
   heredan) y las bandas que no son de filas pueden llevarla. La versión 3 añadió `lienzo`,
   `escenario: null` y bandas `espacio` (con `guias`), y el escenario dejó de ser banda obligatoria;
@@ -618,10 +622,12 @@ Y en todos los casos, el repaso de siempre:
      y quitar escenario, guardar y recargar.
    - **Butacas sueltas y formas:** agregar, mover, girar (una barra junto al borde), cambiar tamaño,
      zona y nombre, duplicar, guardar, y elegir una butaca suelta en Previsualizar.
-   - **Herencia de zona:** una mesa o un bloque dentro de una banda toma su zona («Hereda: …» en
-     *Editar*); fijarle una propia y volver a heredar; en un mapa en blanco, agregar una
-     pieza fuera de toda zona y ver el aviso; guardar, recargar y comprobar que lo heredado sigue
-     siguiendo a su banda.
+   - **Herencia de zona:** crear dentro de una banda toma su zona; mover o girar conserva esa
+     pertenencia. Reasignar explícitamente una zona o elegir heredar de la región actual; crear
+     fuera de toda zona muestra el aviso. Guardar y recargar conserva las pertenencias oficiales.
+   - **Identidad y revisión:** retirar y recrear no reutiliza IDs; numerar con letras y ceros
+     iniciales, mover, guardar y abrir conserva etiquetas. Congelar impide editar; nuevo borrador
+     conserva identidades e incrementa la revisión sin sobrescribir la anterior.
    - **Duplicar y nombres:** Duplicar y Ctrl+D en una mesa, un bloque, una banda, una vertical y una
      franja; clic en el fondo para seleccionar bandas (y subir de nivel); renombrar en el panel y con
      doble clic en un subtítulo; que los subtítulos se lean en Previsualizar sin tapar clics.

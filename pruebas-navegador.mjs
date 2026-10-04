@@ -211,7 +211,7 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
     await t.test('dos mesas numero 1 de zonas distintas no se mezclan en el resumen', async () => {
       const resumen = await protocolo.evaluar(`(() => {
         const plano = planoEditable();
-        planos[tipoActual] = { ...plano, mesas: plano.mesas.map(m => m.id === 'M2' ? { ...m, zona: 'luneta' } : m) };
+        planos[tipoActual] = cambiarZonaDePiezas(plano, ['M2'], 'luneta');
         regenerar('');
         elegidas.add('M1-N1');
         elegidas.add('M2-N1');
@@ -327,6 +327,56 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       assert.equal(await protocolo.evaluar('planoEditable().antecedentesComerciales.mesasCompletas[0]'), 'M1');
       assert.equal(await protocolo.evaluar('document.querySelector("#antecedentes-comerciales").hidden'), false);
       assert.equal(await protocolo.evaluar('planoEditable().zonas.every(z => !("precio" in z)) && butacas.every(b => !b.grupo?.completa)'), true);
+    });
+
+    await t.test('numeracion oficial por teclado conserva zona e identidad al mover, guardar y reabrir', async () => {
+      await protocolo.evaluar(`(() => {
+        redibujar('mixta-ninguno'); cambiarModo('editor');
+        window.__confirmOriginal = window.confirm; window.confirm = () => true;
+        const selector = document.querySelector('#modo-numeracion');
+        selector.value = 'oficial'; selector.dispatchEvent(new Event('change', {bubbles:true}));
+        document.querySelector('#herramienta-numeracion').click();
+        document.querySelector('.butaca[data-id="luneta-A1"]').focus();
+      })()`);
+      await protocolo.tecla('Enter', 'Enter', 13);
+      assert.equal(await protocolo.evaluar('document.activeElement.id'), 'fila-oficial');
+      await protocolo.evaluar(`(() => {
+        document.querySelector('#fila-oficial').value = 'AA';
+        document.querySelector('#numero-oficial').value = '03';
+        document.querySelector('#formulario-numeracion').requestSubmit();
+      })()`);
+      assert.match(await protocolo.evaluar('document.querySelector(".butaca[data-id=\\"luneta-A1\\"]").getAttribute("aria-label")'), /fila AA, butaca 03/);
+      await protocolo.evaluar(`(() => {
+        const antes = butacas.find(b => b.id === 'M1-N1'); window.__zonaAntes = antes.zona;
+        const nuevo = cambiarZonaBanda(planoEditable(), 'mesas', 'luneta');
+        nuevo.mesas[0].giro = 180; planos[tipoActual] = nuevo; regenerar('');
+        document.querySelector('#nombre-mapa').value = 'Oficial navegador'; document.querySelector('#guardar-mapa').click();
+      })()`);
+      assert.equal(await protocolo.evaluar('butacas.find(b => b.id === "M1-N1").zona === window.__zonaAntes'), true);
+      assert.equal(await protocolo.evaluar('butacas.find(b => b.id === "luneta-A1").numero'), '03');
+      await protocolo.evaluar('Object.values(historiales).forEach(h => h.marcarGuardado())');
+      const carga = protocolo.evento('Page.loadEventFired'); await protocolo.enviar('Page.reload', {ignoreCache:true}); await carga;
+      await protocolo.evaluar(`redibujar('mapa:Oficial navegador'); cambiarModo('editor');`);
+      assert.deepEqual(await protocolo.evaluar('(() => {const b = butacas.find(b => b.id === "luneta-A1"); return [b.fila,b.numero,b.zona];})()'), ['AA','03','luneta']);
+    });
+
+    await t.test('congelar revision cierra la edicion y nuevo borrador conserva la anterior', async () => {
+      await protocolo.evaluar(`(() => {
+        window.confirm = () => true;
+        document.querySelector('#publicar-revision').click();
+      })()`);
+      assert.equal(await protocolo.evaluar('TIPOS_DE_SALA[tipoActual].revisionFisica.estado'), 'publicada');
+      assert.equal(await protocolo.evaluar('document.querySelector("#modo-editor").disabled && modo === "vista"'), true);
+      await protocolo.evaluar('document.querySelector("#nuevo-borrador").click()');
+      assert.equal(await protocolo.evaluar('modo'), 'editor');
+      assert.equal(await protocolo.evaluar('TIPOS_DE_SALA[tipoActual].revisionFisica.numero'), 2);
+      assert.equal(await protocolo.evaluar('butacas.find(b => b.id === "luneta-A1").numero'), '03');
+      assert.equal(await protocolo.evaluar('JSON.parse(localStorage.getItem("selector-asientos:mapas"))["Oficial navegador"].revisionFisica.estado'), 'publicada');
+      await protocolo.evaluar(`(() => {
+        document.querySelector('#nombre-mapa').value = 'Oficial navegador'; document.querySelector('#guardar-mapa').click();
+      })()`);
+      assert.match(await protocolo.evaluar('document.querySelector("#estado").textContent'), /otro nombre/);
+      assert.equal(await protocolo.evaluar('JSON.parse(localStorage.getItem("selector-asientos:mapas"))["Oficial navegador"].revisionFisica.numero'), 1);
     });
 
     assert.deepEqual(protocolo.excepciones, [], 'errores JavaScript en el navegador');

@@ -200,6 +200,7 @@ function dibujarButacas() {
   porId.clear();
   const bloqueando = modo === 'editor' && herramienta === 'bloquear';
   const pintando = modo === 'editor' && herramienta === 'zona';
+  const numerando = modo === 'editor' && herramienta === 'numeracion';
   const pincel = document.getElementById('zona-pincel').value;
   // En el primer dibujo se injerta un fragmento. En los siguientes, cada id conserva
   // su nodo, foco y lugar en el arbol si no cambio; solo se mueven los que cambiaron
@@ -214,7 +215,7 @@ function dibujarButacas() {
     // palomita si ya es de esa zona. Las ocupadas no cambian de zona.
     const dePincel = pintando && b.zona === pincel;
     const marcada = bloqueando ? b.estado === 'bloqueada' : pintando ? dePincel : elegida;
-    const inactiva = bloqueando || pintando ? b.estado === 'ocupada' : !seleccionable;
+    const inactiva = numerando ? false : bloqueando || pintando ? b.estado === 'ocupada' : !seleccionable;
     const g = anteriores.get(b.id) || nodo('g', { role: 'checkbox' });
     if (!anteriores.has(b.id)) {
       g.dataset.id = b.id;

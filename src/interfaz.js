@@ -743,7 +743,7 @@ svg.addEventListener('pointerdown', (e) => {
       x: e.clientX, y: e.clientY, movido: 0,
       // Con la herramienta de zona o de bloqueo, arrastrar dibuja un rectangulo en vez
       // de mover el plano; Alt lo deshace (zona de siempre, o desbloquear).
-      area: modo === 'editor' && conButacas() && !soloMover ? { desde: celdaBajo(e), alt: e.altKey } : null,
+      area: modo === 'editor' && conButacas() && herramienta !== 'numeracion' && !soloMover ? { desde: celdaBajo(e), alt: e.altKey } : null,
       // Colocando piezas, arrastrar el fondo las selecciona; con Ctrl, se suman a las
       // que ya estaban.
       marco: modo === 'editor' && !conButacas() && !soloMover
@@ -891,6 +891,7 @@ function alternar(elemento) {
   if (modo === 'editor') {        // en el editor no se elige: se coloca o se bloquea
     if (herramienta === 'bloquear' && elemento) alternarBloqueo(elemento);
     if (herramienta === 'zona' && elemento) pintarZona(elemento);
+    if (herramienta === 'numeracion' && elemento) elegirEtiquetaOficial(elemento);
     return;
   }
   const b = elemento && porNodo(elemento);
@@ -1007,7 +1008,7 @@ svg.addEventListener('keydown', (e) => {
   }
   const elemento = e.target.closest('.butaca');
   if (!elemento) return;
-  const porArea = modo === 'editor' && conButacas();
+  const porArea = modo === 'editor' && conButacas() && herramienta !== 'numeracion';
   if (e.key === 'Escape' && areaTeclado) {
     e.preventDefault();
     limpiarArea();

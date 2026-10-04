@@ -179,6 +179,16 @@
   .herramientas button:disabled:hover { background: var(--fondo-control); }
   /* display:flex de .herramientas pisaria el atributo hidden. */
   .herramientas[hidden] { display: none; }
+  .numeracion-oficial label { display: block; margin: 8px 0 4px; font-size: 12px; color: var(--texto-apagado); }
+  .numeracion-oficial input, .numeracion-oficial select, .numeracion-oficial button {
+    box-sizing: border-box; width: 100%; min-height: 30px; padding: 5px 8px;
+    font: inherit; font-size: 12px; color: var(--texto-tenue);
+    background: var(--fondo-control); border: 1px solid var(--borde); border-radius: 6px;
+  }
+  .numeracion-oficial button { margin-top: 8px; cursor: pointer; }
+  .numeracion-oficial button[aria-pressed="true"] { background: var(--acento-fuerte); border-color: var(--acento); }
+  .numeracion-oficial :is(input, select, button):focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
+  .numeracion-oficial :disabled { opacity: .45; cursor: default; }
 
   /* --- Panel de bandas (editor) --- */
   .bandas { margin: 16px 0 0; padding: 10px 12px; background: var(--fondo-panel); border: 1px solid var(--borde-suave); border-radius: 8px; }
@@ -296,7 +306,8 @@
      Las butacas no responden: el clic atraviesa hasta la pieza o el fondo. */
   #plano.editando .butaca { pointer-events: none; }
   /* Con la herramienta de bloqueo, las butacas vuelven a responder. */
-  #plano.editando.bloqueando .butaca, #plano.editando.pintando .butaca { pointer-events: auto; }
+  #plano.editando.bloqueando .butaca, #plano.editando.pintando .butaca, #plano.editando.numerando .butaca { pointer-events: auto; }
+  #plano.numerando .butaca { cursor: pointer; }
   .herramientas input[type="text"] {
     height: 30px; min-width: 210px; padding: 0 9px; font: inherit; font-size: 13px; color: var(--texto-claro);
     background: var(--fondo-plano); border: 1px solid var(--borde); border-radius: 6px;

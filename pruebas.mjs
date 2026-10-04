@@ -82,6 +82,171 @@ test('contrato: referencias cruzadas, fila compartida y conjunto no comprable', 
   assert.deepEqual(conjuntos.map((g) => g.id), esperado.conjuntosComprables);
 });
 
+test('fase 3: mover conserva zona fisica y reasignar cambia solo los lugares pedidos', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const movido = api.cambiarZonaBanda(plano, 'mesas', 'luneta');
+  movido.mesas[0].y += 1;
+  api.generarPlano('mixta-ambos', movido);
+  assert.equal(api.butacas.find((b) => b.id === 'M1-N1').zona, 'mesas');
+  const nuevo = api.reasignarZonaFisica(movido, ['M1-N1'], 'general');
+  api.generarPlano('mixta-ambos', nuevo);
+  assert.equal(api.butacas.find((b) => b.id === 'M1-N1').zona, 'general');
+  assert.equal(api.butacas.find((b) => b.id === 'M1-N2').zona, 'mesas');
+  assert.equal(plano.identidadFisica['M1-N1'].zona, 'mesas');
+  const propia = api.cambiarZonaDePiezas(movido, ['M1'], 'general');
+  api.generarPlano('mixta-ambos', propia);
+  const heredada = api.cambiarZonaDePiezas(propia, ['M1'], '');
+  api.generarPlano('mixta-ambos', heredada);
+  assert.equal(api.butacas.find((b) => b.id === 'M1-N1').zona, 'luneta');
+});
+
+test('fase 3: retirar y volver a ampliar no reutiliza ID ni bloqueo', () => {
+  const api = cargar();
+  let { plano } = planoDe(api, 'mixta-ambos');
+  plano.bloqueadas.push('M1-N2');
+  plano.mesas[0].largo = 1;
+  api.generarPlano('mixta-ambos', plano);
+  plano = api.sincronizarIdentidad(plano);
+  assert.ok(plano.idsRetirados.includes('M1-N2'));
+  plano.mesas[0].largo = 2;
+  api.generarPlano('mixta-ambos', plano);
+  plano = api.sincronizarIdentidad(plano);
+  api.generarPlano('mixta-ambos', plano);
+  const nuevo = api.butacas.find((b) => b.claveDiseno === 'M1-N2');
+  assert.notEqual(nuevo.id, 'M1-N2');
+  assert.equal(nuevo.estado, 'libre');
+  assert.equal(api.butacas.find((b) => b.claveDiseno === 'M1-N1').id, 'M1-N1');
+  const mapa = api.mapaDesdePlano('Retirados', plano, null);
+  const leido = api.validarMapa(JSON.parse(JSON.stringify(mapa)));
+  assert.equal(leido.errores, undefined);
+  assert.deepEqual(leido.mapa.idsRetirados, plano.idsRetirados);
+  assert.equal(leido.mapa.identidadFisica['M1-N2'].id, nuevo.id);
+  api.generarPlano({ ...api.TIPOS_DE_SALA['mixta-ambos'], mesasOcupadas: { M1: ['N2'] } }, plano);
+  assert.equal(api.butacas.find((b) => b.id === nuevo.id).estado, 'libre');
+  plano.bloqueadas.push(nuevo.id);
+  const sala = api.generarPlano('mixta-ambos', plano);
+  const copia = api.duplicarPieza(plano, sala, 'M1');
+  const idCopia = copia.identidadFisica['M7-N2'].id;
+  assert.notEqual(idCopia, nuevo.id);
+  assert.ok(copia.bloqueadas.includes(idCopia));
+});
+
+test('fase 3: etiquetas oficiales sobreviven a giro y guardado; duplicar exige numerar nuevos lugares', () => {
+  const api = cargar();
+  let { plano, sala } = planoDe(api, 'mixta-ambos');
+  plano = api.cambiarNumeracion(plano, 'oficial');
+  plano = api.editarEtiquetaOficial(plano, 'M1-N1', { fila: 'B', numero: '03' });
+  assert.equal(plano.motivo, undefined);
+  assert.equal(plano.identidadFisica['M1-N2'].mesa, 'B');
+  plano.mesas[0].giro = 180;
+  api.generarPlano('mixta-ambos', plano);
+  const lugar = api.butacas.find((b) => b.id === 'M1-N1');
+  assert.deepEqual([lugar.numeroMesa, lugar.numero], ['B', '03']);
+  const salida = api.validarMapa(api.mapaDesdePlano('Oficial', plano, null));
+  assert.equal(salida.errores, undefined);
+  api.generarPlano(api.definicionDeMapa(salida.mapa));
+  assert.equal(api.butacas.find((b) => b.id === 'M1-N1').numero, '03');
+  sala = api.generarPlano('mixta-ambos', plano);
+  const copia = api.duplicarPieza(plano, sala, 'M1');
+  api.generarPlano('mixta-ambos', copia);
+  const exportacion = api.exportarLugaresDeMapa(api.mapaDesdePlano('Copia', copia, null));
+  assert.match((exportacion.errores || []).join(' '), /etiqueta oficial al lugar nuevo/);
+});
+
+test('fase 3: numeracion parcial de mesa conserva su etiqueta y rechaza contradicciones al importar', () => {
+  const api = cargar();
+  let { plano, sala } = planoDe(api, 'mixta-ambos');
+  plano = api.cambiarNumeracion(plano, 'oficial');
+  sala = api.generarPlano('mixta-ambos', plano);
+  plano = api.duplicarPieza(plano, sala, 'M1');
+  api.generarPlano('mixta-ambos', plano);
+  plano = api.sincronizarIdentidad(plano);
+  const idMesa = plano.mesas.at(-1).id;
+  const lugar = api.butacas.find((b) => b.grupo?.id === idMesa);
+  plano = api.editarEtiquetaOficial(plano, lugar.id, { fila: 'Palco B', numero: '01' });
+  const mapa = api.mapaDesdePlano('Parcial', plano, null);
+  const resultado = api.validarMapa(mapa);
+  assert.equal(resultado.errores, undefined);
+  api.generarPlano(api.definicionDeMapa(resultado.mapa));
+  assert.ok(api.butacas.filter((b) => b.grupo?.id === idMesa).every((b) => b.numeroMesa === 'Palco B'));
+  assert.match(api.exportarLugaresDeMapa(resultado.mapa).errores.join(' '), /etiqueta oficial al lugar nuevo/);
+  const clave = Object.keys(mapa.identidadFisica).find((k) => k.startsWith(idMesa + '-') && mapa.identidadFisica[k].id !== lugar.id);
+  mapa.identidadFisica[clave].mesa = 'Otra mesa';
+  assert.match((api.validarMapa(mapa).errores || []).join(' '), /contradictorias/);
+});
+
+test('fase 3: etiquetas duplicadas y controles se rechazan sin modificar el original', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const oficial = api.cambiarNumeracion(plano, 'oficial');
+  const antes = JSON.stringify(oficial);
+  assert.match(api.editarEtiquetaOficial(oficial, 'luneta-A2', { fila: 'a', numero: '1' }).motivo, /otro lugar/);
+  assert.match(api.editarEtiquetaOficial(oficial, 'luneta-A2', { fila: 'A', numero: '\n' }).motivo, /etiquetas/);
+  assert.equal(JSON.stringify(oficial), antes);
+  assert.match(api.editarEtiquetaOficial(plano, 'luneta-A2', { fila: 'A', numero: '5' }).motivo, /activa/);
+});
+
+test('fase 3: revision congelada verifica integridad y nuevo borrador conserva identidades', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const publicado = api.publicarRevisionFisica(api.mapaDesdePlano('Revision', plano, null));
+  assert.equal(publicado.errores, undefined);
+  assert.equal(publicado.mapa.revisionFisica.estado, 'publicada');
+  assert.equal(api.validarMapa(JSON.parse(JSON.stringify(publicado.mapa))).errores, undefined);
+  assert.equal(publicado.catalogo.revision.huella, publicado.mapa.revisionFisica.huella);
+  const alterado = JSON.parse(JSON.stringify(publicado.mapa));
+  alterado.zonas[0].nombre = 'Alterada';
+  assert.match((api.validarMapa(alterado).errores || []).join(' '), /publicada fue modificada/);
+  const otraRevision = JSON.parse(JSON.stringify(publicado.mapa));
+  otraRevision.revisionFisica.numero++;
+  assert.match((api.validarMapa(otraRevision).errores || []).join(' '), /publicada fue modificada/);
+  const borrador = api.nuevaRevisionFisica(publicado.mapa);
+  assert.equal(borrador.revisionFisica.numero, 2);
+  assert.equal(borrador.revisionFisica.estado, 'borrador');
+  assert.equal(borrador.revisionFisica.huella, undefined);
+  assert.deepEqual(borrador.identidadFisica, publicado.mapa.identidadFisica);
+  assert.equal(publicado.mapa.revisionFisica.numero, 1);
+});
+
+test('fase 3: inventario importado no admite IDs retirados, registros ausentes ni zonas desconocidas', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const mapa = api.mapaDesdePlano('Inventario', plano, null);
+  const probar = (mutar) => { const m = JSON.parse(JSON.stringify(mapa)); mutar(m); return api.validarMapa(m).errores?.join(' '); };
+  assert.match(probar((m) => { m.idsRetirados = ['luneta-A1']; }), /retirado/);
+  assert.match(probar((m) => { delete m.identidadFisica['luneta-A1']; }), /no coincide/);
+  assert.match(probar((m) => { m.identidadFisica['luneta-A1'].zona = 'desconocida'; }), /identidad física inválida/);
+  assert.match(probar((m) => { m.identidadFisica['luneta-A2'].id = 'luneta-A1'; }), /repetido/);
+  assert.match(probar((m) => { m.revisionFisica.numero = 0; }), /revisión física/);
+});
+
+test('fase 3: deshacer restaura lugares pero una accion nueva no reutiliza los descartados', () => {
+  const api = cargar();
+  const { plano, sala } = planoDe(api, 'mixta-ambos');
+  const copia = api.duplicarPieza(plano, sala, 'M1');
+  const restaurado = api.conciliarIdentidadAlRestaurar(copia, plano);
+  assert.ok(restaurado.idsRetirados.includes('M7-N1'));
+  assert.equal(restaurado.siguiente, 8);
+  api.generarPlano('mixta-ambos', restaurado);
+  const otra = api.duplicarPieza(restaurado, sala, 'M1');
+  assert.equal(otra.mesas.at(-1).id, 'M8');
+  const rehacer = api.conciliarIdentidadAlRestaurar(restaurado, copia);
+  assert.ok(rehacer.identidadFisica['M7-N1']);
+  assert.ok(!rehacer.idsRetirados.includes('M7-N1'));
+});
+
+test('fase 3: reasignar por area modifica pertenencias materializadas sin mover ni renombrar IDs', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const antes = api.butacas.find((b) => b.id === 'luneta-A1');
+  const resultado = api.asignarZonaEnArea(plano, api.butacas, api.areaDeCeldas({ x: antes.x, y: antes.y }, { x: antes.x, y: antes.y }), 'general');
+  api.generarPlano('mixta-ambos', resultado.plano);
+  const despues = api.butacas.find((b) => b.id === antes.id);
+  assert.deepEqual([despues.id, despues.x, despues.y, despues.zona], [antes.id, antes.x, antes.y, 'general']);
+  assert.equal(api.butacas.find((b) => b.id === 'luneta-A2').zona, 'luneta');
+});
+
 test('historial: deshacer, rehacer y cambios respecto al guardado', () => {
   const { crearHistorial } = cargar();
   const estado = (n) => ({ plano: String(n), firma: String(n) });
@@ -652,7 +817,7 @@ test('un mapa guarda el diseño y las bloqueadas, pero no la ocupacion', () => {
   const mapa = api.mapaDesdePlano('Salón Jardín', editado, '2026-09-16T18:30:00Z', ids);
 
   assert.equal(mapa.formato, api.FORMATO_MAPA);
-  assert.equal(mapa.version, 5);
+  assert.equal(mapa.version, 6);
   assert.deepEqual(mapa.distribucion, { bloques: [4, 4, 4], pasillos: [1, 1] });
   assert.equal(mapa.pasillos, undefined);
   const texto = JSON.stringify(mapa);
@@ -694,7 +859,7 @@ test('validarMapa rechaza archivos que no son mapas o traen datos no validos', (
   assert.deepEqual(api.validarMapa(null).errores, ['el archivo no contiene un mapa']);
   assert.deepEqual(api.validarMapa([1, 2]).errores, ['el archivo no contiene un mapa']);
   assert.deepEqual(con((m) => { m.formato = 'otra-cosa'; }), ['no es un mapa de este selector de asientos']);
-  assert.deepEqual(con((m) => { m.version = 6; }), ['versión de mapa no compatible (6)']);
+  assert.deepEqual(con((m) => { m.version = 7; }), ['versión de mapa no compatible (7)']);
   assert.ok(con((m) => { m.nombre = '   '; }).includes('el nombre debe tener entre 1 y 80 caracteres'));
   assert.ok(con((m) => { m.distribucion.pasillos = [1]; }).includes('columnas: con 3 bloques hacen falta 2 anchos de pasillo'));
   assert.ok(con((m) => { delete m.distribucion; }).includes('columnas: faltan los bloques o los pasillos'));
@@ -911,7 +1076,7 @@ test('un mapa guarda las columnas y un mapa de la version 1 se sigue leyendo', (
   delete viejo.distribucion;
   const { mapa: convertido, errores } = api.validarMapa(viejo);
   assert.equal(errores, undefined);
-  assert.equal(convertido.version, 5);
+  assert.equal(convertido.version, 6);
   assert.deepEqual(convertido.distribucion, { bloques: [4, 9], pasillos: [1] });
   assert.equal(convertido.pasillos, undefined);
 });
@@ -1089,7 +1254,7 @@ test('los bloques se guardan en el mapa, con nombre propio, y se validan al leer
   assert.ok(con((m) => { m.bloquesFilas[0].giro = 45; }).includes('F1: giro no válido'));
   assert.deepEqual(con((m) => { m.bloquesFilas[0].y = 2; }), ['Bloque 1 choca con la fila A de Luneta']);
   // Un mapa sin bloques (los anteriores) sigue siendo valido.
-  assert.equal(con((m) => { delete m.bloquesFilas; delete m.siguienteBloque; }).length, 0);
+  assert.equal(con((m) => { m.version = 5; delete m.bloquesFilas; delete m.siguienteBloque; }).length, 0);
 });
 
 test('letraDeFila sigue con AA, AB... despues de la Z', () => {
@@ -1476,8 +1641,8 @@ test('renombrar bandas y verticales: se guarda, se limpia y sobrevive al cambio 
   const salaNueva = api.generarPlano('mixta-ambos', nuevo);
   assert.equal(salaNueva.bandas.at(-1).verticales[1].nombre, 'Palcos derechos');
   assert.equal(api.ubicar(salaNueva.bandas, 'general').item.nombre, 'Gradas');
-  // La etiqueta de las butacas sigue siendo la de la zona.
-  assert.equal(etiqueta(api, 'general-A1'), 'Luneta D1');
+  // Cambiar el contenedor no reasigna las pertenencias ya resueltas.
+  assert.equal(etiqueta(api, 'general-A1'), 'General A1');
   // planoDesdeSala conserva los nombres propios, no los de por defecto.
   const extraido = api.planoDesdeSala('mixta-ambos', salaNueva);
   assert.deepEqual([extraido.bandas[3].nombre, extraido.bandas[4].nombre, extraido.bandas[4].verticales[1].nombre],
@@ -1626,7 +1791,7 @@ test('mapas version 3: lienzo, sin escenario y espacios con guias, y se validan 
   const { plano } = conLienzo(api, (p) => api.agregarBanda(api.alternarGuias(p, 'espacio'), 'espacio', 20));
   const mapa = JSON.parse(JSON.stringify(api.mapaDesdePlano('Salón de eventos', plano, null)));
   assert.deepEqual([mapa.version, mapa.lienzo, mapa.escenario, mapa.bandas],
-    [5, true, null, [{ id: 'espacio', tipo: 'espacio', alto: 10, guias: true }, { id: 'banda1', tipo: 'espacio', alto: 4 }]]);
+    [6, true, null, [{ id: 'espacio', tipo: 'espacio', alto: 10, guias: true }, { id: 'banda1', tipo: 'espacio', alto: 4 }]]);
   const { mapa: leido, errores } = api.validarMapa(mapa);
   assert.equal(errores, undefined);
   assert.deepEqual([leido.lienzo, leido.escenario, leido.bandas[0].guias], [true, null, true]);
@@ -1753,7 +1918,7 @@ test('planoDesdeSala y los mapas guardan formas, butacas sueltas y sus contadore
   assert.ok(con((m) => { m.butacasSueltas[0].id = 'F1'; }).includes('butaca suelta 1: id no válido o repetido'));
   assert.deepEqual(con((m) => { m.butacasSueltas[0].x = 2; m.butacasSueltas[0].y = 0; }), ['Barra libre choca con la butaca A1 de General']);
   // Sin las listas (mapas anteriores), vacias; los contadores no bajan de lo que existe.
-  const viejo = api.validarMapa({ ...mapa, formas: undefined, butacasSueltas: undefined, siguienteForma: undefined });
+  const viejo = api.validarMapa({ ...mapa, version: 5, formas: undefined, butacasSueltas: undefined, siguienteForma: undefined });
   assert.deepEqual([viejo.mapa.formas, viejo.mapa.butacasSueltas, viejo.mapa.siguienteForma], [[], [], 1]);
   const bajo = api.validarMapa({ ...mapa, siguienteForma: 1 });
   assert.equal(bajo.mapa.siguienteForma, 5);
@@ -1766,6 +1931,7 @@ test('planoDesdeSala y los mapas guardan formas, butacas sueltas y sus contadore
 const mapaDeFilas = (api, n) => {
   const { plano } = planoDe(api, 'mapa-en-blanco');
   const mapa = JSON.parse(JSON.stringify(api.mapaDesdePlano('Grande', plano, null)));
+  mapa.version = 5; // Archivo anterior sin inventario materializado: valida la migracion y el aforo.
   mapa.distribucion = { bloques: [40], pasillos: [] };
   mapa.bandas = Array.from({ length: n }, (_, i) => ({ id: 'b' + i, tipo: 'filas', zona: 'general', filas: api.FILAS_MAXIMAS }));
   return mapa;
@@ -1838,7 +2004,7 @@ test('migracion v1-v4 conserva identidad y antecedentes sin activar tarifas ni c
     const esperado = plano.mesas.map((m) => [m.id, m.x, m.y]);
     const salida = api.validarMapa(viejo);
     assert.equal(salida.errores, undefined);
-    assert.equal(salida.mapa.version, 5);
+    assert.equal(salida.mapa.version, 6);
     assert.deepEqual(salida.mapa.mesas.map((m) => [m.id, m.x, m.y]), esperado);
     assert.ok(salida.mapa.zonas.every((z) => !('precio' in z)));
     assert.ok(salida.mapa.mesas.every((m) => !('completa' in m)));
@@ -1851,7 +2017,7 @@ test('migracion v1-v4 conserva identidad y antecedentes sin activar tarifas ni c
     const reexportado = api.mapaDesdePlano('Anterior', api.planoDesdeSala('mapa:Anterior', sala), null);
     assert.deepEqual(api.validarMapa(reexportado).mapa, salida.mapa);
     const catalogo = api.exportarLugaresDeMapa(reexportado).catalogo;
-    assert.equal(catalogo.version, 2);
+    assert.equal(catalogo.version, 3);
     assert.ok(catalogo.lugares.every((l) => !('preview_price_cents' in l) && !('preview_currency' in l)));
     assert.equal('antecedentesComerciales' in catalogo, false);
   }
@@ -1905,7 +2071,8 @@ test('agregar y eliminar zonas: las nuevas sirven para filas, las usadas no se e
   // vuelta a crear): el id salta los que ya existen en vez de repetir uno vivo.
   const atrasado = api.agregarZona({ ...conVip, siguienteZona: 1 });
   assert.deepEqual(atrasado.zonas.map((z) => z.id).filter((id) => id.startsWith('zona')), ['zona1', 'zona2']);
-  const vip = api.cambiarZonaBanda(conVip, 'luneta', 'zona1');
+  const vip = api.reasignarZonaFisica(api.cambiarZonaBanda(conVip, 'luneta', 'zona1'),
+    api.butacas.filter((b) => b.banda === 'luneta').map((b) => b.id), 'zona1');
   api.generarPlano('mixta-ambos', vip);
   assert.equal(etiqueta(api, 'luneta-C12'), 'VIP C12');
 
@@ -1916,7 +2083,9 @@ test('agregar y eliminar zonas: las nuevas sirven para filas, las usadas no se e
   // Cuentan tambien las bandas dentro de verticales, los bloques y las butacas sueltas.
   assert.match(api.eliminarZona({ ...vip, bloquesFilas: [bloque('F1', 1, 14, { zona: 'luneta' })] }, 'luneta').motivo, /en uso/);
   assert.match(api.eliminarZona({ ...vip, butacasSueltas: [{ id: 'B1', tipo: 'butaca', x: 1, y: 14, zona: 'luneta', giro: 0 }] }, 'luneta').motivo, /en uso/);
-  const soloGeneral = api.eliminarZona(api.eliminarZona(api.cambiarZonaBanda(plano, 'luneta', 'general'), 'luneta'), 'general');
+  const todoGeneral = api.reasignarZonaFisica(api.cambiarZonaBanda(plano, 'luneta', 'general'),
+    Object.values(plano.identidadFisica).filter((f) => f.zona === 'luneta').map((f) => f.id), 'general');
+  const soloGeneral = api.eliminarZona(api.eliminarZona(todoGeneral, 'luneta'), 'general');
   // La ultima zona de filas no se elimina (aunque ademas este en uso).
   assert.deepEqual(soloGeneral, { motivo: 'debe quedar al menos una zona para filas' });
   assert.deepEqual(api.eliminarZona(api.agregarZona(plano), 'general'), { motivo: 'General está en uso (1 banda o pieza); cámbialas de zona antes' });
@@ -1943,7 +2112,7 @@ test('los mapas guardan y validan las zonas; sin ellas, las de siempre', () => {
   const { mapa: leido, errores } = api.validarMapa(mapa);
   assert.equal(errores, undefined);
   const sala = api.generarPlano(api.registrarMapa(leido));
-  assert.deepEqual([sala.bandas.at(-1).nombre, etiqueta(api, 'general-A1')], ['VIP', 'VIP A1']);
+  assert.deepEqual([sala.bandas.at(-1).nombre, etiqueta(api, 'general-A1')], ['VIP', 'General A1']);
   assert.deepEqual(api.planoDesdeSala(api.registrarMapa(leido), sala).zonas, mapa.zonas);
 
   const con = (cambio) => { const m = JSON.parse(JSON.stringify(mapa)); cambio(m); return api.validarMapa(m).errores || []; };
@@ -1955,7 +2124,7 @@ test('los mapas guardan y validan las zonas; sin ellas, las de siempre', () => {
   assert.ok(con((m) => { m.zonas = [{ id: 'mesas', nombre: 'Mesas' }]; }).includes('falta una zona para filas'));
   assert.ok(con((m) => { m.bandas[1].zona = 'mesas'; }).includes('banda 2: zona desconocida'));
   // Sin zonas en el archivo (mapas anteriores): Luneta, Mesas y General de siempre.
-  const viejo = api.validarMapa({ ...mapa, zonas: undefined, bandas: mapa.bandas.map((b) => (b.zona === 'zona1' ? { ...b, zona: 'general' } : b)) });
+  const viejo = api.validarMapa({ ...mapa, version: 5, zonas: undefined, bandas: mapa.bandas.map((b) => (b.zona === 'zona1' ? { ...b, zona: 'general' } : b)) });
   assert.deepEqual(viejo.mapa.zonas.map((z) => z.nombre), ['Luneta', 'Mesas', 'General']);
   assert.ok(api.validarMapa({ ...mapa, zonas: undefined }).errores.includes('banda 4: zona desconocida'));
 });
@@ -2189,7 +2358,7 @@ test('una zona asignada a asientos esta en uso y no se elimina', () => {
 test('las mesas visibles empiezan en 1 por zona sin cambiar los ids internos', () => {
   const api = cargar();
   const { plano } = planoDe(api, 'mixta-ambos');
-  const separado = { ...plano, mesas: plano.mesas.map((m) => m.id === 'M2' ? { ...m, zona: 'luneta' } : m) };
+  const separado = api.cambiarZonaDePiezas(plano, ['M2'], 'luneta');
   api.generarPlano('mixta-ambos', separado);
   assert.deepEqual(['M1', 'M2', 'M3'].map((id) => {
     const mesa = api.mesas.find((m) => m.id === id);
@@ -2228,8 +2397,7 @@ test('el catalogo exige zona fisica confirmada y exporta identidades y etiquetas
 test('el catalogo rechaza nombres provisionales y mesas de zonas mezcladas', () => {
   const api = cargar();
   const { plano } = planoDe(api, 'mixta-ambos');
-  const provisional = api.agregarZona(plano);
-  provisional.mesas[0].zona = 'zona1';
+  const provisional = api.cambiarZonaDePiezas(api.agregarZona(plano), ['M1'], 'zona1');
   const mapa = (p) => api.mapaDesdePlano('Recinto', p, null);
   assert.match(api.exportarLugaresDeMapa(mapa(provisional)).errores.join(' '), /nombre definitivo/);
   const pintado = api.asignarZonaAsiento(plano, 'M1-N1', 'luneta', 'mesas');
@@ -2268,7 +2436,7 @@ test('duplicar copia las zonas de los asientos, y el mapa las guarda y valida', 
 
 // --- Herencia de zona por banda -----------------------------------------------------
 
-test('las mesas heredan la zona de su banda, y la suya manda sobre ella', () => {
+test('las mesas conservan la herencia inicial y la reasignacion fisica es explicita', () => {
   const api = cargar();
   const { plano } = planoDe(api, 'mixta-ambos');
   // Sin zona propia, los lugares de una mesa cuestan lo que su banda: la zona de mesas.
@@ -2276,12 +2444,15 @@ test('las mesas heredan la zona de su banda, y la suya manda sobre ella', () => 
   assert.equal('zona' in plano.mesas[0], false);
   assert.equal(api.butacas.find((b) => b.id === 'M1-N1').zona, 'mesas');
   // La banda pasa a Luneta y sus mesas con ella, sin tocar ninguna mesa.
-  const deLuneta = api.cambiarZonaBanda(plano, 'mesas', 'luneta');
+  const soloContenedor = api.cambiarZonaBanda(plano, 'mesas', 'luneta');
+  api.generarPlano('mixta-ambos', soloContenedor);
+  assert.equal(api.butacas.find((b) => b.id === 'M1-N1').zona, 'mesas');
+  const deLuneta = api.cambiarZonaDePiezas(soloContenedor, plano.mesas.map((m) => m.id), 'luneta');
   api.generarPlano('mixta-ambos', deLuneta);
   assert.deepEqual(api.mesas.map((m) => m.zonaEfectiva), api.mesas.map(() => 'luneta'));
   assert.equal(api.butacas.find((b) => b.id === 'M1-N1').zona, 'luneta');
   // Una mesa con zona propia no hereda: se queda en la suya.
-  const propia = { ...deLuneta, mesas: deLuneta.mesas.map((m) => (m.id === 'M1' ? { ...m, zona: 'general' } : m)) };
+  const propia = api.cambiarZonaDePiezas(deLuneta, ['M1'], 'general');
   api.generarPlano('mixta-ambos', propia);
   assert.equal(api.butacas.find((b) => b.id === 'M1-N1').zona, 'general');
   assert.equal(api.butacas.find((b) => b.id === 'M2-N1').zona, 'luneta');
@@ -2359,8 +2530,9 @@ test('mapas version 4: la zona de una mesa y la de una banda de mesas son opcion
   const nuevo = { ...api.cambiarZonaBanda(plano, 'mesas', 'luneta'),
                   mesas: plano.mesas.map((m) => (m.id === 'M1' ? { ...m, zona: 'general' } : m)) };
   const mapa = JSON.parse(JSON.stringify(api.mapaDesdePlano('Herencia', nuevo, null)));
+  mapa.version = 4; // Los archivos viejos resuelven herencia antes de materializar el inventario.
   assert.deepEqual([mapa.version, mapa.mesas[0].zona, mapa.mesas[1].zona, mapa.bandas[2].zona],
-    [5, 'general', undefined, 'luneta']);
+    [4, 'general', undefined, 'luneta']);
   const { mapa: leido, errores } = api.validarMapa(mapa);
   assert.equal(errores, undefined);
   api.generarPlano(api.registrarMapa(leido));
@@ -2372,7 +2544,7 @@ test('mapas version 4: la zona de una mesa y la de una banda de mesas son opcion
   // Un mapa de la version 3: sus mesas no traian zona y pasan a heredar la de su banda.
   const viejo = { ...JSON.parse(JSON.stringify(api.mapaDesdePlano('Viejo', plano, null))), version: 3 };
   const leidoViejo = api.validarMapa(viejo).mapa;
-  assert.equal(leidoViejo.version, 5);
+  assert.equal(leidoViejo.version, 6);
   api.generarPlano(api.registrarMapa(leidoViejo));
   assert.equal(api.butacas.find((b) => b.id === 'M1-N1').zona, 'mesas');
 });
@@ -2404,7 +2576,7 @@ test('zonaNuevaParaBanda le da a la banda una zona propia con su nombre', () => 
   assert.deepEqual([propia.zonas.at(-1), propia.siguienteZona], [{ id: 'zona1', nombre: 'Luneta 2' }, 2]);
   const sala = api.generarPlano('mixta-ambos', propia);
   assert.equal(sala.bandas.at(-1).nombre, 'Luneta 2');
-  assert.equal(api.butacas.find((b) => b.id === 'general-A1').zona, 'zona1');
+  assert.equal(api.butacas.find((b) => b.id === 'general-A1').zona, 'general');
   assert.equal(api.zonaExclusivaDeBanda(propia, 'general'), 'zona1');
   // El nombre puesto a mano se va: ahora el nombre vive en la zona.
   const conNombre = api.renombrarBanda(compartida, 'general', 'Balcón');

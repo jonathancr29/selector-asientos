@@ -1,7 +1,8 @@
 # Contrato de recinto, evento y conector
 
-Estado: fase 1, decisiones acordadas. Este documento distingue requisitos futuros de lo
-implementado; no anuncia niveles, palcos, numeracion explicita ni conexion de venta disponibles.
+Estado: contrato acordado en fase 1. La fase 3 implementa identidad por lugar, numeracion
+explicita y revisiones locales. Niveles, sectores, entidades de fila, palcos y conexion de venta
+siguen pendientes. Este documento distingue requisitos futuros de lo implementado.
 Complementa el contrato de lugares para Sin Taquilla y prevalece sobre sus reglas comerciales
 anteriores cuando haya diferencias. Los nombres de campos siguientes son un contrato logico,
 no tablas SQL ni endpoints definitivos.
@@ -36,7 +37,7 @@ Numeracion automatica y oficial explicita son modos distintos. La automatica cal
 la explicita conserva las oficiales, incluidos pares, impares y saltos. El cambio de modo muestra
 las etiquetas afectadas y requiere una accion deliberada. Mover, girar, dividir o regenerar no
 cambia etiquetas explicitas ni IDs. La unicidad se verifica sobre la ubicacion completa, no
-solo sobre fila y numero. La numeracion automatica actual por zona sigue vigente hasta fase 3.
+solo sobre fila y numero. Desde fase 3 se puede elegir numeracion automatica u oficial explicita.
 
 Una revision publicada es inmutable. El evento conserva su revision, incluso tras cancelaciones.
 La correspondencia entre revisiones es una operacion explicita; conservar IDs no autoriza a
@@ -47,8 +48,8 @@ migrar un evento con ventas. Cada boleto congela ubicacion completa y precio his
 La herencia de zona ayuda a crear o reasignar: asiento, pieza, banda mas interna, asignacion
 explicita de respaldo con aviso. En el futuro movimiento visual conserva pertenencias oficiales;
 reasignarlas es otra accion. Solo se avisa de contradicciones con regiones que tengan una relacion
-fisica definida. En fase 2 se conserva la herencia dinamica existente; congelar pertenencias al
-mover requiere la fase 3 y no debe fingirse implementado.
+fisica definida. Desde fase 3 se materializa la zona inicial por lugar; mover conserva esa
+pertenencia y reasignarla es explicito. Las otras pertenencias se incorporaran con sus entidades.
 
 Cada nivel admite regiones independientes. Centro y laterales son accesos rapidos, no limites
 del formato. La geometria admite coordenadas fraccionarias, bloques con angulo, filas rectas y
@@ -118,7 +119,8 @@ sin activarlos. Guardar y reabrir conserva esos antecedentes, pero el catalogo f
 Asignaciones individuales antiguas sin confirmacion siguen requiriendo revision fisica.
 No fusionar zonas por compartir tarifa ni adivinar ubicacion desde precios.
 
-Fase 2 separa paneles y retira tarifas. Niveles, sectores, filas oficiales, palcos, geometria y
+Fase 2 separa paneles y retira tarifas. Fase 3 añade etiquetas oficiales, identidad por lugar
+y revisiones locales. Niveles, sectores, entidades de fila, palcos, geometria y
 venta integrada son fases posteriores. La ocupacion de ejemplo no es estado comercial real.
 
 ## 8. Casos de aceptacion

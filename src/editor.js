@@ -9,7 +9,7 @@ let mesaActiva = null;     // id de la mesa sobre la que actuan los botones y at
 const piezasActivas = new Set();
 let herramienta = 'mesas'; // en el editor: 'mesas' (colocar), 'bloquear' o 'zona' (butacas)
 // Las herramientas que trabajan sobre butacas: las butacas responden y se recorren.
-const conButacas = () => herramienta === 'bloquear' || herramienta === 'zona';
+const conButacas = () => ['bloquear', 'zona', 'numeracion'].includes(herramienta);
 let bandaActiva = null;    // id de la banda, vertical o franja seleccionada (excluye a mesaActiva)
 let tipoActual, salaActual;
 // Plano guardado por tipo de sala: { 'mixta-ambos': { bandas, mesas, siguiente,
@@ -118,6 +118,7 @@ const tipoDePieza = (p) => (esEscenario(p) ? 'escenario' : esBloqueFilas(p) ? 'b
 const aplica = (accion, p) => ACCIONES_DE[tipoDePieza(p)].has(accion);
 
 function actualizarControles() {
+  actualizarIdentidadControles();
   const m = mesaActiva && piezaPorId(mesaActiva);
   const varias = piezasActivas.size > 1;
   const todas = [...piezasActivas].map((id) => piezaPorId(id)).filter(Boolean);
@@ -299,14 +300,18 @@ function actualizarEstadoEdicion() {
 }
 
 function restaurarEdicion(accion) {
+  const actual = planoEditable();
   const historial = historiales[tipoActual];
   const estado = historial && historial[accion]();
   if (!estado) return;
   if (estado.plano === null) delete planos[tipoActual];
-  else planos[tipoActual] = JSON.parse(estado.plano);
+  else planos[tipoActual] = conciliarIdentidadAlRestaurar(actual, JSON.parse(estado.plano));
   restaurandoHistorial = true;
   try {
     regenerar(accion === 'deshacer' ? 'Último cambio deshecho.' : 'Cambio rehecho.');
+    if (planos[tipoActual]) {
+      historial.actualizarActual(fotoDelPlano()); actualizarEstadoEdicion();
+    }
   } finally {
     restaurandoHistorial = false;
   }
@@ -326,6 +331,10 @@ const fotoDeButacas = () => butacas.map((b) => ({ id: b.id, estado: b.estado }))
 // 'antes' se puede pasar hecho cuando el plano ya se genero para validarlo.
 function regenerar(mensaje, antes = fotoDeButacas()) {
   salaActual = generarPlano(tipoActual, planos[tipoActual]);
+  if (planos[tipoActual]) {
+    planos[tipoActual] = sincronizarIdentidad(planos[tipoActual]);
+    salaActual = generarPlano(tipoActual, planos[tipoActual]);
+  }
   // Una pieza que quedo fuera de toda banda con zona no tiene de quien heredar: se le
   // escribe la suya y se anuncia la ubicacion fisica resuelta.
   let sueltas = { fijadas: [] };
@@ -360,6 +369,8 @@ function regenerar(mensaje, antes = fotoDeButacas()) {
     sueltas.fijadas.length
       ? 'Fuera de toda zona, así que se les asignó ' + zonas[sueltas.zona].nombre + ': ' +
         sueltas.fijadas.join(', ') + '.' : '',
+    butacas.some((b) => b.zona !== b.zonaOriginal)
+      ? 'Hay lugares con zona física distinta de su región de dibujo. Mover conserva la ubicación; usa Asignar zona para reasignarla.' : '',
   ].filter(Boolean).join(' ');
 }
 
@@ -695,10 +706,7 @@ document.getElementById('zona-pieza').addEventListener('change', (e) => {
   }
   const pieza = piezaPorId(mesaActiva);
   if (!pieza || esForma(pieza) || esEscenario(pieza)) return;
-  const config = { ...configDePieza(pieza) };
-  if (e.target.value) config.zona = e.target.value;
-  else delete config.zona;
-  reemplazarMesa(config);
+  planos[tipoActual] = cambiarZonaDePiezas(planoEditable(), [pieza.id], e.target.value);
   regenerar('');
   const despues = piezaPorId(pieza.id);
   const zona = zonas[e.target.value] || zonas[zonaEnCelda(salaActual, despues.x, despues.y)];
@@ -826,6 +834,9 @@ const PISTAS = {
 };
 
 function cambiarModo(nuevo) {
+  if (nuevo === 'editor' && TIPOS_DE_SALA[tipoActual].revisionFisica?.estado === 'publicada') {
+    anunciar('Esta revisión está publicada. Crea una nueva revisión en borrador para editar.'); return;
+  }
   if (nuevo === modo) return;
   if (arrastreMesa) terminarArrastreMesa(false);
   limpiarArea();
@@ -842,8 +853,9 @@ function cambiarModo(nuevo) {
   // guardado); el resto del grupo Mapa, solo al editar.
   document.getElementById('grupo-mapa').hidden = !editando;
   document.getElementById('pista').textContent = PISTAS[modo];
+  document.getElementById('herramienta-numeracion').setAttribute('aria-pressed', 'false');
   herramienta = 'mesas';
-  svg.classList.remove('bloqueando', 'pintando');
+  svg.classList.remove('bloqueando', 'pintando', 'numerando');
   document.getElementById('herramienta-bloquear').setAttribute('aria-pressed', 'false');
   document.getElementById('herramienta-zona').setAttribute('aria-pressed', 'false');
   document.getElementById('pincel-zona').hidden = true;
@@ -872,13 +884,17 @@ function cambiarHerramienta(nueva) {
   herramienta = nueva;
   const bloqueando = herramienta === 'bloquear';
   const pintando = herramienta === 'zona';
+  svg.classList.toggle('numerando', herramienta === 'numeracion');
+  document.getElementById('herramienta-numeracion').setAttribute('aria-pressed', String(herramienta === 'numeracion'));
   svg.classList.toggle('bloqueando', bloqueando);
   svg.classList.toggle('pintando', pintando);
   document.getElementById('herramienta-bloquear').setAttribute('aria-pressed', String(bloqueando));
   document.getElementById('herramienta-zona').setAttribute('aria-pressed', String(pintando));
   document.getElementById('pincel-zona').hidden = !pintando;
   if (pintando) llenarPincel();
-  document.getElementById('pista').textContent = PISTAS[bloqueando ? 'bloquear' : pintando ? 'zona' : modo];
+  document.getElementById('pista').textContent = herramienta === 'numeracion'
+    ? 'Haz clic en un lugar o pulsa Enter para editar su etiqueta oficial. Las flechas recorren los lugares.'
+    : PISTAS[bloqueando ? 'bloquear' : pintando ? 'zona' : modo];
   actualizarAccesoButacas();
   marcarActivas([]);
   bandaActiva = null;
@@ -1186,3 +1202,55 @@ document.getElementById('agregar-forma-barra').addEventListener('click', () => a
 for (const boton of botonesDeMesa()) {
   boton.addEventListener('click', () => ejecutarAccion(boton.dataset.accion));
 }
+
+function actualizarIdentidadControles() {
+  const plano = planos[tipoActual];
+  const r = plano?.revisionFisica || TIPOS_DE_SALA[tipoActual].revisionFisica;
+  const publicada = r?.estado === 'publicada';
+  document.getElementById('revision-fisica').textContent = r ? 'Revisión ' + r.numero + ' · ' + r.estado : 'Revisión 1 · borrador';
+  document.getElementById('revision-publicada').hidden = !publicada;
+  document.getElementById('modo-editor').disabled = Boolean(publicada);
+  document.getElementById('modo-numeracion').value = plano?.modoNumeracion || TIPOS_DE_SALA[tipoActual].modoNumeracion || 'automatica';
+  const oficial = document.getElementById('modo-numeracion').value === 'oficial';
+  document.getElementById('herramienta-numeracion').disabled = !oficial;
+  const id = document.getElementById('id-lugar-oficial').value;
+  const existe = oficial && butacas.some((b) => b.id === id);
+  for (const campo of ['fila-oficial', 'numero-oficial', 'guardar-etiqueta']) document.getElementById(campo).disabled = !existe;
+}
+
+document.getElementById('modo-numeracion').addEventListener('change', (e) => {
+  const plano = planoEditable();
+  const modoNuevo = e.target.value;
+  const ejemplos = butacas.slice(0, 3).map((b) => etiquetaDe(b)).join('; ');
+  if (!confirm('Cambiar a numeración ' + (modoNuevo === 'oficial' ? 'oficial explícita' : 'automática por posición') +
+      ' afecta las etiquetas de ' + butacas.length + ' lugares. ' +
+      (modoNuevo === 'oficial' ? 'Se conservarán como oficiales las etiquetas visibles actuales.' : 'Las etiquetas volverán a calcularse por zona y posición.') +
+      '\nEtiquetas actuales afectadas (ejemplos): ' + ejemplos + '\n\n¿Aplicar el cambio?')) {
+    e.target.value = plano.modoNumeracion; return;
+  }
+  planos[tipoActual] = cambiarNumeracion(plano, modoNuevo);
+  regenerar('Numeración ' + modoNuevo + ' aplicada.');
+  if (modoNuevo !== 'oficial' && herramienta === 'numeracion') cambiarHerramienta('mesas');
+});
+document.getElementById('herramienta-numeracion').addEventListener('click', () =>
+  cambiarHerramienta(herramienta === 'numeracion' ? 'mesas' : 'numeracion'));
+
+function elegirEtiquetaOficial(elemento) {
+  const b = porNodo(elemento);
+  if (!b) return;
+  document.getElementById('id-lugar-oficial').value = b.id;
+  document.getElementById('fila-oficial').value = b.grupo ? b.numeroMesa : b.fila;
+  document.getElementById('numero-oficial').value = b.numero;
+  actualizarIdentidadControles();
+  document.getElementById('fila-oficial').focus();
+  anunciar('Etiqueta de ' + etiquetaDe(b) + '. El ID ' + b.id + ' se conserva.');
+}
+document.getElementById('formulario-numeracion').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const id = document.getElementById('id-lugar-oficial').value;
+  const resultado = editarEtiquetaOficial(planoEditable(), id, { fila: document.getElementById('fila-oficial').value,
+    numero: document.getElementById('numero-oficial').value });
+  if (resultado.motivo) { anunciar('No se cambió la etiqueta: ' + resultado.motivo + '.'); return; }
+  planos[tipoActual] = resultado;
+  regenerar('Etiqueta oficial guardada para ' + id + '.');
+});

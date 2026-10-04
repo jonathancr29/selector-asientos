@@ -116,12 +116,18 @@
           <button type="button" class="icono" id="eliminar-mapa" aria-label="Eliminar el mapa guardado" data-tooltip="Eliminar mapa" hidden><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-eliminar-mapa"></use></svg></button>
         </div>
         <button type="button" id="confirmar-zonas-fisicas">Revisar zonas físicas asignadas</button>
+        <p class="pista" id="revision-fisica"></p>
+        <button type="button" id="publicar-revision">Congelar y exportar revisión</button>
         <p class="pista">El catálogo contiene ubicación e identidad física. Sin Taquilla proporcionará las tarifas del evento.</p>
         <p class="pista" id="antecedentes-comerciales" hidden></p>
         <input type="file" id="archivo-mapa" accept=".json,application/json" hidden>
       </div>
     </details>
     <!-- La sala como columnas, zonas y lista de bandas, de arriba abajo. -->
+    <div class="herramientas" id="revision-publicada" hidden>
+      <p class="pista">Revisión publicada: edición cerrada. Sus eventos conservarán esta revisión.</p>
+      <button type="button" id="nuevo-borrador">Crear nueva revisión en borrador</button>
+    </div>
     <section class="bandas" id="panel-bandas" aria-labelledby="titulo-bandas" hidden>
       <h2 class="solo-lector" id="titulo-bandas">Diseño de la sala</h2>
       <details class="grupo" open>
@@ -337,6 +343,19 @@
           <input type="text" id="nombre-pieza" maxlength="40" autocomplete="off" disabled placeholder="Ej.: Lateral izquierdo">
         </div>
         <p class="pista">La modalidad de venta se configura por evento en Sin Taquilla.</p>
+      </details>
+      <details class="grupo numeracion-oficial" open>
+        <summary>Numeración oficial</summary>
+        <label for="modo-numeracion">Numeración del mapa</label>
+        <select id="modo-numeracion"><option value="automatica">Automática por zona</option><option value="oficial">Oficial explícita</option></select>
+        <p class="pista">Las etiquetas oficiales se conservan al mover o girar. Admite letras, pares, impares y saltos.</p>
+        <button type="button" id="herramienta-numeracion" aria-pressed="false">Elegir lugar para numerar</button>
+        <form id="formulario-numeracion">
+          <label for="id-lugar-oficial">ID del lugar</label><input id="id-lugar-oficial" readonly>
+          <label for="fila-oficial">Fila o número de mesa</label><input id="fila-oficial" maxlength="40" disabled>
+          <label for="numero-oficial">Butaca o lugar</label><input id="numero-oficial" maxlength="40" disabled>
+          <button type="submit" id="guardar-etiqueta" disabled>Guardar etiqueta oficial</button>
+        </form>
       </details>
       <details class="grupo" open>
         <summary>Sala</summary>
