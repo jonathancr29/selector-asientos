@@ -262,10 +262,12 @@ comentarios `// ----`.
 - **El área se borra al cambiar de modo o de herramienta** (`limpiarArea` en `cambiarModo` y
   `cambiarHerramienta`) y al mover el foco sin Mayús. Vive en su propia capa, `#area`, que
   `dibujarTodo` no toca.
-- **Zona por asiento (`plano.zonasDeAsiento`):** se aplica en `generarPlano` **después** de
-  `numerarFilas`, así que cambia `zona` y `seccion` pero no `fila` ni `numero`. Cada butaca guarda
+- **Zona por asiento (`plano.zonasDeAsiento`):** se aplica en `generarPlano` **antes** de
+  `numerarFilas`, así que su zona física determina `fila`, `numero` y `seccion`. Cada butaca guarda
   `zonaOriginal`; `planoDesdeSala` extrae las que difieren. Asignar la zona original quita la entrada
   (`asignarZonaAsiento`). Cuenta en `usosDeZona` y se copia al duplicar (`copiarZonasDeAsiento`).
+  `zonasFisicasConfirmadas` guarda el valor revisado de cada asignación para el catálogo; las
+  asignaciones heredadas sin esa confirmación no son publicables porque podían ser solo tarifa.
   La herramienta es `herramienta === 'zona'`; `conButacas()` agrupa las que trabajan sobre butacas.
 - **El panel de bandas es el de las zonas** («Zonas y precios»): cada fila lleva el color, el nombre,
   el precio y la zona de su banda, y un **✓** que guarda nombre y precio de una vez. El ✓ lee los dos
@@ -311,9 +313,9 @@ comentarios `// ----`.
 - **Ningún cambio de bandas o columnas deja una pieza que no cabe:** `aplicarBandas` genera,
   comprueba con `primeraPiezaQueNoCabe` (mesas y bloques) y, si falla, vuelve al plano anterior.
 - **Id estable, etiqueta calculada.** `id` no depende de la posición: la selección, las reservas y
-  las bloqueadas usan solo el id. `fila`, `numero` y `seccion` se recalculan en `numerarFilas`: por
-  zona y de izquierda a derecha para lo que mira al escenario; con secuencia propia para bloques
-  girados. Nunca uses la etiqueta como clave.
+  las bloqueadas usan solo el id. `fila`, `numero` y `seccion` se recalculan en `numerarFilas` por
+  zona, también para bloques girados. `numerarMesas` asigna el número visible por zona y posición;
+  `M…` sigue siendo el id. Nunca uses la etiqueta como clave.
 - **Una mesa respeta los pasillos; un bloque de filas y el escenario no:** en un bloque, los pasillos
   son el espacio entre bloques.
 - **Las bandas son un árbol:** la sala apila bandas; una `division` reparte su ancho en verticales, y
@@ -692,8 +694,6 @@ redibujados y toma la mediana de estos últimos. La duración no bloquea CI porq
 
 Lo grande, por orden de valor:
 
-- **Implementar identidad y numeración del contrato**: zona física separada de tarifa, mesas
-  numeradas por zona, etiquetas únicas y validación previa a publicar.
 - **Integrar Sin Taquilla**: convertir la entrega autónoma en CSS y JavaScript externos para su
   política de seguridad; usar sus datos y transacciones para disponibilidad, precios y boletos.
 - **Medir antes de otra optimización del SVG**: la reconciliación de butacas redujo el redibujado

@@ -12,19 +12,22 @@ function actualizarResumen() {
 
   const cubos = new Map();
   for (const b of lista) {
-    const clave = b.grupo ? b.grupo.nombre : b.seccion;
+    const clave = b.grupo ? 'mesa:' + b.grupo.id : 'zona:' + b.zona;
     if (!cubos.has(clave)) cubos.set(clave, []);
     cubos.get(clave).push(b);
   }
   const detalle = document.getElementById('detalle');
   detalle.textContent = '';
-  for (const [clave, items] of cubos) {
+  for (const items of cubos.values()) {
     const li = document.createElement('li');
+    const zonasDelGrupo = new Set(items.map((b) => b.zona));
+    const nombre = items[0].grupo ? items[0].grupo.nombre + ' · ' +
+      (zonasDelGrupo.size === 1 ? zonas[items[0].zona].nombre : 'varias zonas') : items[0].seccion;
     const cuantos = (items[0].grupo && items[0].grupo.completa ? 'mesa completa, ' : '') +
                     (items.length === 1 ? '1 lugar' : items.length + ' lugares');
     const cuales = items.map((b) => (b.grupo ? b.numero : b.fila + b.numero)).join(', ');
     const importe = items.reduce((s, b) => s + zonas[b.zona].precio, 0);
-    li.textContent = clave + ' · ' + cuantos + ' (' + cuales + ') · ' + dinero(importe);
+    li.textContent = nombre + ' · ' + cuantos + ' (' + cuales + ') · ' + dinero(importe);
     detalle.appendChild(li);
   }
 }
@@ -184,6 +187,46 @@ function exportarMapa() {
   anunciar('Mapa «' + nombre + '» exportado como ' + enlace.download + '.');
 }
 
+function revisarZonasFisicas() {
+  const asignadas = Object.entries(planoEditable().zonasDeAsiento || {});
+  if (!asignadas.length) {
+    anunciar('No hay zonas físicas asignadas a lugares individuales.');
+    return;
+  }
+  for (let i = 0; i < asignadas.length; i += 20) {
+    const muestra = asignadas.slice(i, i + 20).map(([id, zona]) => id + ' → ' + (zonas[zona]?.nombre || zona));
+    const pregunta = 'Comprueba que estas asignaciones indican ubicación física, no solo tarifa ' +
+      '(' + (i + 1) + '–' + Math.min(i + 20, asignadas.length) + ' de ' + asignadas.length + '):\n\n' +
+      muestra.join('\n') + '\n\n¿Confirmas estas zonas físicas?';
+    if (!confirm(pregunta)) return;
+  }
+  planos[tipoActual] = confirmarZonasFisicas(planoEditable());
+  regenerar('Zonas físicas confirmadas para ' + asignadas.length + ' lugares.');
+}
+
+function exportarCatalogoLugares() {
+  const nombre = campoNombre.value.trim() || TIPOS_DE_SALA[tipoActual].nombre;
+  const mapa = mapaDesdePlano(nombre, planoEditable(), new Date().toISOString(), idsActuales());
+  const { catalogo, errores } = exportarLugaresDeMapa(mapa);
+  // La validacion genera el mapa candidato: vuelve a mostrar el que se edita.
+  salaActual = generarPlano(tipoActual, planos[tipoActual]);
+  dibujarTodo();
+  if (errores) {
+    anunciar('No se pudo exportar el catálogo: ' + errores.slice(0, 3).join('; ') +
+      (errores.length > 3 ? '… (' + errores.length + ' problemas)' : '') + '.');
+    return;
+  }
+  const archivo = new Blob([JSON.stringify(catalogo, null, 2) + '\n'], { type: 'application/json' });
+  const enlace = document.createElement('a');
+  enlace.href = URL.createObjectURL(archivo);
+  enlace.download = nombreDeArchivo(nombre).replace(/\.json$/, '-lugares.json');
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  setTimeout(() => URL.revokeObjectURL(enlace.href), 0);
+  anunciar('Catálogo de ' + catalogo.lugares.length + ' lugares validado y exportado.');
+}
+
 // Un mapa real ocupa pocos KB: un archivo mayor no se lee, para no bloquear la pestaña
 // leyendo y validando algo que no es un mapa razonable.
 const ARCHIVO_MAXIMO = 1024 * 1024;
@@ -250,6 +293,8 @@ campoNombre.addEventListener('keydown', (e) => {
 });
 document.getElementById('eliminar-mapa').addEventListener('click', eliminarMapa);
 document.getElementById('exportar-mapa').addEventListener('click', exportarMapa);
+document.getElementById('exportar-lugares').addEventListener('click', exportarCatalogoLugares);
+document.getElementById('confirmar-zonas-fisicas').addEventListener('click', revisarZonasFisicas);
 document.getElementById('importar-mapa').addEventListener('click', () =>
   document.getElementById('archivo-mapa').click());
 document.getElementById('archivo-mapa').addEventListener('change', (e) => {

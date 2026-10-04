@@ -111,9 +111,12 @@
         <div class="rejilla-iconos herramientas">
           <button type="button" class="icono" id="guardar-mapa" aria-label="Guardar el mapa" data-tooltip="Guardar"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-guardar"></use></svg></button>
           <button type="button" class="icono" id="exportar-mapa" aria-label="Exportar el mapa como JSON" data-tooltip="Exportar JSON"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-exportar"></use></svg></button>
+          <button type="button" class="icono" id="exportar-lugares" aria-label="Validar y exportar catálogo de lugares" data-tooltip="Exportar lugares"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-exportar"></use></svg></button>
           <button type="button" class="icono" id="importar-mapa" aria-label="Importar un mapa desde un JSON" data-tooltip="Importar JSON"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-importar"></use></svg></button>
           <button type="button" class="icono" id="eliminar-mapa" aria-label="Eliminar el mapa guardado" data-tooltip="Eliminar mapa" hidden><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-eliminar-mapa"></use></svg></button>
         </div>
+        <button type="button" id="confirmar-zonas-fisicas">Revisar zonas físicas asignadas</button>
+        <p class="pista">El catálogo contiene lugares y precios de referencia; Sin Taquilla asignará las tarifas de venta.</p>
         <input type="file" id="archivo-mapa" accept=".json,application/json" hidden>
       </div>
     </details>

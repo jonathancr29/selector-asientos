@@ -12,12 +12,10 @@ const capaRotuloSeleccion = document.getElementById('rotulo-seleccion');
 const formatoDinero = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 const dinero = (centavos) => formatoDinero.format(centavos / 100);
 const porId = new Map();   // id -> butaca, para no recorrer la lista en cada interaccion
-// El lugar de una mesa dice su zona: es la que le da precio, la herede de su banda o
-// se la hayan puesto a mano.
-const zonaDeLugar = (b) => (zonas[b.zona] ? ', ' + zonas[b.zona].nombre : '');
-const etiquetaDe = (b) => (b.grupo && b.grupo.completa ? b.grupo.nombre + ', mesa completa, lugar ' + b.numero + zonaDeLugar(b)
-  : b.grupo ? b.grupo.nombre + ', lugar ' + b.numero + zonaDeLugar(b)
-                                   : b.seccion + ', fila ' + b.fila + ', butaca ' + b.numero);
+// La zona abre la etiqueta, como saldra en el boleto; el id queda aparte.
+const etiquetaDe = (b) => (b.grupo ? zonas[b.zona].nombre + ', mesa ' + b.numeroMesa +
+  (b.grupo.completa ? ' completa' : '') + ', lugar ' + b.numero
+  : b.seccion + ', fila ' + b.fila + ', butaca ' + b.numero);
 
 function nodo(nombre, atributos) {
   const el = document.createElementNS(NS, nombre);
