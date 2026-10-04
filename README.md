@@ -173,17 +173,9 @@ subir, bajar, duplicar, eliminar, quitar y agregar fila, ancho de una vertical, 
 fila, y agregar banda de filas, zona de mesas, espacio o franja. En *Mapa* son guardar, exportar,
 importar y eliminar; en *Columnas*, aplicar (✓); en *Otras zonas*, eliminar y agregar zona.
 
-- **Nombre:** cuando la banda tiene su zona para ella sola, **el nombre es el de la zona**: cambiarlo
-  cambia también las etiquetas de sus butacas. Si comparte zona con otra banda, el campo es su nombre
-  propio y, vacío, toma el de por defecto.
-- **Precio:** el precio por lugar de su zona, en pesos, editable en la propia fila. Es el que paga
-  todo lo que cae dentro de la banda: sus filas, y las mesas, bloques y butacas sueltas que hereden
-  (ver *La zona se hereda de la banda*).
-- **Zona:** con qué zona va la banda. Elegir la de otra banda hace que **compartan precio y
-  numeración**; *Zona nueva…* le da una propia, con su nombre y a $0. Los espacios y las franjas
-  pueden ir *Sin zona*: entonces no dan precio a nada y lo de dentro hereda de más afuera.
-- **Venta por mesa / por butacas** (solo en las zonas de mesas que tienen mesas): cambia de golpe
-  cómo se venden todas sus mesas. Si unas van por mesa y otras por butacas, aparece *Venta mixta*.
+- **Nombre:** es propio de la banda; renombrarlo no cambia la zona ni las etiquetas.
+- **Zona:** asigna una zona física existente, compartida si corresponde. «Zona nueva…» crea
+  una de forma explícita; los espacios pueden quedarse sin zona y heredar de más afuera.
 - **↑ / ↓:** sube o baja la banda. Sus piezas viajan con ella.
 - **Duplicar:** crea una copia justo debajo, con todo lo que tiene dentro (ver más abajo).
 - **Eliminar:** quita la banda y las piezas que empiezan dentro de ella; lo de debajo sube.
@@ -213,40 +205,25 @@ que desaparecen se avisan igual que al acortar una mesa.
 
 Las bandas sin nombre propio toman el de su zona, numerado si se repite: *General*, *General 2*.
 
-### Zonas y precios: la zona es la banda
+### Bandas y zonas físicas independientes
 
-**Una zona y una banda son la misma cosa.** Cada fila del grupo *Zonas y precios* es una banda con su
-**color**, su **nombre** y su **precio por lugar**, y ese precio se lo da a todo lo que cae dentro.
-Al empezar, la sala mixta trae *Luneta* ($350), *Mesas* ($500) y *General* ($200).
+**Distribución del plano** administra bandas; **Zonas físicas** lista todas las zonas, incluso
+las usadas por bandas. Agregar zona no crea espacio. Agregar banda no crea zona: filas toman
+General o la primera zona de filas y mesas usan la zona de mesas. Eliminar banda conserva zonas.
+El nombre de banda es un subtítulo independiente; su nombre automático puede usar el de la zona.
+Las zonas tienen ID, nombre y color derivado de la paleta; el límite sigue siendo **40 zonas**.
+Las usadas no se eliminan, y se conservan la zona de mesas y al menos una zona para filas.
 
-- **Cada banda nueva nace con su zona:** color propio, nombre a partir del tipo (*General 2*,
-  *Mesas 2*) y precio 0. Los **espacios** son la excepción: nacen sin zona, porque un hueco no da
-  precio a nada.
-- **Nombre y precio** se escriben en la fila y se guardan con **✓** (también con Enter o al salir del
-  campo; Esc deshace lo escrito). El precio es por lugar, en pesos, de 0 a 1,000,000, y se puede
-  escribir como 350, 350.50 o $1,200.00. Los nombres no se repiten. Hasta **40 zonas**.
-- **El botón de la etiqueta (🏷+) crea una zona nueva con su espacio:** le pones nombre y precio y
-  metes dentro mesas, bloques o butacas.
-- **Compartir:** el selector de cada fila apunta a otra zona, y entonces las dos bandas comparten
-  nombre, precio, color y numeración (la *Luneta izquierda* y la *derecha* de una franja son la misma
-  zona). *Zona nueva…* vuelve a darle una propia. Mientras comparten, el campo de nombre de cada fila
-  es su nombre propio, porque renombrar la zona cambiaría también el de la otra.
-- **Al eliminar una banda se va su zona**, salvo que la use otra banda, una pieza o alguna butaca
-  pintada. Las zonas que se quedan sin banda aparecen al final de la lista, con su nombre, su precio
-  y su botón de eliminar.
-- La zona de mesas no se elimina, y siempre queda al menos una zona para filas.
-
-Todo lo que muestra la zona usa sus valores actuales: la etiqueta de las butacas (*«VIP, fila A,
-butaca 1»*), el nombre por defecto de las bandas, los selectores y el resumen con su total. Las filas
-nuevas nacen en *General* o, si no existe, en la primera zona de filas. **Restablecer sala** vuelve a
-las tres de siempre.
+El mapa físico no configura precios ni venta completa. Sin un evento conectado, el resumen
+muestra **Precio no disponible**. Cero no se inventa: los importes llegarán desde Sin Taquilla.
+Las herramientas de venta agrupada siguen como base interna para fases posteriores, sin controles
+comerciales en el editor. El conector, niveles y numeración oficial aún no están implementados.
 
 ### La zona se hereda de la banda
 
-**Cada banda le da su zona, y con ella su precio, a todo lo que cae dentro:** mesas, bloques de filas
-y butacas sueltas. Una mesa dentro de la *Zona de mesas* cuesta lo que ella; esa misma banda puesta en
-Luneta hace que sus mesas cuesten lo que la Luneta. Las bandas de filas ya llevaban su zona; ahora
-también pueden llevarla las zonas de mesas, los espacios y las bandas verticales.
+**Cada banda le da su zona física a las piezas que heredan:** mesas, bloques y butacas sueltas.
+La herencia dinámica actual se conserva; la separación entre mover y reasignar pertenencias
+oficiales se implementará en fase 3.
 
 De lo más concreto a lo más general, manda:
 
@@ -254,7 +231,7 @@ De lo más concreto a lo más general, manda:
 2. la zona **propia de esa mesa, bloque o butaca suelta**, si se la diste en *Editar*;
 3. la zona de la **banda** que la contiene y, si hay bandas dentro de bandas, la más interna;
 4. si no cae dentro de ninguna banda con zona, el editor le escribe una y lo dice en el aviso: una
-   pieza nunca se guarda sin precio.
+   pieza nunca se guarda sin zona física.
 
 En *Editar*, el selector de zona empieza en **«Hereda: ⟨zona de la banda⟩»**; elegir una
 zona concreta la fija y volver a *Hereda* la suelta. Las piezas nuevas nacen heredando.
@@ -269,7 +246,6 @@ asignársela; otro clic la devuelve a su zona de siempre.
 - **La numeración sigue la zona física:** la butaca A3 de Luneta pintada de VIP conserva su ID,
   pero pasa a *«VIP, fila A, butaca 1»* si es la primera de esa zona. Sus vecinas de Luneta se
   renumeran. Un lugar de mesa muestra zona, mesa y lugar; las mesas empiezan en 1 en cada zona.
-- **Mesas completas:** su precio suma cada lugar a su zona, así que un lugar VIP la encarece.
 - Las butacas ocupadas no cambian de zona. Una zona asignada a algún asiento cuenta como en uso y no se
   puede eliminar.
 - Se guarda en el mapa como `zonasDeAsiento` (asiento → zona) y se copia al duplicar piezas o bandas.
@@ -286,7 +262,7 @@ filas del bloque central». Con *Asignar zona* o *Bloquear butacas* activadas:
   estas herramientas están activas, el arrastre es del rectángulo. Con ellas, la barra espaciadora ya
   no marca la butaca enfocada; para eso está Enter.
 - Las **butacas ocupadas** del área no cambian y se dicen en el aviso. Si una mesa que se vende
-  completa queda con lugares de dos zonas, también se avisa: su precio deja de ser el de una sola zona.
+  completa queda con lugares de dos zonas, también se avisa de la mezcla de zonas físicas.
 - Solo se guarda lo que se aparta de su zona de siempre, así que pintar un área y devolverla deja el
   mapa como estaba.
 
@@ -391,7 +367,8 @@ quita (el escenario nunca). Como siempre, si algo deja de caber, el cambio no se
 │ Tipo de sala     │                         │  editor)     │
 │ Mapa             │         PLANO           │              │
 │ Columnas       ⓘ │                         │ Agregar      │
-│ Zonas y precios ⓘ│                         │ Editar       │
+│ Distribución   ⓘ │                         │ Editar       │
+│ Zonas físicas    │                         │              │
 │ Leyenda          ├─────────────────────────┤ Sala         │
 │                  │ Estado  Seleccionadas… ▲│              │
 └──────────────────┴─────────────────────────┴──────────────┘
@@ -399,19 +376,17 @@ quita (el escenario nunca). Como siempre, si algo deja de caber, el cambio no se
 
 - **Lateral izquierdo (la sala), de arriba abajo:** *Vista* (Previsualizar, Editar plano y zoom, todo
   con iconos); el **tipo de sala**, que se ve en los dos modos; y, solo en el editor, *Mapa*,
-  *Columnas* y *Zonas y precios*. La *Leyenda* va al final. Los grupos *Columnas* y *Zonas y precios*
+  *Columnas*, *Distribución del plano* y *Zonas físicas*. La *Leyenda* va al final. Los grupos *Columnas* y *Distribución del plano*
   llevan un botón de **información (ⓘ)** junto al título que abre y cierra su explicación.
 - **Lateral derecho (las piezas), solo en el editor:** *Agregar*, *Editar* (acciones, zona, nombre y
-  venta) y *Sala* (asignar zona, bloquear butacas, escenario, restablecer). Los iconos
+  orientación) y *Sala* (asignar zona, bloquear butacas, escenario, restablecer). Los iconos
   van en rejilla y su tooltip sale a la derecha.
-- **Lateral derecho (configuración), solo en el editor:** *Mapa* (nombre, guardar, exportar,
-  importar), *Columnas* y *Zonas y precios*.
 - **En escritorio (más de 900 px de ancho y 600 px de alto), una sola pantalla:** la página no se
   desplaza. Los laterales, el encabezado y el pie quedan fijos, y el plano llena el hueco que queda,
   así que la sala se ve completa. Lo único que se desplaza es el interior de un lateral cuando su
   contenido no cabe. Cada grupo se pliega haciendo clic en su título.
 - **Los grupos de los laterales se pliegan** con un clic en su título, que lleva la flecha delante
-  (▾ abierto, ▸ cerrado). Los de *Columnas* y *Zonas y precios* llevan además el botón de información,
+  (▾ abierto, ▸ cerrado). Los de *Columnas* y *Distribución del plano* llevan además el botón de información,
   el mismo del encabezado.
 - **Encabezado:** el título con un botón de **información (ⓘ)** y, debajo, el aforo.
 - **Hojas de información:** el botón ⓘ abre, **sobre el plano**, tres hojas que se recorren de una
@@ -420,7 +395,7 @@ quita (el escenario nunca). Como siempre, si algo deja de caber, el cambio no se
   teclado. Se cierran con el mismo botón, la ✕, **Esc** o un clic en el plano. Solo se abren al
   pulsar ⓘ.
 - **Pie: una barra fija.** A la izquierda, los mensajes («Mesa 3 movida…») y avisos; a la derecha, el
-  resumen («Seleccionadas: 2 · Total $700.00») y un botón **▲** que despliega **hacia arriba, sobre el
+  resumen («Seleccionadas: 2 · Precio no disponible») y un botón **▲** que despliega **hacia arriba, sobre el
   plano,** el detalle de las butacas elegidas por zona y por mesa.
 - Los paneles de información y de detalle no mueven ni cambian el tamaño del plano.
 - **Previsualizar ajustado a la pantalla:** el plano ocupa el alto que queda bajo el encabezado, con la
@@ -461,26 +436,14 @@ Los tres estilos de mesa rectangular son el mismo modelo con otros valores:
 La huella es el rectángulo completo, así que las esquinas vacías de una cruz quedan **reservadas**:
 ninguna otra mesa puede ocuparlas.
 
-### Venta por mesa o por butacas
+### Modalidad de venta de mesas y palcos
 
-El organizador decide cómo se vende cada mesa, y puede hacerlo de tres formas:
-
-- **Una mesa:** con la mesa seleccionada en el editor, el selector **Venta** de *Editar*
-  elige entre *Venta por butacas* y *Venta por mesa*.
-- **Toda una zona de mesas:** el selector **Venta** de su fila, en *Bandas y precios*, cambia de golpe
-  todas las mesas de esa banda. Si unas van por mesa y otras por butacas, muestra *Venta mixta*.
-- **Todas las del plano:** el botón **«Aplicar a todas las mesas»**, que copia a todas el modo de la
-  mesa seleccionada.
-
-- **Por mesa:** en Previsualizar, un clic en la mesa (el tablero) o en cualquiera de sus lugares
-  **elige la mesa y todos sus lugares libres** a la vez; otro clic los suelta. El tablero se marca
-  con sus lugares, y el resumen la muestra como *«Mesa 3 · mesa completa, 4 lugares · $2,000.00»*.
-- **Precio:** la suma de sus lugares libres, cada uno al precio de su zona (la que herede de su banda,
-  salvo que la mesa o el lugar lleven otra). Un lugar **bloqueado** no se vende ni se cobra: la mesa se vende con los demás.
-- **Una mesa completa con algún lugar ocupado se vendió entera:** todos sus lugares salen ocupados.
-- **Por butacas** (lo de siempre): cada lugar se elige por separado y el tablero no responde al clic.
-- Si se pasa a venta por mesa una que tenía solo algunos lugares elegidos, se eligen todos y se avisa.
-- Se guarda en el mapa como `completa: true` en la mesa; sin el campo, se vende por lugares.
+El editor conserva los lugares y su mesa física. Los controles de venta completa se retiraron:
+la modalidad pertenecerá al evento en Sin Taquilla, siguiendo el contrato de recinto y evento.
+En la previsualización actual se seleccionan lugares individualmente y no se calcula un importe.
+La importación conserva `completa: true` de mapas antiguos como antecedente inactivo.
+Las funciones puras de selección conjunta se conservan como base para la futura generalización
+a mesas y palcos; la configuración del evento y su validación en servidor siguen pendientes.
 
 ### Mesas redondas
 
@@ -769,7 +732,7 @@ El diseño se guarda **sin base de datos**, como JSON, de dos formas:
   a otro equipo o para versionarlo en git.
 
 Un mapa guarda el **diseño**, no la venta: nombre, columnas (bloques y pasillos), bandas, mesas con su forma y posición,
-butacas bloqueadas, **zonas con sus nombres y precios** y los contadores de ids. No guarda la ocupación ni la selección.
+butacas bloqueadas, **zonas físicas con sus nombres** y los contadores de ids. No guarda la ocupación ni la selección.
 
 **Límites:** una sala tiene como máximo **20.000 butacas** (contando las de mesas, bloques y butacas
 sueltas). Más harían lento el dibujo del plano. El editor no aplica un cambio que pase de ahí (agregar
@@ -802,22 +765,23 @@ bandas de tipo `espacio` (con `guias`); el escenario ya no tiene que ser la prim
 guarda `formas` y `butacasSueltas` (listas opcionales) con sus contadores `siguienteForma` y
 `siguienteButaca`. Los mapas de la versión 2 se leen igual que antes.
 
-**Versión 4** (la actual) es la de la herencia de zona: `zona` es **opcional** en las mesas, los
-bloques y las butacas sueltas —sin ella heredan la de su banda— y las zonas de mesas, los espacios,
-las franjas y las bandas verticales pueden llevar la suya. Un mapa de la versión 3 se lee igual: como
-sus mesas no traían zona, pasan a heredar la de la banda donde están, que es la de mesas.
+**Versión 4** añadió herencia de zona opcional en piezas y bandas.
+
+**Versión 5** (actual) separa zonas físicas y datos comerciales. Zonas guardan ID y nombre,
+y mesas no guardan venta completa activa. Los precios y mesas completas de mapas v1–v4 se
+conservan en antecedentes comerciales pendientes de revisión. Se mantienen al guardar y abrir,
+pero no activan precios ni selección conjunta. No se fusionan zonas ni se adivina su significado.
 
 **Catálogo de lugares.** En *Mapa → Exportar lugares* se valida el diseño y se descarga un JSON
 con un registro por lugar: ID local estable, zona física, fila/butaca o mesa/lugar, etiqueta,
-coordenadas, bloqueo y precio de referencia. El ID no cambia al mover una pieza ni al renumerar.
+coordenadas y bloqueo, sin tarifas ni antecedentes comerciales. El ID no cambia al mover una pieza ni al renumerar.
 La validación exige un nombre definitivo para cada zona con lugares, etiquetas únicas y que todos
 los lugares de una mesa estén en la misma zona física. Una zona llamada *Zona* o *Zona 2* es
 provisional. Los mapas viejos se siguen abriendo; si tienen `zonasDeAsiento`, antes de exportar el
 catálogo hay que revisar esas asignaciones con *Revisar zonas físicas asignadas*. La confirmación
 se guarda como `zonasFisicasConfirmadas`, asociada al ID y al valor de zona; cambiar la zona vuelve
-a exigir revisión. El precio del catálogo es solo una referencia de previsualización: Sin Taquilla
-decidirá la categoría y el importe al publicar y vender. El catálogo aún no es un inventario de
-evento ni publica el mapa en Sin Taquilla.
+a exigir revisión. El catálogo físico es versión 2 y Sin Taquilla decidirá categoría, importe y modalidad al configurar
+el evento. Aún no publica el mapa ni conecta la venta.
 
 Los mapas de la versión 1 (que guardaban `"pasillos": "ambos"`) se siguen leyendo: se convierten a
 bloques y pasillos al cargarlos.
@@ -909,9 +873,10 @@ cargar y la vuelve a consultar antes de enviar la selección, y el servidor rech
 se hayan ocupado entre tanto. La comprobación contra sobreventa va en una transacción de base de
 datos, nunca en el navegador.
 
-El [contrato de lugares para Sin Taquilla](docs/CONTRATO_LUGARES_SINTAQUILLA.md) define la identidad
-de cada lugar, su etiqueta y precio, las mesas completas y qué sucede con el mapa después de
-publicar un evento. Es un documento de diseño; la integración aún no está implementada.
+El [contrato de recinto y evento](docs/CONTRATO_RECINTO_EVENTO.md) define identidad física,
+numeración oficial, tarifas por evento, venta agrupada y revisiones. Complementa y actualiza
+el [contrato de lugares para Sin Taquilla](docs/CONTRATO_LUGARES_SINTAQUILLA.md).
+La integración aún no está implementada.
 
 ## Sobre three.js
 

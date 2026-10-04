@@ -4,20 +4,20 @@
 // ---------------------------------------------------------------------------
 const listaBandas = document.getElementById('lista-bandas');
 
-// Las zonas que pueden llevar filas (todas menos la de mesas), con su precio.
+// Las zonas fisicas que pueden llevar filas (todas menos la de mesas).
 // 'heredada' es la zona que la pieza tomaria de su banda: con ella, la primera opcion
 // es heredarla, que es como nacen las piezas. Sin ella (una pieza fuera de toda banda
-// con zona) hay que elegir una: el plano nunca guarda una butaca sin precio.
+// con zona) hay que elegir una: el plano nunca guarda una butaca sin zona.
 function llenarZonasDeFilas(select, actual, { heredada = null, conMesas = false, mezcla = false } = {}) {
   select.textContent = '';
   // Varias piezas con zonas distintas: se ve que no coinciden y elegir una las iguala.
   if (mezcla) select.appendChild(new Option('— varias zonas —', 'mezcla', false, true));
   if (heredada && zonas[heredada]) {
-    select.appendChild(new Option('Hereda: ' + zonas[heredada].nombre + ' · ' + dinero(zonas[heredada].precio),
+    select.appendChild(new Option('Hereda: ' + zonas[heredada].nombre,
                                   '', false, !actual && !mezcla));
   }
-  for (const [id, { nombre, precio }] of Object.entries(zonas)) {
-    if (id !== 'mesas' || conMesas) select.appendChild(new Option(nombre + ' · ' + dinero(precio), id, false, id === actual));
+  for (const [id, { nombre }] of Object.entries(zonas)) {
+    if (id !== 'mesas' || conMesas) select.appendChild(new Option(nombre, id, false, id === actual));
   }
 }
 
@@ -66,23 +66,27 @@ function dibujarBandas() {
   }
 }
 
-// Zonas y precios (editor). Como el panel de bandas: se rehace entero y el foco
+// Catalogo de zonas fisicas, separado de la distribucion: se rehace y el foco
 // vuelve al mismo control.
 const listaZonas = document.getElementById('lista-zonas');
 
 function dibujarZonas() {
   if (modo !== 'editor') return;
+  const antecedentes = planos[tipoActual]?.antecedentesComerciales || TIPOS_DE_SALA[tipoActual].antecedentesComerciales;
+  const aviso = document.getElementById('antecedentes-comerciales');
+  const precios = antecedentes?.preciosPorZona.length || 0;
+  const completas = antecedentes?.mesasCompletas.length || 0;
+  aviso.hidden = !precios && !completas;
+  aviso.textContent = 'Antecedentes pendientes de revisión: ' + precios + ' precios de zona y ' + completas +
+    ' mesas completas. Se conservan al guardar, pero no configuran este mapa ni futuros eventos.';
   const activo = document.activeElement;
   const foco = listaZonas.contains(activo) ? { op: activo.dataset.op, zona: activo.dataset.zona } : null;
   listaZonas.textContent = '';
   const usadas = { bandas: salaActual.bandas, mesas, bloquesFilas, butacasSueltas,
     zonasDeAsiento: Object.fromEntries(butacas.filter((b) => b.zona !== b.zonaOriginal).map((b) => [b.id, b.zona])) };
-  // Las zonas de las bandas se editan en su fila: aqui solo quedan las demas (las de
-  // una pieza suelta, las pintadas a mano y las que aun no usa nadie).
-  const deBandas = new Set(nodosDeBandas(salaActual.bandas).map(zonaDeBanda).filter(Boolean));
-  const sueltas = Object.entries(zonas).filter(([id]) => !deBandas.has(id));
-  listaZonas.hidden = !sueltas.length;
-  for (const [id, { nombre, precio }] of sueltas) {
+  const sueltas = Object.entries(zonas);
+  listaZonas.hidden = false;
+  for (const [id, { nombre }] of sueltas) {
     const li = document.createElement('li');
     li.className = 'banda';
     const campo = (clase, op, valor, etiqueta, extra = {}) => {
@@ -109,8 +113,6 @@ function dibujarZonas() {
     eliminar.disabled = id === 'mesas' || usos > 0 || Object.keys(zonas).filter((z) => z !== 'mesas').length <= 1;
     li.append(
       campo('nombre-zona', 'nombre-zona', nombre, 'Nombre de la zona ' + nombre, { maxLength: NOMBRE_MAXIMO }),
-      campo('precio-zona', 'precio-zona', (precio / 100).toFixed(2), 'Precio por lugar de ' + nombre + ', en pesos',
-            { inputMode: 'decimal' }),
       eliminar, detalle);
     listaZonas.appendChild(li);
   }
@@ -133,17 +135,7 @@ function aplicarCampoDeZona(campo) {
     }
     return;
   }
-  const precio = leerPrecio(campo.value);
-  if (precio === null) {
-    anunciar('No se pudo: escribe el precio en pesos, por ejemplo 350 o 350.50 (hasta 1,000,000).');
-    campo.value = (zona.precio / 100).toFixed(2);
-    return;
-  }
-  if (precio === zona.precio) {
-    campo.value = (precio / 100).toFixed(2);
-    return;
-  }
-  aplicarBandas(editarZona(planoEditable(), id, { precio }), zona.nombre + ': ' + dinero(precio) + ' por lugar.');
+
 }
 
 listaZonas.addEventListener('change', (e) => {
@@ -157,7 +149,7 @@ listaZonas.addEventListener('keydown', (e) => {
     aplicarCampoDeZona(campo);
   } else if (e.key === 'Escape') {
     const zona = zonas[campo.dataset.zona];
-    if (zona) campo.value = campo.dataset.op === 'nombre-zona' ? zona.nombre : (zona.precio / 100).toFixed(2);
+    if (zona) campo.value = zona.nombre;
   }
 });
 listaZonas.addEventListener('click', (e) => {
@@ -166,21 +158,11 @@ listaZonas.addEventListener('click', (e) => {
   const nombre = zonas[boton.dataset.zona].nombre;
   aplicarBandas(eliminarZona(planoEditable(), boton.dataset.zona), 'Zona «' + nombre + '» eliminada.');
 });
-// Una zona nueva es una banda nueva: un espacio con su zona, su color y su precio.
+// Crear zona no modifica la distribucion del plano.
 document.getElementById('agregar-zona').addEventListener('click', () => {
-  const plano = planoEditable();
-  const id = 'banda' + plano.siguienteBanda;
-  const conEspacio = agregarBanda(plano, 'espacio', salaActual.ancho);
-  const conZona = zonaNuevaParaBanda(conEspacio, id, 'Zona');
-  if (!aplicarBandas(conZona, '')) return;
-  const banda = bandaDe(salaActual, id);
-  marcarBandaActiva(id);
-  anunciar('Zona «' + banda.nombre + '» agregada, a ' + dinero(0) + ' por lugar. Escribe su nombre y su precio.');
-  const campo = listaBandas.querySelector('input[data-op="nombre"][data-banda="' + id + '"]');
-  if (campo) {
-    campo.focus();
-    campo.select();
-  }
+  if (!aplicarBandas(agregarZona(planoEditable()), 'Zona física agregada. Escribe su nombre.')) return;
+  const campo = listaZonas.querySelector('li:last-child input');
+  if (campo) { campo.focus(); campo.select(); }
 });
 
 // Los botones de información de los grupos: abren y cierran su texto de ayuda. Van
@@ -220,45 +202,19 @@ function inicioDeFila(item, clase) {
   const muestra = document.createElement('span');
   muestra.className = 'muestra-capa';
   muestra.setAttribute('aria-hidden', 'true');
-  // El nombre de una banda que tiene su zona para ella sola es el de la zona: son lo
-  // mismo en el panel, asi que renombrarla renombra la zona y las etiquetas la siguen.
-  const propia = zonaExclusivaDeBanda(planoEditable(), item.id);
   const campo = document.createElement('input');
   Object.assign(campo, { type: 'text', maxLength: NOMBRE_MAXIMO, autocomplete: 'off',
-                         value: propia ? zonas[propia].nombre : item.nombrePropio || '',
+                         value: item.nombrePropio || '',
                          placeholder: item.nombre });
   campo.setAttribute('aria-label', 'Nombre de ' + item.nombre);
   campo.dataset.op = 'nombre';
   campo.dataset.banda = item.id;
-  if (propia) campo.dataset.zona = propia;
   nombre.appendChild(campo);
-  const precio = precioDeBanda(item);
-  li.append(muestra, nombre, precio);
-  // El ✓ guarda lo escrito en la fila: el nombre y el precio a la vez. Enter y salir del
-  // campo siguen funcionando; esto es la forma visible de lo mismo.
-  if (precio) li.appendChild(boton('aplicar', 'Guardar el nombre y el precio de ' + item.nombre, 'guardar', item.id));
-  li.appendChild(detalle);   // la seleccionada: borde de su color y aria-current
+  li.append(muestra, nombre, boton('aplicar', 'Guardar el nombre de ' + item.nombre, 'guardar', item.id), detalle);
   return { li, detalle };
 }
 
-// El precio por lugar de la zona de una banda, editable en su propia fila. Las bandas
-// sin zona (espacios y franjas que no dan precio a nada) no lo llevan.
-function precioDeBanda(item) {
-  const zona = item.zona && zonas[item.zona];
-  if (!zona) return '';
-  const campo = document.createElement('input');
-  Object.assign(campo, { type: 'text', className: 'precio-zona', inputMode: 'decimal', autocomplete: 'off',
-                         value: (zona.precio / 100).toFixed(2) });
-  campo.setAttribute('aria-label', 'Precio por lugar de ' + zona.nombre + ', en pesos');
-  campo.dataset.op = 'precio';
-  campo.dataset.banda = item.id;
-  campo.dataset.zona = item.zona;
-  return campo;
-}
-
-// La zona de una banda: la suya o la de otra banda (así dos bandas comparten precio y
-// numeración), «Zona nueva» para darle una propia, y «Sin zona» donde se puede no dar
-// precio (espacios y franjas: lo de dentro hereda de más afuera).
+// Zona fisica asignada a la banda; varias pueden compartir numeracion.
 function selectorDeZona(banda) {
   const select = document.createElement('select');
   select.setAttribute('aria-label', 'Zona de ' + banda.nombre);
@@ -269,27 +225,9 @@ function selectorDeZona(banda) {
   }
   for (const [id, { nombre }] of Object.entries(zonas)) {
     if (id === 'mesas' && banda.tipo === 'filas') continue;   // la de mesas no numera filas
-    // Sin el precio: el de la zona de esta banda ya esta en su campo, al lado.
     select.appendChild(new Option(nombre, id, false, id === banda.zona));
   }
   select.appendChild(new Option('Zona nueva…', 'nueva'));
-  return select;
-}
-
-// En una zona de mesas, cómo se venden todas sus mesas. «Mixta» solo aparece cuando ya
-// lo son, para no perder el estado de cada mesa sin querer.
-function selectorDeVenta(banda) {
-  const dentro = mesasDeBanda(salaActual, banda.id);
-  if (!dentro.length) return null;
-  const completas = dentro.filter((id) => mesas.find((m) => m.id === id).completa).length;
-  const select = document.createElement('select');
-  select.setAttribute('aria-label', 'Venta de las mesas de ' + banda.nombre);
-  select.dataset.op = 'venta';
-  select.dataset.banda = banda.id;
-  const mixta = completas > 0 && completas < dentro.length;
-  if (mixta) select.appendChild(new Option('Venta mixta', 'mixta', false, true));
-  select.appendChild(new Option('Venta por butacas', 'butacas', false, !mixta && !completas));
-  select.appendChild(new Option('Venta por mesa', 'mesa', false, !mixta && completas === dentro.length));
   return select;
 }
 
@@ -323,8 +261,6 @@ function filasDeBandas(bandas, enVertical) {
         guias.setAttribute('aria-pressed', String(Boolean(banda.guias)));
         controles.appendChild(guias);
       }
-      // La venta de las mesas de la banda va al final, tras los botones de siempre.
-      banda.ventaAlFinal = selectorDeVenta(banda);
     } else {
       detalle.textContent = plural(banda.verticales.length, 'banda vertical', 'bandas verticales') +
         ' · ' + plural(banda.alto, 'fila', 'filas');
@@ -339,7 +275,6 @@ function filasDeBandas(bandas, enVertical) {
       boton('abajo', 'Bajar ' + n, 'bajar', banda.id, i === bandas.length - 1),
       boton('duplicar', 'Duplicar ' + n, 'duplicar', banda.id),
       boton('eliminar', 'Eliminar ' + n, 'eliminar', banda.id));
-    if (banda.ventaAlFinal) controles.appendChild(banda.ventaAlFinal);
     li.appendChild(controles);
     if (esDivision(banda)) {
       const ol = document.createElement('ol');
@@ -426,16 +361,6 @@ function aplicarNombreDeBanda(campo) {
   const banda = bandaDe(salaActual, id);
   if (!banda) return;
   const nombre = campo.value.trim().slice(0, NOMBRE_MAXIMO);
-  // Con zona para ella sola, el nombre es el de la zona: las etiquetas lo siguen.
-  const propia = campo.dataset.zona;
-  if (propia) {
-    if (nombre === zonas[propia].nombre) return;
-    if (!aplicarBandas(editarZona(planoEditable(), propia, { nombre }),
-                       zonas[propia].nombre + ' se llama ahora «' + nombre + '».')) {
-      campo.value = zonas[propia].nombre;
-    }
-    return;
-  }
   if (nombre === (banda.nombrePropio || '')) return;
   aplicarBandas(renombrarBanda(planoEditable(), id, nombre),
     nombre ? banda.nombre + ' se llama ahora «' + nombre + '».' : banda.nombre + ' vuelve a su nombre por defecto.');
@@ -488,14 +413,8 @@ listaBandas.addEventListener('click', (e) => {
   } else if (op === 'guias') {
     aplicarBandas(alternarGuias(plano, id), (banda.guias ? 'Sin guías de fila en ' : 'Guías de fila en ') + n + '.');
   } else if (op === 'guardar') {
-    // Los dos campos se leen ANTES de aplicar nada: el primer cambio rehace la lista y se
-    // llevaria por delante lo escrito en el otro (paso: el precio volvia al de antes).
-    const fila = control.closest('li[data-banda]');
-    const copia = (campo) => campo && { value: campo.value, dataset: { ...campo.dataset } };
-    const nombre = copia(fila.querySelector('input[data-op="nombre"]'));
-    const precio = copia(fila.querySelector('input[data-op="precio"]'));
-    if (nombre) aplicarNombreDeBanda(nombre);
-    if (precio) aplicarPrecioDeBanda(precio);
+    const campo = control.closest('li[data-banda]').querySelector('input[data-op="nombre"]');
+    if (campo) aplicarNombreDeBanda(campo);
   } else if (op === 'duplicar') {
     duplicarBandaPorId(id);
   } else if (op === 'eliminar') {
@@ -515,12 +434,9 @@ listaBandas.addEventListener('keydown', (e) => {
   const esNombre = campo.dataset.op === 'nombre';
   if (e.key === 'Enter') {
     if (esNombre) aplicarNombreDeBanda(campo);
-    else aplicarPrecioDeBanda(campo);
   } else if (e.key === 'Escape') {
     const banda = bandaDe(salaActual, campo.dataset.banda);
-    const zona = zonas[campo.dataset.zona];
-    campo.value = !esNombre ? (zona ? (zona.precio / 100).toFixed(2) : campo.value)
-      : zona ? zona.nombre : (banda && banda.nombrePropio) || '';
+    campo.value = (banda && banda.nombrePropio) || '';
   }
 });
 
@@ -528,25 +444,16 @@ listaBandas.addEventListener('change', (e) => {
   const campo = e.target.closest('input[data-op]');
   if (campo) {
     if (campo.dataset.op === 'nombre') aplicarNombreDeBanda(campo);
-    else aplicarPrecioDeBanda(campo);
     return;
   }
   const control = e.target.closest('select[data-op]');
   if (!control) return;
   const { op, banda: id } = control.dataset;
   const antes = bandaDe(salaActual, id).nombre;
-  if (op === 'venta') {
-    if (control.value === 'mixta') return;
-    const completa = control.value === 'mesa';
-    aplicarBandas(marcarMesasDeBanda(planoEditable(), salaActual, id, completa),
-                  'Las mesas de ' + antes + ' se venden ' + (completa ? 'por mesa.' : 'por butacas.'));
-    return;
-  }
   if (control.value === 'nueva') {
     if (aplicarBandas(zonaNuevaParaBanda(planoEditable(), id, antes), '')) {
       const puesta = bandaDe(salaActual, id);
-      anunciar(antes + ' pasa a su propia zona «' + zonas[puesta.zona].nombre + '», a ' + dinero(0) +
-               ' por lugar. Escribe su precio.');
+      anunciar(antes + ' pasa a la zona física «' + zonas[puesta.zona].nombre + '».');
     }
     return;
   }
@@ -554,21 +461,6 @@ listaBandas.addEventListener('change', (e) => {
                 control.value ? antes + ' pasa a la zona ' + zonas[control.value].nombre + '.'
                               : antes + ' se queda sin zona: lo de dentro hereda de más afuera.');
 });
-
-// El precio por lugar escrito en la fila de una banda: es el de su zona.
-function aplicarPrecioDeBanda(campo) {
-  const zona = zonas[campo.dataset.zona];
-  if (!zona) return;
-  const precio = leerPrecio(campo.value);
-  if (precio === null) {
-    anunciar('No se pudo: el precio debe ser de 0 a 1,000,000.00.');
-    campo.value = (zona.precio / 100).toFixed(2);
-    return;
-  }
-  if (precio === zona.precio) return;
-  aplicarBandas(editarZona(planoEditable(), campo.dataset.zona, { precio }),
-                zona.nombre + ': ' + dinero(precio) + ' por lugar.');
-}
 
 function aplicarColumnas() {
   const { distribucion, motivo } = leerDistribucion(
