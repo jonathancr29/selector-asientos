@@ -13,7 +13,7 @@ const formatoDinero = new Intl.NumberFormat('es-MX', { style: 'currency', curren
 const dinero = (centavos) => formatoDinero.format(centavos / 100);
 const porId = new Map();   // id -> butaca, para no recorrer la lista en cada interaccion
 // La zona abre la etiqueta, como saldra en el boleto; el id queda aparte.
-const etiquetaDe = (b) => ((salaActual?.niveles?.length > 1 ? b.nombreNivel + ', ' : '') + (b.grupo ? zonas[b.zona].nombre + ', mesa ' + b.numeroMesa +
+const etiquetaDe = (b) => ((salaActual?.niveles?.length > 1 ? b.nombreNivel + ', ' : '') + (b.sectorFisico ? b.sectorFisico.nombre + ', ' : '') + (b.grupo?.tipo === 'palco' ? zonas[b.zona].nombre + ', ' + b.grupo.nombre + ', lugar ' + b.numero : b.grupo ? zonas[b.zona].nombre + ', mesa ' + b.numeroMesa +
   (b.grupo.completa ? ' completa' : '') + ', lugar ' + b.numero
   : b.seccion + ', fila ' + b.fila + ', butaca ' + b.numero));
 
@@ -40,6 +40,21 @@ function marcarTableroDeMesa(tablero, id) {
 }
 
 function dibujarMuebles() {
+  const palcos = new Map();
+  for (const b of butacasVisibles()) if (b.grupo?.tipo === 'palco') {
+    if (!palcos.has(b.grupo.id)) palcos.set(b.grupo.id, []);
+    palcos.get(b.grupo.id).push(b);
+  }
+  for (const lista of palcos.values()) {
+    const x = Math.min(...lista.map((b) => b.x));
+    const y = Math.min(...lista.map((b) => b.y));
+    const ancho = Math.max(...lista.map((b) => b.x)) + 1 - x;
+    const alto = Math.max(...lista.map((b) => b.y)) + 1 - y;
+    const g = nodo('g', { class: 'palco-fisico', 'aria-hidden': 'true' });
+    g.append(nodo('rect', { x: x * PASO - 2, y: y * PASO - 2, width: ancho * PASO + 4, height: alto * PASO + 4, rx: 3 }),
+      texto('subtitulo', x * PASO, y * PASO - 4, lista[0].grupo.nombre));
+    capaMuebles.appendChild(g);
+  }
   for (const r of planos[tipoActual]?.regionesLibres || TIPOS_DE_SALA[tipoActual].regionesLibres || []) {
     const g = nodo('g', { class: 'region-libre', 'aria-hidden': 'true', transform: `translate(${r.x * PASO} ${r.y * PASO}) rotate(${r.giro})` });
     g.append(nodo('rect', { x: 0, y: 0, width: r.ancho * PASO, height: r.alto * PASO, rx: 2 }), texto('subtitulo', 3, 5, r.nombre));
@@ -205,7 +220,7 @@ function dibujarButacas() {
   porId.clear();
   const bloqueando = modo === 'editor' && herramienta === 'bloquear';
   const pintando = modo === 'editor' && herramienta === 'zona';
-  const numerando = modo === 'editor' && ['numeracion', 'ajustar'].includes(herramienta);
+  const numerando = modo === 'editor' && ['numeracion', 'ajustar', 'fisica'].includes(herramienta);
   const pincel = document.getElementById('zona-pincel').value;
   // En el primer dibujo se injerta un fragmento. En los siguientes, cada id conserva
   // su nodo, foco y lugar en el arbol si no cambio; solo se mueven los que cambiaron
@@ -214,7 +229,7 @@ function dibujarButacas() {
   let siguiente = capaButacas.firstElementChild;
   butacasVisibles().forEach((b, indice) => {
     const seleccionable = b.estado === 'libre';
-    const elegida = elegidas.has(b.id);
+    const elegida = modo === 'editor' && herramienta === 'fisica' ? seleccionFisica.has(b.id) : elegidas.has(b.id);
     // Al bloquear, cada butaca es un checkbox de «bloqueada»; las ocupadas no se tocan.
     // Con el pincel, cada butaca es un checkbox de «de la zona elegida», marcada con la
     // palomita si ya es de esa zona. Las ocupadas no cambian de zona.
@@ -237,8 +252,9 @@ function dibujarButacas() {
       g.replaceChild(glifoButaca(b.x, b.y, b.mira), g.children[1]);
     }
     g._geometria = geometria;
-    const pieza = b.grupo ? b.grupo.id : b.bloque || b.suelta || '';
+    const pieza = b.grupo && b.grupo.tipo !== 'palco' ? b.grupo.id : b.bloque || b.suelta || '';
     const clase = 'butaca' + (seleccionable ? '' : ' ' + b.estado) +
+      (modo === 'editor' && herramienta === 'fisica' && seleccionFisica.has(b.id) ? ' fisica-seleccionada' : '') +
       (elegida || dePincel ? ' elegida' : '') +
       (piezasActivas.has(pieza) && modo === 'editor' && !conButacas() ? ' de-pieza-activa' : '');
     const etiqueta = etiquetaDe(b) + (bloqueando

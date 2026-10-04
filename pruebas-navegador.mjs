@@ -459,6 +459,74 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       assert.equal(await protocolo.evaluar('Object.values(bloquesFilas[0].ajustes)[0].giro'),7);
     });
 
+    await t.test('estructura fisica se crea y asigna por teclado sin cambiar seleccion de compra', async () => {
+      await protocolo.evaluar(`(() => {
+        delete planos['mapa-en-blanco']; delete historiales['mapa-en-blanco']; redibujar('mapa-en-blanco'); cambiarModo('editor');
+        document.querySelector('#agregar-bloque').click(); document.querySelector('#grupo-estructura').open=true;
+        const crear=(tipo,nombre)=>{ const sel=document.querySelector('#tipo-fisico'); sel.value=tipo; sel.dispatchEvent(new Event('change')); document.querySelector('#nombre-entidad-fisica').value=nombre; document.querySelector('#agregar-entidad-fisica').click(); };
+        crear('sector','Izquierdo'); document.querySelector('#herramienta-fisica').click(); document.querySelector('.butaca').focus();
+      })()`);
+      await protocolo.tecla('Enter','Enter',13); await protocolo.tecla('ArrowRight','ArrowRight',39); await protocolo.tecla('Enter','Enter',13);
+      assert.equal(await protocolo.evaluar('seleccionFisica.size'),2);
+      assert.equal(await protocolo.evaluar('elegidas.size'),0);
+      assert.equal(await protocolo.evaluar('document.querySelectorAll(".fisica-seleccionada[aria-checked=true]").length'),2);
+      await protocolo.evaluar(`(() => {
+        document.querySelector('#asignar-entidad-fisica').click();
+        const tipo=document.querySelector('#tipo-fisico'); tipo.value='fila'; tipo.dispatchEvent(new Event('change'));
+        document.querySelector('#nombre-entidad-fisica').value='AA'; document.querySelector('#agregar-entidad-fisica').click(); document.querySelector('#asignar-entidad-fisica').click();
+      })()`);
+      assert.equal(await protocolo.evaluar('miembrosFisicos(planoEditable(),"fila","fila1").length'),2);
+      assert.match(await protocolo.evaluar('document.querySelector(".butaca").getAttribute("aria-label")'),/Izquierdo.*fila AA/);
+      await protocolo.evaluar(`document.querySelector('#eliminar-entidad-fisica').click()`);
+      assert.match(await protocolo.evaluar('document.querySelector("#estado").textContent'),/desvincula/);
+      assert.equal(await protocolo.evaluar('planoEditable().filasFisicas.length'),1);
+    });
+
+    await t.test('palco exige desvincular fila, guarda numeracion propia y mantiene piezas editables', async () => {
+      await protocolo.evaluar(`(() => {
+        const tipo=document.querySelector('#tipo-fisico'); tipo.value='palco'; tipo.dispatchEvent(new Event('change'));
+        document.querySelector('#nombre-entidad-fisica').value='B'; document.querySelector('#agregar-entidad-fisica').click(); document.querySelector('#asignar-entidad-fisica').click();
+      })()`);
+      assert.match(await protocolo.evaluar('document.querySelector("#estado").textContent'),/desvincula la fila/);
+      await protocolo.evaluar(`(() => {
+        const tipo=document.querySelector('#tipo-fisico'); tipo.value='fila'; tipo.dispatchEvent(new Event('change')); document.querySelector('#desvincular-entidad-fisica').click();
+        tipo.value='palco'; tipo.dispatchEvent(new Event('change')); const sel=document.querySelector('#entidad-fisica'); sel.value='palco1'; sel.dispatchEvent(new Event('change')); document.querySelector('#asignar-entidad-fisica').click();
+      })()`);
+      assert.equal(await protocolo.evaluar('butacas.filter(b=>b.grupo?.tipo==="palco").length'),2);
+      assert.equal(await protocolo.evaluar('document.querySelectorAll(".palco-fisico").length'),1);
+      await protocolo.tecla('Enter','Enter',13);
+      assert.equal(await protocolo.evaluar('seleccionFisica.size'),1);
+      await protocolo.evaluar(`(() => {
+        document.querySelector('#numero-lugar-palco').value='07'; document.querySelector('#formulario-numero-palco').requestSubmit();
+        cambiarHerramienta('mesas'); marcarActiva('F1'); ejecutarAccion('girar');
+        document.querySelector('#nombre-mapa').value='Palco navegador'; document.querySelector('#guardar-mapa').click();
+      })()`);
+      assert.equal(await protocolo.evaluar('miembrosFisicos(planoEditable(),"palco","palco1").length'),2);
+      assert.ok(await protocolo.evaluar('butacas.some(b=>b.grupo?.tipo==="palco"&&b.numero==="07")'));
+      assert.match(await protocolo.evaluar('butacas.find(b=>b.grupo?.tipo==="palco"&&b.numero==="07").nodo.getAttribute("aria-label")'),/Palco B, lugar 07/);
+      const carga=protocolo.evento('Page.loadEventFired'); await protocolo.enviar('Page.reload',{ignoreCache:true}); await carga;
+      await protocolo.evaluar(`redibujar('mapa:Palco navegador'); cambiarModo('editor'); document.querySelector('#grupo-estructura').open=true;`);
+      assert.equal(await protocolo.evaluar('planoEditable().palcos[0].nombre'),'B');
+      assert.ok(await protocolo.evaluar('butacas.some(b=>b.grupo?.tipo==="palco"&&b.numero==="07")'));
+      await protocolo.evaluar(`(() => { const tipo=document.querySelector('#tipo-fisico'); tipo.value='palco'; tipo.dispatchEvent(new Event('change')); const sel=document.querySelector('#entidad-fisica'); sel.value='palco1'; sel.dispatchEvent(new Event('change')); document.querySelector('#fisica-miembros').click(); })()`);
+      assert.equal(await protocolo.evaluar('seleccionFisica.size'),2);
+      assert.equal(await protocolo.evaluar('elegidas.size'),0);
+    });
+
+    await t.test('deshacer estructura conserva IDs; salir y cambiar nivel limpian solo seleccion fisica', async () => {
+      await protocolo.evaluar(`(() => {
+        document.querySelector('#nombre-entidad-fisica').value='C'; document.querySelector('#formulario-entidad-fisica').requestSubmit();
+      })()`);
+      assert.equal(await protocolo.evaluar('planoEditable().palcos[0].nombre'),'C');
+      await protocolo.evaluar(`restaurarEdicion('deshacer')`);
+      assert.equal(await protocolo.evaluar('planoEditable().palcos[0].nombre'),'B');
+      await protocolo.evaluar(`restaurarEdicion('rehacer')`);
+      assert.equal(await protocolo.evaluar('planoEditable().palcos[0].id'),'palco1');
+      await protocolo.evaluar(`(() => { cambiarModo('vista'); alternar(document.querySelector('.butaca')); window.__elegidaFisica=[...elegidas][0]; cambiarModo('editor'); document.querySelector('#fisica-miembros').click(); document.querySelector('#nombre-nivel').value='Superior'; document.querySelector('#agregar-nivel').click(); })()`);
+      assert.equal(await protocolo.evaluar('seleccionFisica.size'),0);
+      assert.equal(await protocolo.evaluar('elegidas.has(window.__elegidaFisica)'),true);
+    });
+
     assert.deepEqual(protocolo.excepciones, [], 'errores JavaScript en el navegador');
   } finally {
     protocolo?.socket.close();

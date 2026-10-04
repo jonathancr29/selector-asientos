@@ -394,6 +394,31 @@
           <button id="guardar-ajuste" type="submit">Guardar ajuste</button>
         </form>
       </details>
+      <details class="grupo numeracion-oficial" id="grupo-estructura">
+        <summary>Estructura física</summary>
+        <p class="pista">Sectores, filas y palcos tienen IDs propios. Asignarlos no mueve butacas. La venta se configura en Sin Taquilla.</p>
+        <label for="tipo-fisico">Tipo</label><select id="tipo-fisico"><option value="sector">Sector</option><option value="fila">Fila oficial</option><option value="palco">Palco</option></select>
+        <label for="zona-fisica-entidad">Zona física</label><select id="zona-fisica-entidad"></select>
+        <label for="entidad-fisica">Entidad del nivel actual</label><select id="entidad-fisica"></select>
+        <p id="detalle-entidad-fisica" class="pista"></p>
+        <form id="formulario-entidad-fisica">
+          <label for="nombre-entidad-fisica">Nombre o etiqueta oficial</label><input id="nombre-entidad-fisica" maxlength="40">
+          <button type="button" id="agregar-entidad-fisica">Crear</button>
+          <button type="submit" id="renombrar-entidad-fisica">Renombrar</button>
+          <button type="button" id="eliminar-entidad-fisica">Eliminar entidad vacía</button>
+        </form>
+        <button type="button" id="herramienta-fisica" aria-pressed="false">Elegir lugares con clic o Enter</button>
+        <button type="button" id="fisica-desde-piezas">Usar lugares de piezas seleccionadas</button>
+        <button type="button" id="fisica-miembros">Seleccionar integrantes de la entidad</button>
+        <p id="detalle-seleccion-fisica" class="pista" aria-live="polite">0 lugares para asignar.</p>
+        <button type="button" id="asignar-entidad-fisica">Asignar entidad</button>
+        <button type="button" id="desvincular-entidad-fisica">Desvincular este tipo</button>
+        <button type="button" id="vaciar-seleccion-fisica">Limpiar selección física</button>
+        <form id="formulario-numero-palco">
+          <label for="numero-lugar-palco">Etiqueta de un lugar de palco seleccionado</label><input id="numero-lugar-palco" maxlength="40" disabled>
+          <button type="submit" id="guardar-numero-palco" disabled>Guardar número del lugar</button>
+        </form>
+      </details>
       <details class="grupo numeracion-oficial" open>
         <summary>Numeración oficial</summary>
         <label for="modo-numeracion">Numeración del mapa</label>

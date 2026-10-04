@@ -667,7 +667,7 @@ cero, por ejemplo un salón de eventos. Al elegirla se abre directamente el modo
   fila, para ubicarse. No son butacas ni se venden.
 - **Escenario:** el botón **Agregar escenario** de la barra lo pone en el primer hueco libre: a todo
   el ancho si cabe, si no de 8 o de 4 columnas. Después se mueve y cambia de tamaño como siempre.
-- **Guardar:** con un nombre, en «Mis mapas», como cualquier mapa (versión 7 del formato).
+- **Guardar:** con un nombre, en «Mis mapas», como cualquier mapa (versión 8 del formato).
 
 ### Butacas sueltas y formas
 
@@ -802,7 +802,7 @@ los lugares de una mesa estén en la misma zona física. Una zona llamada *Zona*
 provisional. Los mapas viejos se siguen abriendo; si tienen `zonasDeAsiento`, antes de exportar el
 catálogo hay que revisar esas asignaciones con *Revisar zonas físicas asignadas*. La confirmación
 se guarda como `zonasFisicasConfirmadas`, asociada al ID y al valor de zona; cambiar la zona vuelve
-a exigir revisión. El catálogo físico es versión 4, incluye nivel, revisión e IDs retirados, y Sin Taquilla decidirá categoría, importe y modalidad al configurar
+a exigir revisión. El catálogo físico es versión 5, incluye ubicación completa, revisión e IDs retirados, y Sin Taquilla decidirá categoría, importe y modalidad al configurar
 el evento. Aún no publica el mapa ni conecta la venta.
 
 Los mapas de la versión 1 (que guardaban `"pasillos": "ambos"`) se siguen leyendo: se convierten a
@@ -829,6 +829,47 @@ propias y se recuperan al recargar.
   vez por pieza, lo que con muchísimas mesas y bloques en una sala grande sería cuadrático. Con el
   aforo máximo actual no se nota.
 - **Más formas:** escenario secundario, cabina de DJ, columna u otros obstáculos del recinto.
+
+## Estructura física del recinto (fase 5)
+
+El mapa **versión 8** y el catálogo físico **versión 5** incorporan sectores, filas oficiales
+y palcos con IDs propios. El panel «Estructura física» permite crearlos dentro de un nivel y
+zona, renombrarlos y asignar sus integrantes. Cada tipo admite hasta 1.000 entidades activas.
+Crear una entidad vacía no añade asientos ni aforo. Suprimirla exige desvincular primero sus
+lugares; su ID queda retirado y no se reutiliza, tampoco al deshacer y crear otra.
+
+Las pertenencias se guardan por lugar en el inventario, con `sectorId`, `filaId` y `grupoId`.
+Una fila puede continuar entre bloques o sectores separados por pasillos. Su etiqueta procede
+de la fila física; su numeración de butacas conserva el modo automático u oficial del mapa.
+En modo oficial, renombrar la fila actualiza expresamente la etiqueta de sus integrantes.
+El catálogo verifica la unicidad sobre la ubicación completa, incluido el sector.
+
+Un palco agrupa butacas sueltas o lugares de bloques existentes, sin convertirlos en mesas.
+Cada integrante tiene `numeroGrupo`, una etiqueta explícita independiente de sus coordenadas,
+editable al seleccionar un solo lugar. Las etiquetas iniciales se asignan sin repetir las ya
+existentes; mover o regenerar no las cambia. El palco no necesita una fila ficticia. Para pasar
+un lugar de fila a palco, o viceversa, hay que desvincular antes su pertenencia anterior.
+Todos los integrantes comparten nivel y zona; pueden pertenecer a distintos sectores.
+
+El contorno de un palco se calcula alrededor de sus integrantes visibles: ayuda a reconocer el
+compartimento, pero no es un obstáculo ni una región gráfica que mueva otras piezas. Sus lugares
+se siguen posicionando con bloques o butacas sueltas y admiten las geometrías de fase 4.
+Duplicar esas piezas crea nuevos lugares, conserva su sector y deja pendiente asignar la fila
+o el palco de la copia. El original conserva todos sus integrantes. Reasignar zona es explícito
+y desvincula las pertenencias incompatibles; eliminar nivel retira sus entidades y lugares.
+
+La herramienta «Elegir lugares con clic o Enter» mantiene una selección física independiente
+de la selección de compra. También puede tomar los lugares de las piezas seleccionadas o los
+integrantes de una entidad. Las flechas recorren las butacas; «Asignar entidad» aplica todos los
+lugares o ninguno si hay incompatibilidades. La selección física se limpia al cambiar de nivel
+o salir del editor. Guardar, importar y deshacer conservan entidades y pertenencias.
+
+El catálogo incluye `sector`, `physical_row`, `physical_group` y `group_place_number` por lugar,
+y listas de sectores, filas y grupos con integrantes identificados individualmente. Las mesas
+conservan su ID de pieza como ID de grupo; los palcos tienen ID físico propio. Cada lugar cuenta
+una sola vez. Precios, habilitación por evento y venta conjunta siguen a cargo de Sin Taquilla;
+esta fase no activa venta completa ni implementa el conector. Los mapas v1–v7 se migran sin
+inventar sectores, filas físicas o palcos a partir de su geometría o etiquetas.
 
 ## Niveles, regiones y filas libres (fase 4)
 
@@ -868,9 +909,9 @@ como cuadrados de una celda, incluso en coordenadas fraccionarias; tocar bordes 
 Las flechas siguen la fila y columna local de un bloque libre, aunque el arco retroceda en
 coordenadas; entre bloques buscan el lugar más cercano en la dirección elegida del piso visible.
 
-El catálogo físico **versión 4** agrega nivel y orientación. Su etiqueta completa distingue
-dos lugares con la misma fila/número en pisos diferentes. Sectores oficiales, entidades de fila,
-palcos, imágenes de fondo y curvas generales siguen pendientes. Esta fase no construye ni
+El catálogo físico versión 4 agregó nivel y orientación; la fase 5 lo amplía a versión 5.
+Su etiqueta completa distingue dos lugares con la misma fila/número en pisos diferentes.
+Imágenes de fondo y curvas generales siguen pendientes. Esta fase no construye ni
 confirma el plano o aforo del Clavijero; prepara las herramientas para trazarlo con documentación.
 
 ## Pruebas

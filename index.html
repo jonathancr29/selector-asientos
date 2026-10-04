@@ -392,6 +392,10 @@
   }
   .nota code { color: var(--texto-tenue); }
   .nota + .nota { border-left-color: #fbbf24; }
+.palco-fisico { pointer-events: none; }
+.palco-fisico rect { fill: none; stroke: #a4bdd9; stroke-width: .6; stroke-dasharray: 2 2; }
+.palco-fisico text { text-anchor: start; font-size: 4px; }
+.butaca.fisica-seleccionada .toque { stroke: #facc15; stroke-width: 1.4; }
 </style>
 </head>
 <body>
@@ -770,6 +774,31 @@
           <label for="ajuste-dy">Desplazamiento entre filas</label><input id="ajuste-dy" type="number" step="0.1" value="0">
           <label for="ajuste-giro">Corrección de orientación en grados</label><input id="ajuste-giro" type="number" step="0.1" value="0">
           <button id="guardar-ajuste" type="submit">Guardar ajuste</button>
+        </form>
+      </details>
+      <details class="grupo numeracion-oficial" id="grupo-estructura">
+        <summary>Estructura física</summary>
+        <p class="pista">Sectores, filas y palcos tienen IDs propios. Asignarlos no mueve butacas. La venta se configura en Sin Taquilla.</p>
+        <label for="tipo-fisico">Tipo</label><select id="tipo-fisico"><option value="sector">Sector</option><option value="fila">Fila oficial</option><option value="palco">Palco</option></select>
+        <label for="zona-fisica-entidad">Zona física</label><select id="zona-fisica-entidad"></select>
+        <label for="entidad-fisica">Entidad del nivel actual</label><select id="entidad-fisica"></select>
+        <p id="detalle-entidad-fisica" class="pista"></p>
+        <form id="formulario-entidad-fisica">
+          <label for="nombre-entidad-fisica">Nombre o etiqueta oficial</label><input id="nombre-entidad-fisica" maxlength="40">
+          <button type="button" id="agregar-entidad-fisica">Crear</button>
+          <button type="submit" id="renombrar-entidad-fisica">Renombrar</button>
+          <button type="button" id="eliminar-entidad-fisica">Eliminar entidad vacía</button>
+        </form>
+        <button type="button" id="herramienta-fisica" aria-pressed="false">Elegir lugares con clic o Enter</button>
+        <button type="button" id="fisica-desde-piezas">Usar lugares de piezas seleccionadas</button>
+        <button type="button" id="fisica-miembros">Seleccionar integrantes de la entidad</button>
+        <p id="detalle-seleccion-fisica" class="pista" aria-live="polite">0 lugares para asignar.</p>
+        <button type="button" id="asignar-entidad-fisica">Asignar entidad</button>
+        <button type="button" id="desvincular-entidad-fisica">Desvincular este tipo</button>
+        <button type="button" id="vaciar-seleccion-fisica">Limpiar selección física</button>
+        <form id="formulario-numero-palco">
+          <label for="numero-lugar-palco">Etiqueta de un lugar de palco seleccionado</label><input id="numero-lugar-palco" maxlength="40" disabled>
+          <button type="submit" id="guardar-numero-palco" disabled>Guardar número del lugar</button>
         </form>
       </details>
       <details class="grupo numeracion-oficial" open>
@@ -1928,6 +1957,10 @@ function eliminarNivel(plano, id) {
   const otro = niveles.find((n) => n.id !== id);
   const nuevo = cambiarNivelPlano(plano, otro.id);
   nuevo.niveles = nuevo.niveles.filter((n) => n.id !== id);
+  for (const t of Object.values(TIPOS_FISICOS)) {
+    nuevo.entidadesRetiradas.push(...nuevo[t.lista].filter((e) => e.nivel === id).map((e) => e.id));
+    nuevo[t.lista] = nuevo[t.lista].filter((e) => e.nivel !== id);
+  }
   return nuevo;
 }
 
@@ -1952,10 +1985,12 @@ function generarPlano(tipo, plano = null) {
     lista.push(...butacas);
   }
   butacas.length = 0; butacas.push(...lista);
+  aplicarEstructuraFisica(dato);
   nivelGenerado = activo;
   sala.datosNiveles = { niveles: copiarDatos(niveles), nivelEnEdicion: activo,
     siguienteNivel: dato.siguienteNivel || 2, siguienteRegion: dato.siguienteRegion || 1,
     regionesLibres: copiarDatos(dato.regionesLibres || []) };
+  sala.registroFisico = { ...(sala.registroFisico || {}), ...estructuraFisicaDe(dato) };
   return sala;
 }
 
@@ -2094,7 +2129,7 @@ const excluida = (excluir, id) => (excluir instanceof Set ? excluir.has(id) : id
 function celdasOcupadas(excluir) {
   const ocupadas = new Map();
   for (const b of butacasVisibles()) {
-    if (b.grupo || (b.bloque && excluida(excluir, b.bloque)) || (b.suelta && excluida(excluir, b.suelta))) continue;
+    if ((b.grupo && b.grupo.tipo !== 'palco') || (b.bloque && excluida(excluir, b.bloque)) || (b.suelta && excluida(excluir, b.suelta))) continue;
     ocuparRectangulo(ocupadas, { x: b.x, y: b.y, ancho: 1, alto: 1 }, (b.suelta ? 'la butaca ' + b.fila + b.numero : 'la fila ' + b.fila) + ' de ' + b.seccion);
   }
   for (const m of mesas) {
@@ -2295,7 +2330,7 @@ function primeraPiezaQueNoCabe(sala) {
 // ella; las que estan dentro de una banda que se mueve, viajan con la banda.
 // ---------------------------------------------------------------------------
 const copiarPlano = (plano) => ({
-  ...plano, bandas: copiarBandas(plano.bandas),
+  ...plano, ...estructuraFisicaDe(plano), bandas: copiarBandas(plano.bandas),
   ...(plano.niveles ? { niveles: copiarDatos(plano.niveles) } : {}),
   regionesLibres: copiarDatos(plano.regionesLibres || []),
   ...(plano.zonas ? { zonas: copiarZonas(plano.zonas) } : {}),
@@ -2525,6 +2560,7 @@ function planoDesdeSala(tipo, sala) {
     } : {}),
   }));
   return sincronizarIdentidad({
+    ...estructuraFisicaDe(definicion),
     ...(sala.datosNiveles || {}),
     bandas: limpiar(sala.bandas),
     mesas: mesas.map(configDeMesa),
@@ -2662,7 +2698,7 @@ function asignarZonaEnArea(plano, lista, area, zona) {
     if (destino === b.zonaOriginal) delete nuevo.zonasDeAsiento[b.id];
     else nuevo.zonasDeAsiento[b.id] = destino;
     const fisica = nuevo.identidadFisica?.[b.claveDiseno || b.id];
-    if (fisica) fisica.zona = destino;
+    if (fisica) fijarZonaInventario(nuevo, fisica, destino);
     return true;
   });
   return { plano: nuevo, cambiadas, ocupadas, mesas: mesasConZonasMezcladas(nuevo, lista) };
@@ -2698,7 +2734,106 @@ function bloquearEnArea(plano, lista, area, bloquear) {
 // bandas de tipo 'espacio' (con 'guias') y el escenario ya no es banda obligatoria.
 // ---------------------------------------------------------------------------
 const FORMATO_MAPA = 'selector-asientos/mapa';
-const VERSION_MAPA = 7;
+const VERSION_MAPA = 8;
+
+// La ubicacion pertenece al inventario, nunca a un contenedor de dibujo.
+const TIPOS_FISICOS = {
+  sector: { lista: 'sectores', campo: 'sectorId', prefijo: 'sector', contador: 'siguienteSector' },
+  fila: { lista: 'filasFisicas', campo: 'filaId', prefijo: 'fila', contador: 'siguienteFilaFisica' },
+  palco: { lista: 'palcos', campo: 'grupoId', prefijo: 'palco', contador: 'siguientePalco' },
+};
+const estructuraFisicaDe = (p) => ({ sectores: copiarDatos(p.sectores || []), filasFisicas: copiarDatos(p.filasFisicas || []),
+  palcos: copiarDatos(p.palcos || []), siguienteSector: p.siguienteSector || 1,
+  siguienteFilaFisica: p.siguienteFilaFisica || 1, siguientePalco: p.siguientePalco || 1,
+  entidadesRetiradas: [...(p.entidadesRetiradas || [])] });
+const entidadFisicaDe = (p, tipo, id) => (p[TIPOS_FISICOS[tipo]?.lista] || []).find((e) => e.id === id);
+const miembrosFisicos = (p, tipo, id) => Object.values(p.identidadFisica || {}).filter((f) => f[TIPOS_FISICOS[tipo]?.campo] === id).map((f) => f.id);
+const nombreFisicoNormalizado = (s) => s.normalize('NFKC').trim().toLocaleUpperCase('es');
+
+function agregarEntidadFisica(plano, tipo, nombre, nivel, zona) {
+  const t = TIPOS_FISICOS[tipo];
+  if (!t || !etiquetaOficialValida(nombre) || !nivelesDe(plano).some((n) => n.id === nivel) || !zonasDe(plano).some((z) => z.id === zona)) return { motivo: 'tipo, nombre, nivel o zona física inválidos' };
+  const lista = plano[t.lista] || [];
+  if (lista.length >= 1000 || lista.some((e) => e.nivel === nivel && e.zona === zona && nombreFisicoNormalizado(e.nombre) === nombreFisicoNormalizado(nombre))) return { motivo: 'nombre físico repetido o límite de 1.000 entidades por tipo' };
+  const nuevo = copiarPlano(plano);
+  let siguiente = nuevo[t.contador] || 1;
+  const usados = new Set([...(nuevo.entidadesRetiradas || []), ...lista.map((e) => e.id)]);
+  let id;
+  do { id = t.prefijo + siguiente++; } while (usados.has(id));
+  if (siguiente > 1e6) return { motivo: 'se agotaron los IDs de este tipo físico' };
+  nuevo[t.lista] = [...lista, { id, nombre: nombre.trim(), nivel, zona }];
+  nuevo[t.contador] = siguiente;
+  return { plano: nuevo, id };
+}
+
+function renombrarEntidadFisica(plano, tipo, id, nombre) {
+  const t = TIPOS_FISICOS[tipo];
+  const e = entidadFisicaDe(plano, tipo, id);
+  if (!e || !etiquetaOficialValida(nombre) || (plano[t.lista] || []).some((otra) => otra.id !== id && otra.nivel === e.nivel && otra.zona === e.zona && nombreFisicoNormalizado(otra.nombre) === nombreFisicoNormalizado(nombre))) return { motivo: 'entidad desconocida o nombre físico inválido/repetido' };
+  const nuevo = copiarPlano(plano);
+  nuevo[t.lista].find((otra) => otra.id === id).nombre = nombre.trim();
+  if (tipo === 'fila') for (const f of Object.values(nuevo.identidadFisica || {})) if (f.filaId === id && f.fila !== undefined) f.fila = nombre.trim();
+  return nuevo;
+}
+
+function eliminarEntidadFisica(plano, tipo, id) {
+  const t = TIPOS_FISICOS[tipo];
+  if (!entidadFisicaDe(plano, tipo, id)) return { motivo: 'entidad física desconocida' };
+  if (miembrosFisicos(plano, tipo, id).length) return { motivo: 'reasigna o desvincula sus lugares antes de eliminarla' };
+  const nuevo = copiarPlano(plano);
+  nuevo[t.lista] = nuevo[t.lista].filter((e) => e.id !== id);
+  nuevo.entidadesRetiradas = [...new Set([...(nuevo.entidadesRetiradas || []), id])];
+  return nuevo;
+}
+
+function asignarPertenenciaFisica(plano, ids, tipo, id) {
+  const t = TIPOS_FISICOS[tipo];
+  const e = id ? entidadFisicaDe(plano, tipo, id) : null;
+  if (!t || (id && !e) || !Array.isArray(ids) || !ids.length) return { motivo: 'entidad física o selección inválida' };
+  const nuevo = copiarPlano(plano);
+  const porId = new Map(Object.entries(nuevo.identidadFisica || {}).map(([k,f]) => [f.id, { k, f }]));
+  const elegidos = [...new Set(ids)].map((i) => porId.get(i));
+  if (elegidos.some((p) => !p || (e && (p.f.nivel !== e.nivel || p.f.zona !== e.zona)) || (id && tipo !== 'sector' && p.k.startsWith('M')))) return { motivo: 'los lugares deben existir y compartir nivel y zona; una mesa no se convierte en fila o palco' };
+  if (id && tipo === 'fila' && elegidos.some(({ f }) => f.grupoId)) return { motivo: 'desvincula el palco antes de asignar una fila' };
+  if (id && tipo === 'palco' && elegidos.some(({ f }) => f.filaId)) return { motivo: 'desvincula la fila antes de asignar un palco' };
+  let numero = 1;
+  const usados = new Set(Object.values(nuevo.identidadFisica).filter((f) => f.grupoId === id).map((f) => f.numeroGrupo));
+  for (const { f } of elegidos) {
+    if (!id) { delete f[t.campo]; if (tipo === 'palco') delete f.numeroGrupo; }
+    else {
+      if (tipo === 'palco' && f.grupoId !== id) {
+        while (usados.has(String(numero))) numero++;
+        f.numeroGrupo = String(numero++); usados.add(f.numeroGrupo);
+      }
+      f[t.campo] = id;
+      if (tipo === 'fila' && f.fila !== undefined) f.fila = e.nombre;
+    }
+  }
+  return nuevo;
+}
+
+function editarNumeroPalco(plano, id, numero) {
+  const nuevo = copiarPlano(plano);
+  const f = Object.values(nuevo.identidadFisica || {}).find((p) => p.id === id);
+  if (!f?.grupoId || !etiquetaOficialValida(numero)) return { motivo: 'lugar de palco o etiqueta inválidos' };
+  if (Object.values(nuevo.identidadFisica).some((otra) => otra.id !== id && otra.grupoId === f.grupoId && nombreFisicoNormalizado(otra.numeroGrupo) === nombreFisicoNormalizado(numero))) return { motivo: 'número de lugar repetido en el palco' };
+  f.numeroGrupo = numero.trim(); return nuevo;
+}
+
+function aplicarEstructuraFisica(plano) {
+  const sectores = new Map((plano.sectores || []).map((e) => [e.id,e]));
+  const filas = new Map((plano.filasFisicas || []).map((e) => [e.id,e]));
+  const palcos = new Map((plano.palcos || []).map((e) => [e.id,e]));
+  for (const b of butacas) {
+    const f = plano.identidadFisica?.[b.claveDiseno];
+    if (!f) continue;
+    b.sectorFisico = sectores.get(f.sectorId) || null;
+    b.filaFisica = filas.get(f.filaId) || null;
+    if (b.filaFisica) b.fila = b.filaFisica.nombre;
+    const palco = palcos.get(f.grupoId);
+    if (palco) { b.grupo = { id: palco.id, nombre: 'Palco ' + palco.nombre, tipo: 'palco', completa: false }; b.numero = f.numeroGrupo; b.fila = null; b.numeroMesa = null; }
+  }
+}
 
 // La clave del dibujo identifica una ranura del generador; el ID identifica un lugar.
 // Al retirar una ranura su ID queda registrado y una ampliacion obtiene otro.
@@ -2771,6 +2906,10 @@ function conciliarIdentidadAlRestaurar(actual, destino) {
   const retirados = new Set([...(actual.idsRetirados || []), ...(nuevo.idsRetirados || []),
     ...Object.values(actual.identidadFisica || {}).map((f) => f.id)]);
   nuevo.idsRetirados = [...retirados].filter((id) => !vivos.has(id));
+  const entidadesVivas = new Set(Object.values(TIPOS_FISICOS).flatMap((t) => (nuevo[t.lista] || []).map((e) => e.id)));
+  nuevo.entidadesRetiradas = [...new Set([...(actual.entidadesRetiradas || []), ...(nuevo.entidadesRetiradas || []),
+    ...Object.values(TIPOS_FISICOS).flatMap((t) => (actual[t.lista] || []).map((e) => e.id))])].filter((id) => !entidadesVivas.has(id));
+  for (const t of Object.values(TIPOS_FISICOS)) nuevo[t.contador] = Math.max(actual[t.contador] || 1, nuevo[t.contador] || 1);
   for (const k of ['siguiente', 'siguienteBanda', 'siguienteBloque', 'siguienteButaca', 'siguienteForma', 'siguienteZona', 'siguienteLugar', 'siguienteNivel', 'siguienteRegion']) {
     nuevo[k] = Math.max(actual[k] || 1, nuevo[k] || 1);
   }
@@ -2814,6 +2953,7 @@ function cambiarNumeracion(plano, modo, lista = butacas) {
   nuevo.modoNumeracion = modo;
   if (modo === 'oficial') for (const b of lista) {
     const f = nuevo.identidadFisica[b.claveDiseno || b.id];
+    if (b.grupo?.tipo === 'palco') { delete f.numero; delete f.fila; delete f.mesa; continue; }
     f.numero = String(b.numero);
     if (b.grupo) f.mesa = String(b.numeroMesa);
     else f.fila = String(b.fila);
@@ -2822,13 +2962,15 @@ function cambiarNumeracion(plano, modo, lista = butacas) {
   return nuevo;
 }
 
-const claveEtiquetaFisica = (f) => JSON.stringify([f.nivel || 'n1', f.zona, f.mesa ? 'mesa' : 'fila', f.mesa || f.fila, f.numero]
+const claveEtiquetaFisica = (f) => JSON.stringify([f.nivel || 'n1', f.zona, f.sectorId || '', f.grupoId || '', f.grupoId ? 'palco' : f.mesa ? 'mesa' : 'fila', f.grupoId || f.mesa || f.fila, f.grupoId ? f.numeroGrupo : f.numero]
   .map((s) => String(s).normalize('NFKC').trim().toLocaleUpperCase('es')));
 function editarEtiquetaOficial(plano, id, valores) {
   if (plano.modoNumeracion !== 'oficial') return { motivo: 'activa la numeración oficial primero' };
   const nuevo = copiarPlano(plano);
   const lugar = Object.values(nuevo.identidadFisica || {}).find((f) => f.id === id);
   if (!lugar) return { motivo: 'ese lugar ya no existe' };
+  if (lugar.grupoId) return editarNumeroPalco(plano, id, String(valores.numero ?? ''));
+  if (lugar.filaId && valores.fila !== entidadFisicaDe(plano, 'fila', lugar.filaId)?.nombre) return { motivo: 'renombra la fila física desde su catálogo' };
   const claveLugar = Object.keys(nuevo.identidadFisica).find((k) => nuevo.identidadFisica[k] === lugar);
   const deMesa = claveLugar.startsWith('M');
   const fila = String(valores.fila ?? '').trim();
@@ -2854,8 +2996,17 @@ function reasignarZonaFisica(plano, ids, zona) {
   if (!zonasDe(plano).some((z) => z.id === zona)) return { motivo: 'zona física desconocida' };
   const nuevo = copiarPlano(plano);
   const elegidos = new Set(ids);
-  for (const f of Object.values(nuevo.identidadFisica || {})) if (elegidos.has(f.id)) f.zona = zona;
+  for (const f of Object.values(nuevo.identidadFisica || {})) if (elegidos.has(f.id)) {
+    fijarZonaInventario(nuevo, f, zona);
+  }
   return nuevo;
+}
+
+function fijarZonaInventario(plano, f, zona) {
+  f.zona = zona;
+  for (const [tipo,t] of Object.entries(TIPOS_FISICOS)) if (f[t.campo] && entidadFisicaDe(plano,tipo,f[t.campo])?.zona !== zona) {
+    delete f[t.campo]; if (tipo === 'palco') delete f.numeroGrupo;
+  }
 }
 
 function nuevaRevisionFisica(plano) {
@@ -2884,7 +3035,8 @@ function identidadDeMapa(dato, errores, idsZona) {
     }
     if (ids.has(f.id) || retiradosSet.has(f.id)) errores.push('ID físico repetido o retirado: ' + f.id);
     ids.add(f.id);
-    resultado[clave] = { id: f.id, zona: f.zona, ...(f.nivel ? { nivel: f.nivel } : {}) };
+    resultado[clave] = { id: f.id, zona: f.zona, ...(f.nivel ? { nivel: f.nivel } : {}),
+      ...Object.fromEntries(['sectorId','filaId','grupoId','numeroGrupo'].filter((k) => f[k] !== undefined).map((k) => [k,f[k]])) };
     if (clave.startsWith('M') && f.mesa !== undefined) {
       const grupo = clave.split('-')[0];
       if (!etiquetaOficialValida(f.mesa)) errores.push('etiqueta de mesa inválida en ' + f.id);
@@ -2911,7 +3063,8 @@ function identidadDeMapa(dato, errores, idsZona) {
 function huellaRevision(mapa) {
   const claves = ['niveles', 'regionesLibres', 'siguienteNivel', 'siguienteRegion', 'distribucion', 'bandas', 'mesas', 'bloquesFilas', 'formas', 'butacasSueltas', 'escenario', 'lienzo',
     'bloqueadas', 'zonasDeAsiento', 'zonasFisicasConfirmadas', 'zonas', 'identidadFisica', 'idsRetirados', 'siguienteLugar', 'modoNumeracion',
-    'siguiente', 'siguienteBanda', 'siguienteBloque', 'siguienteForma', 'siguienteButaca', 'siguienteZona'];
+    'siguiente', 'siguienteBanda', 'siguienteBloque', 'siguienteForma', 'siguienteButaca', 'siguienteZona',
+    'sectores', 'filasFisicas', 'palcos', 'siguienteSector', 'siguienteFilaFisica', 'siguientePalco', 'entidadesRetiradas'];
   const texto = JSON.stringify({ revision: { recintoId: mapa.revisionFisica.recintoId, numero: mapa.revisionFisica.numero },
     contenido: Object.fromEntries(claves.map((k) => [k, mapa[k]])) });
   let a = 2166136261;
@@ -2978,6 +3131,7 @@ function mapaDesdePlano(nombre, plano, guardado, idsExistentes = null) {
   plano = sincronizarIdentidad(plano);
   return {
     formato: FORMATO_MAPA, version: VERSION_MAPA, nombre, guardado,
+    ...estructuraFisicaDe(plano),
     niveles: copiarDatos(nivelesDe(plano)), siguienteNivel: plano.siguienteNivel || 2,
     regionesLibres: copiarDatos(plano.regionesLibres || []), siguienteRegion: plano.siguienteRegion || 1,
     distribucion: { bloques: [...plano.distribucion.bloques], pasillos: [...plano.distribucion.pasillos] },
@@ -3016,6 +3170,7 @@ const limpiarBandasParaMapa = (lista) => lista.map(({ ocupadas, bloqueadasAlFina
 }));
 
 const definicionDeMapa = (mapa) => ({
+  ...estructuraFisicaDe(mapa),
   nombre: mapa.nombre, grupo: GRUPO_MAPAS, lienzo: Boolean(mapa.lienzo), distribucion: mapa.distribucion, bandas: mapa.bandas,
   mesas: mapa.mesas, bloquesFilas: mapa.bloquesFilas, formas: mapa.formas, butacasSueltas: mapa.butacasSueltas,
   escenario: mapa.escenario, bloqueadas: mapa.bloqueadas, zonasDeAsiento: mapa.zonasDeAsiento,
@@ -3051,7 +3206,7 @@ function nombreDeArchivo(nombre) {
 function motivoDeCabecera(dato) {
   if (!dato || typeof dato !== 'object' || Array.isArray(dato)) return 'el archivo no contiene un mapa';
   if (dato.formato !== FORMATO_MAPA) return 'no es un mapa de este selector de asientos';
-  if (![1, 2, 3, 4, 5, 6, VERSION_MAPA].includes(dato.version)) return 'versión de mapa no compatible (' + dato.version + ')';
+  if (![1, 2, 3, 4, 5, 6, 7, VERSION_MAPA].includes(dato.version)) return 'versión de mapa no compatible (' + dato.version + ')';
   return null;
 }
 
@@ -3349,7 +3504,87 @@ function regionesDeMapa(lista, idsZona, errores) {
   return regiones;
 }
 
+function validarEstructuraFisica(dato, errores) {
+  const limpio = {};
+  const niveles = new Set((Array.isArray(dato.niveles) ? dato.niveles : []).map((n) => n?.id));
+  const zonasFisicas = new Set((Array.isArray(dato.zonas) ? dato.zonas : []).map((z) => z?.id));
+  const retirados = dato.entidadesRetiradas;
+  const patron = /^(sector|fila|palco)[1-9]\d{0,5}$/;
+  if (!Array.isArray(retirados) || retirados.length > BUTACAS_MAXIMAS || !retirados.every((id) => typeof id === 'string' && patron.test(id)) || new Set(retirados).size !== retirados.length) errores.push('registro de entidades retiradas inválido');
+  limpio.entidadesRetiradas = Array.isArray(retirados) ? [...retirados] : [];
+  const idsRetirados = new Set(limpio.entidadesRetiradas);
+  for (const [tipo,t] of Object.entries(TIPOS_FISICOS)) {
+    const lista = dato[t.lista];
+    limpio[t.lista] = [];
+    if (!Array.isArray(lista) || lista.length > 1000) { errores.push('lista física inválida: ' + tipo); continue; }
+    const ids = new Set();
+    const nombres = new Set();
+    for (const e of lista) {
+      if (!e || typeof e.id !== 'string' || !new RegExp('^' + t.prefijo + '[1-9]\\d{0,5}$').test(e.id) || ids.has(e.id) || idsRetirados.has(e.id) || !etiquetaOficialValida(e.nombre) || !niveles.has(e.nivel) || !zonasFisicas.has(e.zona)) { errores.push('entidad física inválida o retirada: ' + tipo); continue; }
+      ids.add(e.id);
+      const nombre = JSON.stringify([e.nivel,e.zona,nombreFisicoNormalizado(e.nombre)]);
+      if (nombres.has(nombre)) errores.push('nombre físico repetido: ' + tipo);
+      nombres.add(nombre);
+      limpio[t.lista].push({ id: e.id, nombre: e.nombre.trim(), nivel: e.nivel, zona: e.zona });
+    }
+    if (!esEntero(dato[t.contador],1,1e6)) errores.push('contador físico inválido: ' + tipo);
+    limpio[t.contador] = Math.max(dato[t.contador] || 1, ...[...ids, ...limpio.entidadesRetiradas.filter((id) => id.startsWith(t.prefijo))].map((id) => Number(id.slice(t.prefijo.length)) + 1));
+  }
+  const porTipo = new Map(Object.entries(TIPOS_FISICOS).map(([tipo,t]) => [tipo,new Map(limpio[t.lista].map((e) => [e.id,e]))]));
+  const etiquetasPalco = new Set();
+  for (const [clave,f] of Object.entries(dato.identidadFisica || {})) {
+    if (!f || typeof f !== 'object') continue;
+    for (const [tipo,t] of Object.entries(TIPOS_FISICOS)) if (f[t.campo] !== undefined) {
+      const e = porTipo.get(tipo).get(f[t.campo]);
+      if (!e || e.nivel !== f.nivel || e.zona !== f.zona || (tipo !== 'sector' && clave.startsWith('M'))) errores.push('pertenencia física incompatible: ' + f.id + ' (' + tipo + ')');
+      if (tipo === 'fila' && e && f.fila !== undefined && f.fila !== e.nombre) errores.push('etiqueta distinta de la fila física: ' + f.id);
+    }
+    if (f.filaId && f.grupoId) errores.push('un lugar de palco no pertenece también a una fila: ' + f.id);
+    if (f.grupoId) {
+      if (!etiquetaOficialValida(f.numeroGrupo)) errores.push('número de lugar de palco inválido: ' + f.id);
+      else {
+        const etiqueta = JSON.stringify([f.grupoId,nombreFisicoNormalizado(f.numeroGrupo)]);
+        if (etiquetasPalco.has(etiqueta)) errores.push('número repetido en palco: ' + f.id);
+        etiquetasPalco.add(etiqueta);
+      }
+    } else if (f.numeroGrupo !== undefined) errores.push('número de palco sin grupo: ' + f.id);
+  }
+  return limpio;
+}
+
 function validarMapa(dato) {
+  const cabecera = motivoDeCabecera(dato);
+  if (cabecera) return { errores: [cabecera] };
+  if (dato.version < 8) {
+    // Los formatos anteriores no pueden inyectar pertenencias futuras.
+    const anterior = copiarDatos(dato);
+    for (const t of Object.values(TIPOS_FISICOS)) { delete anterior[t.lista]; delete anterior[t.contador]; }
+    delete anterior.entidadesRetiradas;
+    for (const f of Object.values(anterior.identidadFisica || {})) if (f && typeof f === 'object') for (const k of ['sectorId','filaId','grupoId','numeroGrupo']) delete f[k];
+    const r = validarMapaNiveles(anterior);
+    if (r.errores) return r;
+    Object.assign(r.mapa, estructuraFisicaDe({}));
+    if (r.mapa.revisionFisica.estado === 'publicada') r.mapa.revisionFisica.huella = huellaRevision(r.mapa);
+    generarPlano(definicionDeMapa(r.mapa));
+    return r;
+  }
+  const errores = [];
+  const estructura = validarEstructuraFisica(dato, errores);
+  if (errores.length) return { errores };
+  const entrada = { ...dato, version: 7, revisionFisica: { ...dato.revisionFisica, estado: 'borrador' } };
+  // La revision completa se comprueba despues de limpiar tanto dibujo como pertenencias.
+  const r = validarMapaNiveles(entrada);
+  if (r.errores) return r;
+  Object.assign(r.mapa, estructura, { revisionFisica: { recintoId: dato.revisionFisica.recintoId,
+    numero: dato.revisionFisica.numero, estado: dato.revisionFisica.estado,
+    ...(dato.revisionFisica.estado === 'publicada' ? { huella: dato.revisionFisica.huella } : {}) } });
+  if (!['borrador','publicada'].includes(r.mapa.revisionFisica.estado)) return { errores: ['revisión física inválida'] };
+  if (r.mapa.revisionFisica.estado === 'publicada' && r.mapa.revisionFisica.huella !== huellaRevision(r.mapa)) return { errores: ['la revisión publicada fue modificada: crea un nuevo borrador'] };
+  generarPlano(definicionDeMapa(r.mapa));
+  return r;
+}
+
+function validarMapaNiveles(dato) {
   const cabecera = motivoDeCabecera(dato);
   if (cabecera) return { errores: [cabecera] };
   if (dato.version < 7) {
@@ -3583,7 +3818,7 @@ function exportarLugaresDeMapa(dato) {
     }
   }
   if (mapa.modoNumeracion === 'oficial') for (const f of Object.values(mapa.identidadFisica)) {
-    if (!f.numero) errores.push('asigna una etiqueta oficial al lugar nuevo ' + f.id);
+    if (!f.numero && !f.grupoId) errores.push('asigna una etiqueta oficial al lugar nuevo ' + f.id);
   }
   const zonasPorMesa = new Map();
   for (const b of butacas) if (b.grupo) {
@@ -3600,31 +3835,48 @@ function exportarLugaresDeMapa(dato) {
       errores.push('el lugar ' + b.id + ' no tiene zona física con nombre');
       continue;
     }
-    const mesa = Boolean(b.grupo);
-    const clave = claveEtiquetaFisica({ nivel: b.nivel, zona: b.zona, numero: b.numero, ...(mesa ? { mesa: b.numeroMesa } : { fila: b.fila }) });
+    const palco = b.grupo?.tipo === 'palco';
+    const mesa = Boolean(b.grupo) && !palco;
+    const clave = claveEtiquetaFisica({ nivel: b.nivel, zona: b.zona, numero: b.numero,
+      sectorId: b.sectorFisico?.id, filaId: b.filaFisica?.id, ...(palco ? { grupoId: b.grupo.id, numeroGrupo: b.numero } : mesa ? { mesa: b.numeroMesa } : { fila: b.fila }) });
     if (usados.has(clave)) errores.push('etiqueta repetida: ' + usados.get(clave) + ' y ' + b.id);
     usados.set(clave, b.id);
     lugares.push({
       local_place_id: b.id,
       level: { id: b.nivel, name: b.nombreNivel },
       physical_zone: { id: b.zona, name: zona.nombre },
-      kind: mesa ? 'table_place' : 'row_seat',
-      row: mesa ? null : b.fila,
-      seat_number: mesa ? null : b.numero,
+      sector: b.sectorFisico ? { id: b.sectorFisico.id, name: b.sectorFisico.nombre } : null,
+      physical_row: b.filaFisica ? { id: b.filaFisica.id, name: b.filaFisica.nombre } : null,
+      physical_group: b.grupo ? { id: b.grupo.id, type: palco ? 'box' : 'table', name: b.grupo.nombre } : null,
+      group_place_number: b.grupo ? b.numero : null,
+      kind: palco ? 'box_place' : mesa ? 'table_place' : 'row_seat',
+      row: b.grupo ? null : b.fila,
+      seat_number: b.grupo ? null : b.numero,
       table_id: mesa ? b.grupo.id : null,
       table_number: mesa ? b.numeroMesa : null,
       table_place_number: mesa ? b.numero : null,
-      label: (mapa.niveles.length > 1 ? b.nombreNivel + ', ' : '') + (mesa ? zona.nombre + ', mesa ' + b.numeroMesa + ', lugar ' + b.numero
+      label: (mapa.niveles.length > 1 ? b.nombreNivel + ', ' : '') + (b.sectorFisico ? b.sectorFisico.nombre + ', ' : '') + (palco ? zona.nombre + ', ' + b.grupo.nombre + ', lugar ' + b.numero : mesa ? zona.nombre + ', mesa ' + b.numeroMesa + ', lugar ' + b.numero
         : zona.nombre + ', fila ' + b.fila + ', butaca ' + b.numero),
       x: b.x, y: b.y, orientation: b.mira, blocked: b.estado === 'bloqueada',
     });
   }
   if (errores.length) return { errores };
   return { catalogo: {
-    formato: 'selector-asientos/lugares', version: 4, mapa: mapa.nombre,
+    formato: 'selector-asientos/lugares', version: 5, mapa: mapa.nombre,
     revision: { ...mapa.revisionFisica }, modoNumeracion: mapa.modoNumeracion, idsRetirados: [...mapa.idsRetirados],
-    niveles: copiarDatos(mapa.niveles).map(({ id, nombre }) => ({ id, nombre })), lugares,
+    niveles: copiarDatos(mapa.niveles).map(({ id, nombre }) => ({ id, nombre })),
+    sectores: copiarDatos(mapa.sectores), filas: copiarDatos(mapa.filasFisicas),
+    grupos: gruposFisicosDelCatalogo(mapa, butacas), entidadesRetiradas: [...mapa.entidadesRetiradas], lugares,
   } };
+}
+
+function gruposFisicosDelCatalogo(plano, lista) {
+  const grupos = new Map((plano.palcos || []).map((e) => [e.id, { ...e, tipo: 'palco', lugares: [] }]));
+  for (const b of lista) if (b.grupo) {
+    if (!grupos.has(b.grupo.id)) grupos.set(b.grupo.id, { id: b.grupo.id, tipo: 'mesa', nombre: b.grupo.nombre, nivel: b.nivel, zona: b.zona, lugares: [] });
+    grupos.get(b.grupo.id).lugares.push(b.id);
+  }
+  return [...grupos.values()];
 }
 
 // Cambia los bloques y pasillos de toda la sala y recoloca las mesas:
@@ -3803,7 +4055,7 @@ function copiarIdentidadesDePiezas(plano, ids) {
     let id = nueva;
     if (usados.has(id)) do { id = 'L' + copia.siguienteLugar++; } while (usados.has(id));
     usados.add(id);
-    copia.identidadFisica[nueva] = { id, zona: f.zona, nivel: f.nivel || 'n1' };
+    copia.identidadFisica[nueva] = { id, zona: f.zona, nivel: f.nivel || 'n1', ...(f.sectorId ? { sectorId: f.sectorId } : {}) };
     if (plano.bloqueadas?.includes(f.id) && !copia.bloqueadas.includes(id)) copia.bloqueadas.push(id);
     if (plano.zonasDeAsiento?.[f.id]) copia.zonasDeAsiento[id] = plano.zonasDeAsiento[f.id];
     if (plano.zonasFisicasConfirmadas?.[f.id]) copia.zonasFisicasConfirmadas[id] = plano.zonasFisicasConfirmadas[f.id];
@@ -3822,7 +4074,7 @@ function asignarZonaAsiento(plano, id, zona, original) {
   if (zona === original) delete nuevo.zonasDeAsiento[id];
   else nuevo.zonasDeAsiento[id] = zona;
   const fisica = Object.values(nuevo.identidadFisica || {}).find((f) => f.id === id);
-  if (fisica) fisica.zona = zona;
+  if (fisica) fijarZonaInventario(nuevo, fisica, zona);
   return nuevo;
 }
 
@@ -3990,9 +4242,9 @@ function cambiarZonaDePiezas(plano, ids, zona) {
     const p = configEnPlano(nuevo, id);
     return [id, zona || (p && zonaEnCelda(disposicion, p.x, p.y)) || zonaParaFilas(zonasDe(nuevo))];
   }));
-  for (const b of butacas) if (elegidas.has(b.grupo?.id || b.bloque || b.suelta)) {
+  for (const b of butacas) if (elegidas.has(b.grupo?.tipo === 'palco' ? b.bloque || b.suelta : b.grupo?.id || b.bloque || b.suelta)) {
     const f = nuevo.identidadFisica?.[b.claveDiseno || b.id];
-    if (f) f.zona = destinos.get(b.grupo?.id || b.bloque || b.suelta);
+    if (f) fijarZonaInventario(nuevo, f, destinos.get(b.grupo?.tipo === 'palco' ? b.bloque || b.suelta : b.grupo?.id || b.bloque || b.suelta));
   }
   return nuevo;
 }
@@ -4110,7 +4362,8 @@ function usosDeZona(plano, id) {
   const fisicos = Object.values(plano.identidadFisica || {}).filter((f) => f.zona === id).length;
   const otrasPiezas = locales.slice(1).flatMap((p) => piezasDe(p)).filter((p) => p.zona === id).length;
   const regiones = locales.flatMap((p) => p.regionesLibres || []).filter((r) => r.zona === id).length;
-  return bandas + piezas + otrasPiezas + regiones + asientos + (fisicos && !bandas && !piezas && !asientos ? 1 : 0);
+  const entidades = Object.values(TIPOS_FISICOS).flatMap((t) => plano[t.lista] || []).filter((e) => e.zona === id).length;
+  return entidades + bandas + piezas + otrasPiezas + regiones + asientos + (fisicos && !bandas && !piezas && !asientos ? 1 : 0);
 }
 
 // Agrega una zona fisica suelta, «Zona» y las siguientes numeradas al final de
@@ -4339,7 +4592,7 @@ const formatoDinero = new Intl.NumberFormat('es-MX', { style: 'currency', curren
 const dinero = (centavos) => formatoDinero.format(centavos / 100);
 const porId = new Map();   // id -> butaca, para no recorrer la lista en cada interaccion
 // La zona abre la etiqueta, como saldra en el boleto; el id queda aparte.
-const etiquetaDe = (b) => ((salaActual?.niveles?.length > 1 ? b.nombreNivel + ', ' : '') + (b.grupo ? zonas[b.zona].nombre + ', mesa ' + b.numeroMesa +
+const etiquetaDe = (b) => ((salaActual?.niveles?.length > 1 ? b.nombreNivel + ', ' : '') + (b.sectorFisico ? b.sectorFisico.nombre + ', ' : '') + (b.grupo?.tipo === 'palco' ? zonas[b.zona].nombre + ', ' + b.grupo.nombre + ', lugar ' + b.numero : b.grupo ? zonas[b.zona].nombre + ', mesa ' + b.numeroMesa +
   (b.grupo.completa ? ' completa' : '') + ', lugar ' + b.numero
   : b.seccion + ', fila ' + b.fila + ', butaca ' + b.numero));
 
@@ -4366,6 +4619,21 @@ function marcarTableroDeMesa(tablero, id) {
 }
 
 function dibujarMuebles() {
+  const palcos = new Map();
+  for (const b of butacasVisibles()) if (b.grupo?.tipo === 'palco') {
+    if (!palcos.has(b.grupo.id)) palcos.set(b.grupo.id, []);
+    palcos.get(b.grupo.id).push(b);
+  }
+  for (const lista of palcos.values()) {
+    const x = Math.min(...lista.map((b) => b.x));
+    const y = Math.min(...lista.map((b) => b.y));
+    const ancho = Math.max(...lista.map((b) => b.x)) + 1 - x;
+    const alto = Math.max(...lista.map((b) => b.y)) + 1 - y;
+    const g = nodo('g', { class: 'palco-fisico', 'aria-hidden': 'true' });
+    g.append(nodo('rect', { x: x * PASO - 2, y: y * PASO - 2, width: ancho * PASO + 4, height: alto * PASO + 4, rx: 3 }),
+      texto('subtitulo', x * PASO, y * PASO - 4, lista[0].grupo.nombre));
+    capaMuebles.appendChild(g);
+  }
   for (const r of planos[tipoActual]?.regionesLibres || TIPOS_DE_SALA[tipoActual].regionesLibres || []) {
     const g = nodo('g', { class: 'region-libre', 'aria-hidden': 'true', transform: `translate(${r.x * PASO} ${r.y * PASO}) rotate(${r.giro})` });
     g.append(nodo('rect', { x: 0, y: 0, width: r.ancho * PASO, height: r.alto * PASO, rx: 2 }), texto('subtitulo', 3, 5, r.nombre));
@@ -4531,7 +4799,7 @@ function dibujarButacas() {
   porId.clear();
   const bloqueando = modo === 'editor' && herramienta === 'bloquear';
   const pintando = modo === 'editor' && herramienta === 'zona';
-  const numerando = modo === 'editor' && ['numeracion', 'ajustar'].includes(herramienta);
+  const numerando = modo === 'editor' && ['numeracion', 'ajustar', 'fisica'].includes(herramienta);
   const pincel = document.getElementById('zona-pincel').value;
   // En el primer dibujo se injerta un fragmento. En los siguientes, cada id conserva
   // su nodo, foco y lugar en el arbol si no cambio; solo se mueven los que cambiaron
@@ -4540,7 +4808,7 @@ function dibujarButacas() {
   let siguiente = capaButacas.firstElementChild;
   butacasVisibles().forEach((b, indice) => {
     const seleccionable = b.estado === 'libre';
-    const elegida = elegidas.has(b.id);
+    const elegida = modo === 'editor' && herramienta === 'fisica' ? seleccionFisica.has(b.id) : elegidas.has(b.id);
     // Al bloquear, cada butaca es un checkbox de «bloqueada»; las ocupadas no se tocan.
     // Con el pincel, cada butaca es un checkbox de «de la zona elegida», marcada con la
     // palomita si ya es de esa zona. Las ocupadas no cambian de zona.
@@ -4563,8 +4831,9 @@ function dibujarButacas() {
       g.replaceChild(glifoButaca(b.x, b.y, b.mira), g.children[1]);
     }
     g._geometria = geometria;
-    const pieza = b.grupo ? b.grupo.id : b.bloque || b.suelta || '';
+    const pieza = b.grupo && b.grupo.tipo !== 'palco' ? b.grupo.id : b.bloque || b.suelta || '';
     const clase = 'butaca' + (seleccionable ? '' : ' ' + b.estado) +
+      (modo === 'editor' && herramienta === 'fisica' && seleccionFisica.has(b.id) ? ' fisica-seleccionada' : '') +
       (elegida || dePincel ? ' elegida' : '') +
       (piezasActivas.has(pieza) && modo === 'editor' && !conButacas() ? ' de-pieza-activa' : '');
     const etiqueta = etiquetaDe(b) + (bloqueando
@@ -5554,6 +5823,7 @@ function alternar(elemento) {
     if (herramienta === 'zona' && elemento) pintarZona(elemento);
     if (herramienta === 'numeracion' && elemento) elegirEtiquetaOficial(elemento);
     else if (herramienta === 'ajustar' && elemento) elegirLugarAjuste(elemento);
+    else if (herramienta === 'fisica' && elemento) elegirLugarFisico(elemento);
     return;
   }
   const b = elemento && porNodo(elemento);
@@ -5722,7 +5992,7 @@ let mesaActiva = null;     // id de la mesa sobre la que actuan los botones y at
 const piezasActivas = new Set();
 let herramienta = 'mesas'; // en el editor: 'mesas' (colocar), 'bloquear' o 'zona' (butacas)
 // Las herramientas que trabajan sobre butacas: las butacas responden y se recorren.
-const conButacas = () => ['bloquear', 'zona', 'numeracion', 'ajustar'].includes(herramienta);
+const conButacas = () => ['bloquear', 'zona', 'numeracion', 'ajustar', 'fisica'].includes(herramienta);
 let bandaActiva = null;    // id de la banda, vertical o franja seleccionada (excluye a mesaActiva)
 let tipoActual, salaActual;
 // Plano guardado por tipo de sala: { 'mixta-ambos': { bandas, mesas, siguiente,
@@ -5833,6 +6103,7 @@ const aplica = (accion, p) => ACCIONES_DE[tipoDePieza(p)].has(accion);
 function actualizarControles() {
   actualizarIdentidadControles();
   actualizarControlesGeometria();
+  actualizarControlesFisicos();
   const m = mesaActiva && piezaPorId(mesaActiva);
   const varias = piezasActivas.size > 1;
   const todas = [...piezasActivas].map((id) => piezaPorId(id)).filter(Boolean);
@@ -6043,7 +6314,8 @@ function planoEditable() {
 // Las configuraciones son datos: se guardan y el plano se regenera desde ellas.
 // Si al regenerar desaparecen lugares (acortar, quitar cabeceras, eliminar, bandas),
 // se avisa de los elegidos que se soltaron y de los ocupados que se quitaron.
-const fotoDeButacas = () => butacas.map((b) => ({ id: b.id, estado: b.estado }));
+const fotoDeButacas = () => butacas.map((b) => ({ id: b.id, estado: b.estado,
+  sectorId: b.sectorFisico?.id, filaId: b.filaFisica?.id, grupoId: b.grupo?.tipo === 'palco' ? b.grupo.id : undefined }));
 
 // 'antes' se puede pasar hecho cuando el plano ya se genero para validarlo.
 function regenerar(mensaje, antes = fotoDeButacas()) {
@@ -6063,6 +6335,11 @@ function regenerar(mensaje, antes = fotoDeButacas()) {
     }
   }
   const existe = new Set(butacas.map((b) => b.id));
+  const porIdFisico = new Map(butacas.map((b) => [b.id,b]));
+  const desvinculadas = antes.filter((a) => {
+    const b = porIdFisico.get(a.id);
+    return b && ((a.sectorId && a.sectorId !== b.sectorFisico?.id) || (a.filaId && a.filaId !== b.filaFisica?.id) || (a.grupoId && a.grupoId !== b.grupo?.id));
+  }).map((a) => a.id);
   const { ausentes, noLibres } = conciliarSeleccion(elegidas, butacas);
   const completadas = completarMesasElegidas(elegidas, butacas);
   const ocupadasQuitadas = antes.filter((b) => b.estado === 'ocupada' && !existe.has(b.id))
@@ -6078,6 +6355,7 @@ function regenerar(mensaje, antes = fotoDeButacas()) {
   actualizarEstadoEdicion();
   anunciar(mensaje);
   document.getElementById('aviso').textContent = [
+    desvinculadas.length ? 'Pertenencias físicas desvinculadas o reasignadas: ' + desvinculadas.join(', ') + '.' : '',
     frase(ausentes, 'ya no existe en el plano', 'ya no existen en el plano'),
     frase(noLibres, 'ya no está libre', 'ya no están libres'),
     ocupadasQuitadas.length
@@ -6584,6 +6862,7 @@ function cambiarModo(nuevo) {
   document.getElementById('herramienta-numeracion').setAttribute('aria-pressed', 'false');
   document.getElementById('herramienta-ajustar').setAttribute('aria-pressed', 'false');
   herramienta = 'mesas';
+  seleccionFisica.clear();
   svg.classList.remove('bloqueando', 'pintando', 'numerando');
   document.getElementById('herramienta-bloquear').setAttribute('aria-pressed', 'false');
   document.getElementById('herramienta-zona').setAttribute('aria-pressed', 'false');
@@ -6613,7 +6892,8 @@ function cambiarHerramienta(nueva) {
   herramienta = nueva;
   const bloqueando = herramienta === 'bloquear';
   const pintando = herramienta === 'zona';
-  svg.classList.toggle('numerando', ['numeracion', 'ajustar'].includes(herramienta));
+  svg.classList.toggle('numerando', ['numeracion', 'ajustar', 'fisica'].includes(herramienta));
+  document.getElementById('herramienta-fisica').setAttribute('aria-pressed', String(herramienta === 'fisica'));
   document.getElementById('herramienta-numeracion').setAttribute('aria-pressed', String(herramienta === 'numeracion'));
   document.getElementById('herramienta-ajustar').setAttribute('aria-pressed', String(herramienta === 'ajustar'));
   svg.classList.toggle('bloqueando', bloqueando);
@@ -6624,6 +6904,7 @@ function cambiarHerramienta(nueva) {
   if (pintando) llenarPincel();
   document.getElementById('pista').textContent = herramienta === 'numeracion'
     ? 'Haz clic en un lugar o pulsa Enter para editar su etiqueta oficial. Las flechas recorren los lugares.'
+    : herramienta === 'fisica' ? 'Haz clic o pulsa Enter para añadir o quitar un lugar de la selección física; después aplica la pertenencia.'
     : herramienta === 'ajustar' ? 'Haz clic o pulsa Enter en una butaca de bloque libre para ajustar su posición y orientación.'
     : PISTAS[bloqueando ? 'bloquear' : pintando ? 'zona' : modo];
   actualizarAccesoButacas();
@@ -6635,6 +6916,7 @@ function cambiarHerramienta(nueva) {
     ? 'Bloquear butacas: haz clic en una butaca para bloquearla o desbloquearla.'
     : pintando
     ? 'Asignar zona: elige la zona y haz clic en las butacas. Las marcadas con la palomita ya son de esa zona.'
+    : herramienta === 'fisica' ? 'Seleccionar lugares para asignar su pertenencia física; la selección de compra se conserva.'
     : 'Colocar mesas.');
 }
 
@@ -6943,6 +7225,7 @@ function cambiarNivelVista(id) {
   if (nuevo.motivo) { anunciar(nuevo.motivo); return; }
   if (arrastreMesa) terminarArrastreMesa(false);
   limpiarArea(); marcarActivas([]); bandaActiva = null;
+  seleccionFisica.clear();
   planos[tipoActual] = nuevo;
   salaActual = generarPlano(tipoActual, nuevo);
   dibujarTodo(); actualizarResumen(); actualizarAforo(salaActual); actualizarControles();
@@ -7067,6 +7350,8 @@ function actualizarIdentidadControles() {
   const id = document.getElementById('id-lugar-oficial').value;
   const existe = oficial && butacas.some((b) => b.id === id);
   for (const campo of ['fila-oficial', 'numero-oficial', 'guardar-etiqueta']) document.getElementById(campo).disabled = !existe;
+  const lugar = butacas.find((b) => b.id === id);
+  if (lugar?.filaFisica || lugar?.grupo?.tipo === 'palco') document.getElementById('fila-oficial').disabled = true;
 }
 
 document.getElementById('modo-numeracion').addEventListener('change', (e) => {
@@ -7090,10 +7375,10 @@ function elegirEtiquetaOficial(elemento) {
   const b = porNodo(elemento);
   if (!b) return;
   document.getElementById('id-lugar-oficial').value = b.id;
-  document.getElementById('fila-oficial').value = b.grupo ? b.numeroMesa : b.fila;
+  document.getElementById('fila-oficial').value = b.grupo?.tipo === 'palco' ? b.grupo.nombre : b.grupo ? b.numeroMesa : b.fila;
   document.getElementById('numero-oficial').value = b.numero;
   actualizarIdentidadControles();
-  document.getElementById('fila-oficial').focus();
+  document.getElementById(document.getElementById('fila-oficial').disabled ? 'numero-oficial' : 'fila-oficial').focus();
   anunciar('Etiqueta de ' + etiquetaDe(b) + '. El ID ' + b.id + ' se conserva.');
 }
 document.getElementById('formulario-numeracion').addEventListener('submit', (e) => {
@@ -7104,6 +7389,87 @@ document.getElementById('formulario-numeracion').addEventListener('submit', (e) 
   if (resultado.motivo) { anunciar('No se cambió la etiqueta: ' + resultado.motivo + '.'); return; }
   planos[tipoActual] = resultado;
   regenerar('Etiqueta oficial guardada para ' + id + '.');
+});
+
+// Esta seleccion edita pertenencias; nunca cambia la seleccion de compra.
+const seleccionFisica = new Set();
+function llenarOpcionesFisicas(id, opciones, inicial = '') {
+  const s = document.getElementById(id);
+  const previo = s.value;
+  s.textContent = '';
+  for (const [valor,nombre] of opciones) {
+    const o = document.createElement('option'); o.value = valor; o.textContent = nombre; s.appendChild(o);
+  }
+  s.value = opciones.some(([valor]) => valor === previo) ? previo : inicial;
+}
+function actualizarControlesFisicos() {
+  const plano = planos[tipoActual] || TIPOS_DE_SALA[tipoActual];
+  const visibles = new Set(butacasVisibles().map((b) => b.id));
+  for (const id of seleccionFisica) if (!visibles.has(id) || modo !== 'editor') seleccionFisica.delete(id);
+  const tipo = document.getElementById('tipo-fisico').value;
+  llenarOpcionesFisicas('zona-fisica-entidad', zonasDe(plano).map((z) => [z.id,z.nombre]), zonaParaFilas(zonasDe(plano)));
+  const zona = document.getElementById('zona-fisica-entidad').value;
+  const lista = (plano[TIPOS_FISICOS[tipo].lista] || []).filter((e) => e.nivel === salaActual.nivel && e.zona === zona);
+  llenarOpcionesFisicas('entidad-fisica', [['','— crear o elegir —'], ...lista.map((e) => [e.id,e.nombre])]);
+  const id = document.getElementById('entidad-fisica').value;
+  const entidad = entidadFisicaDe(plano,tipo,id);
+  document.getElementById('detalle-entidad-fisica').textContent = entidad ? entidad.id + ' · ' + miembrosFisicos(plano,tipo,id).length + ' lugares · ' + salaActual.niveles.find((n) => n.id === entidad.nivel).nombre : 'Las entidades vacías no añaden aforo.';
+  for (const boton of ['renombrar-entidad-fisica','eliminar-entidad-fisica','fisica-miembros']) document.getElementById(boton).disabled = !entidad;
+  document.getElementById('asignar-entidad-fisica').disabled = !entidad || !seleccionFisica.size;
+  document.getElementById('desvincular-entidad-fisica').disabled = !seleccionFisica.size;
+  document.getElementById('detalle-seleccion-fisica').textContent = seleccionFisica.size + ' lugares para asignar: ' + [...seleccionFisica].slice(0,5).join(', ');
+  const f = seleccionFisica.size === 1 ? Object.values(plano.identidadFisica || {}).find((p) => p.id === [...seleccionFisica][0]) : null;
+  document.getElementById('numero-lugar-palco').disabled = !f?.grupoId;
+  document.getElementById('guardar-numero-palco').disabled = !f?.grupoId;
+  document.getElementById('numero-lugar-palco').value = f?.numeroGrupo || '';
+  document.getElementById('herramienta-fisica').setAttribute('aria-pressed', String(herramienta === 'fisica'));
+}
+function elegirLugarFisico(elemento) {
+  const b = porNodo(elemento);
+  if (!b) return;
+  if (seleccionFisica.has(b.id)) seleccionFisica.delete(b.id); else seleccionFisica.add(b.id);
+  actualizarControlesFisicos(); dibujarTodo();
+  porId.get(b.id)?.nodo.focus();
+  anunciar(seleccionFisica.size + ' lugares en la selección física.');
+}
+function aplicarResultadoFisico(resultado, mensaje) {
+  if (modo !== 'editor' || planoEditable().revisionFisica?.estado === 'publicada') { anunciar('Crea un borrador editable antes de cambiar la estructura física.'); return false; }
+  if (resultado.motivo) { anunciar('No se aplicó: ' + resultado.motivo + '.'); return false; }
+  planos[tipoActual] = resultado.plano || resultado; regenerar(mensaje); return true;
+}
+for (const id of ['tipo-fisico','zona-fisica-entidad','entidad-fisica']) document.getElementById(id).addEventListener('change', () => {
+  actualizarControlesFisicos();
+  const e = entidadFisicaDe(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('entidad-fisica').value);
+  document.getElementById('nombre-entidad-fisica').value = e?.nombre || '';
+});
+document.getElementById('agregar-entidad-fisica').addEventListener('click', () => {
+  const resultado = agregarEntidadFisica(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('nombre-entidad-fisica').value,salaActual.nivel,document.getElementById('zona-fisica-entidad').value);
+  if (aplicarResultadoFisico(resultado,'Entidad física creada sin mover ni añadir lugares.')) {
+    document.getElementById('entidad-fisica').value = resultado.id; actualizarControlesFisicos();
+  }
+});
+document.getElementById('formulario-entidad-fisica').addEventListener('submit', (e) => {
+  e.preventDefault(); aplicarResultadoFisico(renombrarEntidadFisica(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('entidad-fisica').value,document.getElementById('nombre-entidad-fisica').value),'Nombre físico actualizado; IDs conservados.');
+});
+document.getElementById('eliminar-entidad-fisica').addEventListener('click', () => aplicarResultadoFisico(eliminarEntidadFisica(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('entidad-fisica').value),'Entidad vacía eliminada; su ID queda retirado.'));
+document.getElementById('herramienta-fisica').addEventListener('click', () => cambiarHerramienta(herramienta === 'fisica' ? 'mesas' : 'fisica'));
+document.getElementById('fisica-desde-piezas').addEventListener('click', () => {
+  const ids = butacasVisibles().filter((b) => piezasActivas.has(b.grupo?.tipo === 'palco' ? b.bloque || b.suelta : b.grupo?.id || b.bloque || b.suelta)).map((b) => b.id);
+  seleccionFisica.clear(); ids.forEach((id) => seleccionFisica.add(id)); cambiarHerramienta('fisica');
+});
+document.getElementById('fisica-miembros').addEventListener('click', () => {
+  seleccionFisica.clear(); miembrosFisicos(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('entidad-fisica').value).forEach((id) => seleccionFisica.add(id)); cambiarHerramienta('fisica');
+});
+document.getElementById('vaciar-seleccion-fisica').addEventListener('click', () => { seleccionFisica.clear(); actualizarControlesFisicos(); dibujarTodo(); });
+for (const [boton,asignar] of [['asignar-entidad-fisica',true],['desvincular-entidad-fisica',false]]) document.getElementById(boton).addEventListener('click', () => {
+  const tipo = document.getElementById('tipo-fisico').value;
+  const id = asignar ? document.getElementById('entidad-fisica').value : '';
+  if (asignar && !id) return;
+  aplicarResultadoFisico(asignarPertenenciaFisica(planoEditable(),[...seleccionFisica],tipo,id),'Pertenencia física ' + (asignar ? 'asignada' : 'desvinculada') + '; geometría, IDs y selección de compra conservados.');
+});
+document.getElementById('formulario-numero-palco').addEventListener('submit', (e) => {
+  e.preventDefault(); if (seleccionFisica.size !== 1) return;
+  aplicarResultadoFisico(editarNumeroPalco(planoEditable(),[...seleccionFisica][0],document.getElementById('numero-lugar-palco').value),'Número de lugar del palco actualizado.');
 });
 
 // ---------------------------------------------------------------------------
@@ -7167,6 +7533,7 @@ function actualizarAforo(sala) {
 }
 
 function redibujar(tipo) {
+  seleccionFisica.clear();
   if (arrastreMesa) terminarArrastreMesa(false);
   tipoActual = tipo;
   if (TIPOS_DE_SALA[tipo].revisionFisica?.estado === 'publicada' && modo === 'editor') cambiarModo('vista');

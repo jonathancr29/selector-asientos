@@ -893,6 +893,7 @@ function alternar(elemento) {
     if (herramienta === 'zona' && elemento) pintarZona(elemento);
     if (herramienta === 'numeracion' && elemento) elegirEtiquetaOficial(elemento);
     else if (herramienta === 'ajustar' && elemento) elegirLugarAjuste(elemento);
+    else if (herramienta === 'fisica' && elemento) elegirLugarFisico(elemento);
     return;
   }
   const b = elemento && porNodo(elemento);

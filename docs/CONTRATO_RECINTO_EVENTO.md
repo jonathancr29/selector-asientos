@@ -2,7 +2,7 @@
 
 Estado: contrato acordado en fase 1. Las fases 3 y 4 implementan identidad por lugar, numeracion
 explicita, revisiones locales, niveles, regiones y bloques rectos o en arco con correcciones.
-Sectores, entidades de fila, palcos y conexion de venta siguen pendientes. Los vinculos graficos
+La fase 5 implementa sectores, entidades de fila y palcos; la conexion de venta sigue pendiente. Los vinculos graficos
 de region transforman bloques; no determinan pertenencias fisicas ni modalidades comerciales.
 Complementa el contrato de lugares para Sin Taquilla y prevalece sobre sus reglas comerciales
 anteriores cuando haya diferencias. Los nombres de campos siguientes son un contrato logico,
@@ -121,8 +121,21 @@ Asignaciones individuales antiguas sin confirmacion siguen requiriendo revision 
 No fusionar zonas por compartir tarifa ni adivinar ubicacion desde precios.
 
 Fase 2 separa paneles y retira tarifas. Fase 3 añade etiquetas oficiales, identidad por lugar
-y revisiones locales. Niveles, sectores, entidades de fila, palcos, geometria y
-venta integrada son fases posteriores. La ocupacion de ejemplo no es estado comercial real.
+y revisiones locales. Fase 4 incorpora niveles y geometria libre; fase 5 incorpora sectores,
+filas fisicas y palcos. La venta integrada sigue pendiente. La ocupacion de ejemplo no es estado comercial real.
+
+### Implementacion fisica de fase 5
+
+Mapa v8 y catalogo v5: sectores, filas y palcos tienen IDs y nombres propios dentro de un
+nivel y zona. Las referencias se materializan por lugar; filas pueden atravesar sectores.
+Mesa conserva su grupo geometrico estable. Palco agrupa lugares existentes sin fila ficticia
+y mantiene una etiqueta explicita por integrante. Su contorno visual es una referencia.
+Un lugar no pertenece simultaneamente a fila y palco. Reasignar zona desvincula las pertenencias
+incompatibles, con aviso; eliminar entidad usada exige desvincular previamente sus integrantes.
+Duplicar piezas conserva sector y crea lugares nuevos sin asignarlos a la fila o palco original.
+IDs retirados y contadores se conservan al guardar y deshacer. La revision publicada incluye
+entidades y pertenencias, sin modalidades comerciales. La migracion no deduce estas entidades
+desde letras, coordenadas o bandas. Excluir grupos por evento y reservarlos sigue pendiente.
 
 ## 8. Casos de aceptacion
 

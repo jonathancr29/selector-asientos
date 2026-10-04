@@ -59,6 +59,7 @@ function actualizarAforo(sala) {
 }
 
 function redibujar(tipo) {
+  seleccionFisica.clear();
   if (arrastreMesa) terminarArrastreMesa(false);
   tipoActual = tipo;
   if (TIPOS_DE_SALA[tipo].revisionFisica?.estado === 'publicada' && modo === 'editor') cambiarModo('vista');
