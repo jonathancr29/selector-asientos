@@ -1,0 +1,27 @@
+{
+  "nota": "Ejemplo de contrato futuro; no importable como mapa actual. Niveles ficticios.",
+  "recinto": {
+    "id": "recinto-ejemplo", "revision": "revision-1",
+    "niveles": [{"id":"n1","nombre":"Planta baja"},{"id":"n2","nombre":"Primer piso"},{"id":"n3","nombre":"Segundo piso"}],
+    "zonas": [{"id":"z1","nombre":"Luneta"},{"id":"z2","nombre":"Palcos"},{"id":"z3","nombre":"Galeria"}],
+    "sectores": [{"id":"s1","nombre":"Izquierdo"},{"id":"s2","nombre":"Derecho"}],
+    "filas": [{"id":"f1","etiqueta":"A","numeracion":"explicita"},{"id":"f2","etiqueta":"A","numeracion":"explicita"}],
+    "grupos": [{"id":"g1","tipo":"palco","nombre":"Palco B","lugares":["p3","p4"]}],
+    "lugares": [
+      {"id":"p1","nivel":"n1","zona":"z1","sector":"s1","fila":"f1","grupo":null,"numero":"1","utilizable":true},
+      {"id":"p2","nivel":"n1","zona":"z1","sector":"s2","fila":"f1","grupo":null,"numero":"2","utilizable":true},
+      {"id":"p3","nivel":"n2","zona":"z2","sector":null,"fila":null,"grupo":"g1","numero":"1","utilizable":true},
+      {"id":"p4","nivel":"n2","zona":"z2","sector":null,"fila":null,"grupo":"g1","numero":"2","utilizable":true},
+      {"id":"p5","nivel":"n3","zona":"z3","sector":null,"fila":"f2","grupo":null,"numero":"1","utilizable":false}
+    ],
+    "retirados": ["p0"]
+  },
+  "evento": {
+    "id":"evento-ejemplo","revision":"revision-1",
+    "zonas": [{"id":"z1","habilitada":true,"precioCentavos":35000},{"id":"z2","habilitada":true,"precioCentavos":50000},{"id":"z3","habilitada":false,"precioCentavos":null}],
+    "exclusiones": {"sectores":["s2"],"filas":[],"grupos":[],"lugares":["p4"]},
+    "grupos": [{"id":"g1","modalidad":"completa","requeridos":["p3","p4"]}],
+    "disponibilidad": [{"lugar":"p1","estado":"libre"},{"lugar":"p2","estado":"libre"},{"lugar":"p3","estado":"libre"},{"lugar":"p4","estado":"libre"},{"lugar":"p5","estado":"libre"}]
+  },
+  "esperado": {"inventariados":5,"utilizables":4,"habilitados":["p1","p3"],"disponibles":["p1","p3"],"comprables":["p1"],"conjuntosComprables":[]}
+}

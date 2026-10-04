@@ -4,7 +4,17 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Identidad y numeración por zona física
+## Sin publicar — Contrato de recinto y evento (fase 1)
+
+Rama `claude/contrato-recinto`, basada en `claude/identidad-por-zona` aún pendiente de fusión.
+
+- Contrato de identidades físicas, numeración oficial, geometría gradual, herencia y revisiones.
+- Tarifas y habilitación por evento en Sin Taquilla; venta agrupada común para mesas y palcos.
+- Ejemplo ficticio con tres niveles, fila compartida, palco y conteos comprobables.
+- La implementación de niveles, palcos y conector queda para las fases siguientes.
+- Verificado: 151 pruebas de lógica y 8 de navegador, y HTML sincronizado.
+
+## Cambio anterior pendiente — Identidad y numeración por zona física
 
 Rama `claude/identidad-por-zona`.
 

@@ -1,5 +1,9 @@
 # Contrato de lugares para Sin Taquilla (fase 4)
 
+Las decisiones nuevas de separación física/comercial y venta agrupada se recogen en
+[Contrato de recinto, evento y conector](CONTRATO_RECINTO_EVENTO.md), que prevalece en esas
+materias. Las secciones siguientes conservan el contexto histórico de la integración inicial.
+
 **Estado:** contrato de diseño; el selector ya exporta un catálogo validado de lugares. Todavía no hay integración ni migración de datos en Sin Taquilla.
 **Revisado contra:** este selector en `f9be0cb` y la copia local de Sin Taquilla en
 `cac1455a` (rama `docs/variantes-selector-asientos`, 25 de septiembre de 2026).
