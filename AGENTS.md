@@ -36,6 +36,8 @@ en el propio archivo.
 | `src/plantilla.html`, `src/estilos.css` | Estructura y estilos fuente. |
 | `src/modelo.js`, `src/dibujo.js`, `src/interfaz.js`, `src/editor.js`, `src/persistencia.js` | Secciones fuente del script, unidas en ese orden. |
 | `construir.mjs` | Genera `index.html` y comprueba que esté sincronizado con `--check`. |
+| `src/conector.js`, `integracion/` | API de eventos y entrega generada con HTML/CSS/JS externos para CSP; no editar los archivos generados. |
+| `docs/INTEGRACION_EVENTOS_SINTAQUILLA.md` | Snapshot comercial, API pública, transporte y trabajo pendiente de servidor. |
 | `medir-render.mjs` | Medición local reproducible del plano de 18.720 butacas en Chrome o Edge; no bloquea la CI. |
 | `pruebas.mjs` | Pruebas con `node:test` de la parte del script que no usa el DOM, y dos que vigilan que estos documentos sigan describiendo el código. |
 | `pruebas-navegador.mjs` | Recorridos de la interfaz en Chrome o Edge: guardado, recarga, importación, grupo, teclado y accesibilidad. |
@@ -102,7 +104,7 @@ publicar».
 
 ## Cómo editar las fuentes y el archivo generado
 
-Edita `src/`, no `index.html`: el generador sobrescribe este último. Las cinco fuentes JavaScript
+Edita `src/`, no `index.html`: el generador sobrescribe este último. Las seis fuentes JavaScript
 se concatenan en un único `<script>` clásico, sin `import` ni `export`, para conservar el ámbito y
 el orden de inicialización. `src/modelo.js` termina en la marca «Fin de la parte sin DOM», que usa
 `pruebas.mjs`. Ejecuta `node construir.mjs` después de cada cambio y confirma con `--check`.
@@ -128,8 +130,8 @@ t = t.replace(de, () => a);   // funcion, nunca cadena
 
 ## Cómo está organizado el script
 
-El `<script>` generado une `src/modelo.js`, `src/dibujo.js`, `src/interfaz.js`, `src/editor.js` y
-`src/persistencia.js` en ese orden. Dentro de cada fuente, las secciones están separadas por
+El `<script>` generado une `src/modelo.js`, `src/dibujo.js`, `src/interfaz.js`, `src/editor.js`,
+`src/persistencia.js` y `src/conector.js` en ese orden. Dentro de cada fuente, las secciones están separadas por
 comentarios `// ----`.
 
 1. **Constantes:** `PASO` (12 unidades del viewBox por celda), `GLIFO`, `ANCHO_SALA` (14 columnas).
@@ -201,6 +203,9 @@ comentarios `// ----`.
     selector de tipos, que se construye desde `TIPOS_DE_SALA` (`construirSelector`).
 13. **Mapas guardados:** `leerAlmacen`, `escribirAlmacen` (`localStorage`), `guardarMapa`,
     `exportarMapa`, `importarMapa`, `eliminarMapa`, y la carga de mapas guardados al abrir.
+14. **Evento conectado:** motor puro `resolverEventoDeMapa`, `conteosDeEvento`,
+    `alternarLugarEvento`, `conciliarSeleccionEvento`, `solicitudDeSeleccionEvento`,
+    `firmaDeEvento` y `motivoCambioDeEvento` en modelo; API y transporte en `src/conector.js`.
 
 ## Reglas que no se deben romper
 
@@ -274,9 +279,18 @@ comentarios `// ----`.
   y el de zonas lista todo el catálogo. Renombrar banda no renombra zona. Agregar o eliminar banda
   no crea ni elimina zonas; agregar zona no crea espacio. La herencia se materializa al crear;
   mover conserva pertenencias y reasignar es explícito. No reintroducir precios en el editor.
-- **Venta agrupada:** los ayudantes puros de mesas se conservan para generalizar en fases
-  posteriores. No hay controles comerciales en el editor y los mapas nuevos no activan completa.
-  El contrato exige reservar conjuntos sin recortarlos automáticamente y tarifas desde el evento.
+- **Venta agrupada:** los ayudantes históricos de mesas se conservan para mapas autónomos.
+  Un evento usa `alternarLugarEvento` y `conciliarSeleccionEvento`: mesas y palcos requieren
+  todos sus lugares físicamente utilizables, sin recortar por exclusiones ni disponibilidad.
+  Una selección parcial se suelta, nunca se completa automáticamente. No hay controles comerciales
+  en el editor; el evento fija tarifas y modalidad. El servidor aún debe reservar atómicamente.
+- **Conector de evento:** `eventoConectado` y sus datos no se guardan en el mapa ni localStorage.
+  La revisión publicada y los IDs de evento permanecen fijos. Estado ausente significa desconocido.
+  Al validar una respuesta se reponen los generadores y estados comerciales de la vista, incluso
+  cuando se rechaza. Un fallo de consulta suspende disponibilidad; una respuesta tardía no altera
+  otra sesión ni una versión más reciente. La selección envía solo IDs opacos, nunca precio.
+- **Entrega con CSP:** `construir.mjs` genera también `integracion/index.html`, CSS y JS externos;
+  `--check` comprueba las cuatro salidas. No introducir scripts/estilos inline en la entrega externa.
 - **Una mesa redonda solo guarda sus lugares** (un número par de 2 a 16); el diámetro sale de
   `diametroRedonda` (los lugares entre cuatro, hacia arriba) y las sillas van por parejas en cada
   lado, sin esquinas (`ladosDeRedonda`, `geometriaMesaRedonda`). `cambiarLugaresRedonda` recibe pasos
@@ -707,8 +721,8 @@ redibujados y toma la mediana de estos últimos. La duración no bloquea CI porq
 
 Lo grande, por orden de valor:
 
-- **Integrar Sin Taquilla**: convertir la entrega autónoma en CSS y JavaScript externos para su
-  política de seguridad; usar sus datos y transacciones para disponibilidad, precios y boletos.
+- **Integrar servidor Sin Taquilla**: el conector y la entrega externa ya existen; faltan formulario
+  de eventos, persistencia, endpoints, transacciones de reserva y boletos en aquel proyecto.
 - **Medir antes de otra optimización del SVG**: la reconciliación de butacas redujo el redibujado
   repetido aproximadamente un 44 % en la comparación de esta fase. El resto del plano aún se rehace.
 
@@ -730,8 +744,8 @@ El destino previsto es **Sin Taquilla**, un sistema de ticketing en PHP que ya t
 proyecto no: transacciones contra sobreventa, reservas que caducan, cobro y control de acceso. Lo
 que le falta es justo esto, el asiento identificado.
 
-Para que el selector se pueda incrustar ahí hay **un solo obstáculo técnico**, y conviene saberlo
-antes de tocar nada: la cabecera de seguridad de esa aplicación es
+La entrega externa de fase 6 resuelve el obstáculo técnico de sus recursos inline:
+la cabecera de seguridad de esa aplicación es
 
 ```
 default-src 'self'; style-src 'self'; script-src 'self' 'nonce-…'
@@ -744,4 +758,4 @@ Lo llamativo es que **todo lo demás ya es compatible**: cero `innerHTML`, cero 
 manejadores `onclick=` en el HTML, cero atributos `style=`, y las pocas escrituras a `.style` desde
 el script son CSSOM, que esa cabecera no bloquea. Separan el despliegue **exactamente dos bloques en
 línea**. Las fuentes separadas permiten preparar CSS y JavaScript externos para Sin Taquilla en la
-fase de integración; el `index.html` autónomo sigue llevando ambos en línea.
+fase 6, en `integracion/`; el `index.html` autónomo sigue llevando ambos en línea.

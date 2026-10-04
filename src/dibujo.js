@@ -260,7 +260,7 @@ function dibujarButacas() {
     const etiqueta = etiquetaDe(b) + (bloqueando
       ? (b.estado === 'ocupada' ? ', ocupada' : ', bloquear')
       : pintando ? ', zona ' + zonas[b.zona].nombre + (b.estado === 'ocupada' ? ', ocupada' : '')
-      : (seleccionable ? '' : ', ' + b.estado));
+      : (b.motivoEvento ? ', ' + b.motivoEvento : seleccionable ? '' : ', ' + b.estado));
     // tabindex movil: un solo punto de tabulacion. Colocando mesas, ninguno.
     const tabindex = (modo === 'vista' || conButacas()) && indice === 0 ? '0' : '-1';
     const apariencia = [clase, marcada, inactiva, etiqueta, tabindex, pieza].join('\u0000');
@@ -337,6 +337,7 @@ function dibujarPiezas() {
 }
 
 function dibujarTodo() {
+  if (eventoConectado) aplicarEventoAButacas();
   if (herramienta === 'zona') llenarPincel();
   capaMuebles.textContent = '';
   capaSubtitulos.textContent = '';

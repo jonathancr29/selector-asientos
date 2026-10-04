@@ -5,7 +5,9 @@ function actualizarResumen() {
   // En orden de plano, no de clic: el detalle sale estable.
   const lista = butacas.filter((b) => elegidas.has(b.id));
   document.getElementById('cuenta').textContent = String(lista.length);
-  document.getElementById('total').textContent = 'Precio no disponible';
+  const seleccionEvento = eventoConectado && solicitudDeSeleccionEvento(elegidas, eventoConectado);
+  document.getElementById('total').textContent = seleccionEvento && !seleccionEvento.errores
+    ? dinero(seleccionEvento.totalCentavos) : 'Precio no disponible';
   document.getElementById('vacio').hidden = lista.length > 0;
   document.getElementById('detalle-vacio').hidden = lista.length > 0;
 
@@ -22,10 +24,11 @@ function actualizarResumen() {
     const zonasDelGrupo = new Set(items.map((b) => b.zona));
     const nombre = items[0].grupo ? items[0].grupo.nombre + ' · ' +
       (zonasDelGrupo.size === 1 ? zonas[items[0].zona].nombre : 'varias zonas') : items[0].seccion;
-    const cuantos = (items[0].grupo && items[0].grupo.completa ? 'mesa completa, ' : '') +
+    const cuantos = (items[0].grupo && items[0].grupo.completa ? (items[0].grupo.tipo === 'palco' ? 'palco completo, ' : 'mesa completa, ') : '') +
                     (items.length === 1 ? '1 lugar' : items.length + ' lugares');
     const cuales = items.map((b) => (b.grupo ? b.numero : b.fila + b.numero)).join(', ');
-    li.textContent = (salaActual.niveles.length > 1 ? items[0].nombreNivel + ' · ' : '') + nombre + ' · ' + cuantos + ' (' + cuales + ')';
+    li.textContent = (salaActual.niveles.length > 1 ? items[0].nombreNivel + ' · ' : '') + nombre + ' · ' + cuantos + ' (' + cuales + ')' +
+      (eventoConectado ? ' · ' + dinero(items.reduce((s, b) => s + eventoConectado.lugares.get(b.id).categoria.precioCentavos, 0)) : '');
     detalle.appendChild(li);
   }
 }
@@ -40,6 +43,12 @@ const frase = (ids, singular, plural) => (!ids.length ? ''
 
 
 function actualizarAforo(sala) {
+  if (eventoConectado) {
+    const c = conteosDeEvento(eventoConectado);
+    document.getElementById('aforo').textContent = c.inventariados + ' inventariados · ' + c.utilizables + ' utilizables · ' +
+      c.habilitados + ' habilitados · ' + c.disponibles + ' libres · ' + c.comprables + ' comprables · ' + c.conjuntosComprables + ' conjuntos completos disponibles';
+    return;
+  }
   const bandasDeFilas = hojasDe(sala.bandas).filter((b) => b.tipo === 'filas');
   const filas = bandasDeFilas.reduce((s, b) => s + b.filas, 0);
   // «de 12 butacas» solo si todas las filas ocupan el ancho de la sala.
@@ -59,6 +68,7 @@ function actualizarAforo(sala) {
 }
 
 function redibujar(tipo) {
+  if (eventoConectado && tipo !== tipoActual) { anunciar('El evento conserva su recinto y revisión.'); return; }
   seleccionFisica.clear();
   if (arrastreMesa) terminarArrastreMesa(false);
   tipoActual = tipo;
@@ -207,6 +217,7 @@ document.getElementById('publicar-revision').addEventListener('click', () => {
 });
 
 document.getElementById('nuevo-borrador').addEventListener('click', () => {
+  if (eventoConectado) { anunciar('El evento conserva su revisión publicada. Abre el editor fuera de la compra.'); return; }
   const origen = planoEditable();
   const nuevo = nuevaRevisionFisica(origen);
   const conocidas = Object.values(TIPOS_DE_SALA).map((d) => d.revisionFisica).filter((r) => r?.recintoId === origen.revisionFisica.recintoId);

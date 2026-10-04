@@ -51,6 +51,126 @@ assert.ok(!conComa, 'la parte sin DOM declara varios nombres en una sentencia:\n
 
 const cargar = () => new Function(fuente + '\nreturn { ' + declarados.join(', ') + ' };')();
 
+const ejemploConector = () => JSON.parse(readFileSync(new URL('./docs/ejemplo-conector-evento.json', import.meta.url), 'utf8'));
+
+test('fase 6: revision fija, tres niveles, fila compartida y conteos separados', () => {
+  const a=cargar(), {mapa,evento,esperado}=ejemploConector(); const antes=JSON.stringify(mapa);
+  const r=a.resolverEventoDeMapa(mapa,evento); assert.equal(r.errores,undefined);
+  assert.deepEqual(a.conteosDeEvento(r.evento),esperado); assert.equal(JSON.stringify(mapa),antes);
+  assert.equal(r.evento.catalogo.niveles.length,3);
+  assert.equal(r.evento.lugares.get('F1-1-1').habilitado,true);
+  assert.equal(r.evento.lugares.get('F2-1-1').habilitado,false);
+  assert.equal(r.evento.lugares.get('F1-1-1').physical_row.id,r.evento.lugares.get('F2-1-1').physical_row.id);
+});
+
+test('fase 6: excluir por nivel, zona, fila o grupo afecta exactamente a sus miembros', () => {
+  for(const [tipo,id,esperados] of [['nivel','n2',['F4-1-1','F4-1-2']],['zona','general',['F4-1-1','F4-1-2','F5-1-1']],
+    ['fila','fila1',['F1-1-1','F1-1-2']],['grupo','palco1',['F3-1-1','F3-1-2']],['lugar','F1-1-1',['F1-1-1']]]) {
+    const a=cargar(),{mapa,evento}=ejemploConector(); const antes=a.resolverEventoDeMapa(mapa,evento).evento;
+    evento.exclusiones[tipo]=[id]; const despues=a.resolverEventoDeMapa(mapa,evento).evento;
+    assert.deepEqual([...antes.lugares.keys()].filter(k=>antes.lugares.get(k).habilitado&&!despues.lugares.get(k).habilitado),esperados,tipo);
+  }
+});
+
+test('fase 6: gratuitos explicitos, tarifas activas y conflicto sin prioridad por orden', () => {
+  const a=cargar(),{mapa,evento}=ejemploConector();evento.categorias.forEach(c=>c.precioCentavos=0);
+  let r=a.resolverEventoDeMapa(mapa,evento);const ids=new Set(['F1-1-1']);
+  assert.equal(a.solicitudDeSeleccionEvento(ids,r.evento).totalCentavos,0);
+  evento.categorias[0].activa=false;assert.match(a.resolverEventoDeMapa(mapa,evento).errores.join(),/categoría activa/);
+  evento.categorias[0].activa=true;evento.asignaciones.push({tipo:'fila',id:'fila1',categoriaId:'ett_mesas'});
+  assert.match(a.resolverEventoDeMapa(mapa,evento).errores.join(),/contradictorias/);
+  evento.asignaciones.reverse();assert.match(a.resolverEventoDeMapa(mapa,evento).errores.join(),/contradictorias/);
+  evento.asignaciones.find(x=>x.tipo==='fila').categoriaId='ett_luneta';assert.equal(a.resolverEventoDeMapa(mapa,evento).errores,undefined);
+});
+
+test('fase 6: estado ausente es desconocido, reservas y ventas no reducen inventario', () => {
+  const a=cargar(),{mapa,evento,esperado}=ejemploConector(); delete evento.lugares.find(p=>p.local_place_id==='F1-1-1').estado;
+  evento.lugares.find(p=>p.local_place_id==='F4-1-1').estado='reservado';evento.lugares.find(p=>p.local_place_id==='F4-1-2').estado='vendido';
+  const e=a.resolverEventoDeMapa(mapa,evento).evento,c=a.conteosDeEvento(e);
+  assert.equal(c.inventariados,esperado.inventariados);assert.equal(c.utilizables,esperado.utilizables);assert.equal(c.habilitados,esperado.habilitados);
+  assert.equal(c.disponibles,esperado.disponibles-3);assert.equal(e.lugares.get('F1-1-1').estado,'desconocido');
+  assert.match(e.lugares.get('F1-1-1').motivo,/sin confirmar/);
+});
+
+test('fase 6: mesa y palco usan conjunto utilizable completo y nunca recortan exclusiones', () => {
+  for(const grupo of ['palco1','M1']) {
+    const a=cargar(),{mapa,evento}=ejemploConector();let e=a.resolverEventoDeMapa(mapa,evento).evento;const g=e.grupos.get(grupo);
+    assert.ok(g.comprable);assert.ok(g.requeridos.every(id=>!e.lugares.get(id).blocked));
+    const ids=new Set();assert.equal(a.alternarLugarEvento(ids,g.requeridos[0],e),true);assert.equal(ids.size,g.requeridos.length);
+    assert.equal(a.alternarLugarEvento(ids,g.requeridos.at(-1),e),false);assert.equal(ids.size,0);
+    evento.exclusiones.lugar=[g.requeridos[0]];e=a.resolverEventoDeMapa(mapa,evento).evento;
+    const libre=g.requeridos[1];assert.equal(e.lugares.get(libre).disponible,true);assert.equal(e.lugares.get(libre).comprable,false);
+    assert.match(e.lugares.get(libre).motivo,/conjunto completo/);assert.equal(a.alternarLugarEvento(ids,libre,e),null);
+    evento.grupos.find(x=>x.id===grupo).modalidad='individual';e=a.resolverEventoDeMapa(mapa,evento).evento;
+    assert.equal(a.alternarLugarEvento(ids,libre,e),true);assert.equal(ids.size,1);
+  }
+});
+
+test('fase 6: cualquier estado no libre impide comprar todo el conjunto', () => {
+  for(const estado of ['reservado','vendido','desconocido']) {
+    const a=cargar(),{mapa,evento}=ejemploConector();evento.lugares.find(p=>p.local_place_id==='F3-1-1').estado=estado;
+    const e=a.resolverEventoDeMapa(mapa,evento).evento;assert.equal(e.grupos.get('palco1').comprable,false);
+    assert.equal(e.lugares.get('F3-1-2').comprable,false);assert.equal(e.lugares.get('F3-1-2').disponible,true);
+  }
+});
+
+test('fase 6: actualizar suelta conjuntos enteros y selecciones parciales sin completar', () => {
+  const a=cargar(),{mapa,evento}=ejemploConector();let e=a.resolverEventoDeMapa(mapa,evento).evento;
+  const ids=new Set(['F3-1-1']); assert.deepEqual(a.conciliarSeleccionEvento(ids,e),['F3-1-1']);assert.equal(ids.size,0);
+  a.alternarLugarEvento(ids,'F3-1-1',e);ids.add('F1-1-1');ids.add('retirado');
+  evento.lugares.find(p=>p.local_place_id==='F3-1-2').estado='reservado';e=a.resolverEventoDeMapa(mapa,evento).evento;
+  const quitados=a.conciliarSeleccionEvento(ids,e);assert.equal(quitados.length,3);assert.deepEqual([...ids],['F1-1-1']);
+});
+
+test('fase 6: solicitud solo usa identidades del evento, sin tarifas ni conjuntos parciales', () => {
+  const a=cargar(),{mapa,evento}=ejemploConector();const e=a.resolverEventoDeMapa(mapa,evento).evento;
+  const ids=new Set(['F1-1-1']);a.alternarLugarEvento(ids,'F3-1-1',e);const s=a.solicitudDeSeleccionEvento(ids,e);
+  assert.equal(s.cantidad,3);assert.equal(s.totalCentavos,105000);
+  assert.deepEqual(s.solicitud.event_place_ids,[e.lugares.get('F1-1-1').event_place_id]);assert.deepEqual(s.solicitud.event_group_ids,[e.grupos.get('palco1').event_group_id]);
+  assert.equal(s.solicitud.event_id,'evt_ejemplo');assert.equal(s.solicitud.state_version,1);assert.deepEqual(s.solicitud.revision,mapa.revisionFisica);
+  assert.ok(!JSON.stringify(s.solicitud).includes('precio'));assert.ok(!JSON.stringify(s.solicitud).includes('F3-1-1'));
+  ids.delete('F3-1-2');assert.match(a.solicitudDeSeleccionEvento(ids,e).errores.join(),/parcial/);
+  ids.clear();ids.add('F2-1-1');assert.match(a.solicitudDeSeleccionEvento(ids,e).errores.join(),/no comprable/);
+});
+
+test('fase 6: entradas mal formadas, referencias ajenas y precios incompletos se rechazan', () => {
+  const cambios=[e=>e.version=2,e=>e.evento.moneda='USD',e=>e.evento.id=1,e=>e.evento.versionEstado=-1,
+    e=>e.evento.revision.numero++,e=>e.evento.revision.huella='otra',e=>e.evento.revision.recintoId='otro',
+    e=>e.categorias[0].precioCentavos=null,e=>e.categorias[0].precioCentavos=-1,e=>e.categorias[0].precioCentavos=1.5,
+    e=>e.categorias[0].precioCentavos=100000001,e=>e.categorias[0].activa='true',e=>e.categorias.push({...e.categorias[0]}),
+    e=>e.asignaciones[0].id='ajena',e=>e.asignaciones[0].tipo='banda',e=>e.asignaciones[0].categoriaId='no_existe',
+    e=>e.asignaciones.push({...e.asignaciones[0]}),e=>e.asignaciones=[],e=>e.exclusiones.sector=['ajeno'],
+    e=>e.exclusiones.sector.push('sector2'),e=>delete e.exclusiones.nivel,e=>e.grupos=[],e=>e.grupos[0].modalidad='parcial',
+    e=>e.grupos[0].id='ajeno',e=>e.grupos.push({...e.grupos[0]}),e=>e.grupos[1].event_group_id=e.grupos[0].event_group_id,
+    e=>e.lugares[0].estado='pagado',e=>e.lugares.pop(),e=>e.lugares[0].local_place_id='ajeno',
+    e=>e.lugares[1].event_place_id=e.lugares[0].event_place_id,e=>e.lugares.push({...e.lugares[0]}),
+    e=>e.lugares[0].event_place_id=e.grupos[0].event_group_id,e=>e.lugares[0].event_place_id='12',e=>e.grupos=null];
+  for(const cambiar of cambios) {const a=cargar(),{mapa,evento}=ejemploConector();cambiar(evento);assert.ok(a.resolverEventoDeMapa(mapa,evento).errores,String(cambiar));}
+  const a=cargar(),{mapa,evento}=ejemploConector();mapa.revisionFisica.estado='borrador';delete mapa.revisionFisica.huella;
+  assert.match(a.resolverEventoDeMapa(mapa,evento).errores.join(),/publicada/);
+});
+
+test('fase 6: firma comercial detecta cambios y no depende del orden de respuestas', () => {
+  const a=cargar(),{mapa,evento}=ejemploConector();const firma=a.firmaDeEvento(a.resolverEventoDeMapa(mapa,evento).evento);
+  evento.lugares.reverse();evento.grupos.reverse();evento.categorias.reverse();
+  assert.equal(a.firmaDeEvento(a.resolverEventoDeMapa(mapa,evento).evento),firma);
+  evento.lugares.find(p=>p.local_place_id==='F1-1-1').estado='vendido';assert.notEqual(a.firmaDeEvento(a.resolverEventoDeMapa(mapa,evento).evento),firma);
+  evento.lugares.find(p=>p.local_place_id==='F1-1-1').estado='libre';evento.categorias[0].precioCentavos++;
+  assert.notEqual(a.firmaDeEvento(a.resolverEventoDeMapa(mapa,evento).evento),firma);
+  evento.categorias[0].precioCentavos--;evento.grupos[0].modalidad='individual';
+  assert.notEqual(a.firmaDeEvento(a.resolverEventoDeMapa(mapa,evento).evento),firma);
+});
+
+test('fase 6: actualizaciones conservan identidades de evento para lugares y grupos', () => {
+  const a=cargar(),{mapa,evento}=ejemploConector();const actual=a.resolverEventoDeMapa(mapa,evento).evento;
+  assert.equal(a.motivoCambioDeEvento(actual,actual),null);
+  evento.evento.id='evt_otro';let nuevo=a.resolverEventoDeMapa(mapa,evento).evento;assert.match(a.motivoCambioDeEvento(actual,nuevo),/otro evento/);
+  evento.evento.id='evt_ejemplo';evento.lugares[0].event_place_id='ep_otro';nuevo=a.resolverEventoDeMapa(mapa,evento).evento;
+  assert.match(a.motivoCambioDeEvento(actual,nuevo),/identidad de un lugar/);
+  evento.lugares[0].event_place_id=actual.lugares.get(evento.lugares[0].local_place_id).event_place_id;
+  evento.grupos[0].event_group_id='eg_otro';nuevo=a.resolverEventoDeMapa(mapa,evento).evento;assert.match(a.motivoCambioDeEvento(actual,nuevo),/identidad de un grupo/);
+});
+
 test('contrato: referencias cruzadas, fila compartida y conjunto no comprable', () => {
   const { recinto: r, evento: e, esperado } = JSON.parse(readFileSync(new URL('./docs/ejemplo-recinto-evento.json', import.meta.url), 'utf8'));
   for (const lista of [r.niveles, r.zonas, r.sectores, r.filas, r.grupos, r.lugares]) {

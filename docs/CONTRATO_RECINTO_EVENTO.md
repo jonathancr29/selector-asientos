@@ -110,7 +110,8 @@ permitiendo editar y seleccionar sin servidor, sin simular una compra o una tari
 Compra: IDs de lugares o grupos del evento, nunca precio como autoridad. Servidor valida revision,
 habilitacion, categoria, modalidad y disponibilidad en una transaccion. El conector no es un
 plugin de Codex: es la interfaz entre aplicaciones. Autenticacion, endpoints, errores y refresco
-se concretaran durante la integracion, respetando este contrato.
+se concretan para el cliente en la [guia de fase 6](INTEGRACION_EVENTOS_SINTAQUILLA.md).
+Las rutas concretas y la implementacion transaccional pertenecen a Sin Taquilla.
 
 ## 7. Migracion y alcance de fase 2
 
@@ -135,7 +136,23 @@ incompatibles, con aviso; eliminar entidad usada exige desvincular previamente s
 Duplicar piezas conserva sector y crea lugares nuevos sin asignarlos a la fila o palco original.
 IDs retirados y contadores se conservan al guardar y deshacer. La revision publicada incluye
 entidades y pertenencias, sin modalidades comerciales. La migracion no deduce estas entidades
-desde letras, coordenadas o bandas. Excluir grupos por evento y reservarlos sigue pendiente.
+desde letras, coordenadas o bandas. Fase 6 aplica exclusiones y seleccion agrupada en el cliente;
+reservar en servidor sigue pendiente.
+
+### Conector de fase 6
+
+Snapshot comercial version 1, separado del mapa v8 y catalogo v5. El cliente recibe revision
+publicada, categorias y asignaciones, exclusiones por pertenencia, modalidad de grupos y
+correspondencia de IDs opacos de evento. Disponibilidad desconocida nunca se trata como libre.
+La union de exclusiones cierra exactamente sus integrantes; tarifas distintas sobre un lugar
+se rechazan. Conjuntos requieren todos los lugares fisicamente utilizables de la revision,
+sin recorte por exclusiones ni disponibilidad. Actualizar puede soltar selecciones, con aviso.
+
+Se entrega una API de navegador y recursos externos para CSP, con transporte del mismo origen,
+CSRF, version de estado e identidades estables. El importe es informativo; el servidor debe
+expandir grupos, calcular precios y validar/reservar atomico. No se modifico el servidor en esta
+fase. [Ejemplo importable y snapshot](ejemplo-conector-evento.json) con tres niveles ficticios,
+mesa, palco y fila compartida entre sectores. El Clavijero se construira aparte.
 
 ## 8. Casos de aceptacion
 

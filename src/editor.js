@@ -857,6 +857,7 @@ const PISTAS = {
 };
 
 function cambiarModo(nuevo) {
+  if (eventoConectado && nuevo === 'editor') { anunciar('La compra utiliza una revisión fija. Abre el editor fuera del evento.'); return; }
   if (nuevo === 'editor' && TIPOS_DE_SALA[tipoActual].revisionFisica?.estado === 'publicada') {
     anunciar('Esta revisión está publicada. Crea una nueva revisión en borrador para editar.'); return;
   }
@@ -1359,8 +1360,9 @@ function actualizarIdentidadControles() {
   const r = plano?.revisionFisica || TIPOS_DE_SALA[tipoActual].revisionFisica;
   const publicada = r?.estado === 'publicada';
   document.getElementById('revision-fisica').textContent = r ? 'Revisión ' + r.numero + ' · ' + r.estado : 'Revisión 1 · borrador';
-  document.getElementById('revision-publicada').hidden = !publicada;
-  document.getElementById('modo-editor').disabled = Boolean(publicada);
+  document.getElementById('revision-publicada').hidden = !publicada || Boolean(eventoConectado);
+  document.getElementById('nuevo-borrador').disabled = Boolean(eventoConectado);
+  document.getElementById('modo-editor').disabled = Boolean(publicada || eventoConectado);
   document.getElementById('modo-numeracion').value = plano?.modoNumeracion || TIPOS_DE_SALA[tipoActual].modoNumeracion || 'automatica';
   const oficial = document.getElementById('modo-numeracion').value === 'oficial';
   document.getElementById('herramienta-numeracion').disabled = !oficial;

@@ -21,7 +21,8 @@ python -m http.server 8000
 
 Si editas el proyecto, trabaja en `src/` y genera de nuevo el archivo autónomo con
 `node construir.mjs`. `node construir.mjs --check` comprueba que las fuentes y el HTML entregado
-coinciden; la CI lo exige. No hay instalación de paquetes.
+coinciden; la CI lo exige. También genera y comprueba HTML, CSS y JavaScript externos en
+`integracion/`, para Sin Taquilla. No hay instalación de paquetes.
 
 ## Qué resuelve
 
@@ -217,7 +218,8 @@ Las usadas no se eliminan, y se conservan la zona de mesas y al menos una zona p
 El mapa físico no configura precios ni venta completa. Sin un evento conectado, el resumen
 muestra **Precio no disponible**. Cero no se inventa: los importes llegarán desde Sin Taquilla.
 Las herramientas de venta agrupada siguen como base interna para fases posteriores, sin controles
-comerciales en el editor. El conector aún no está implementado.
+comerciales en el editor. El conector de fase 6 recibe la política desde el evento;
+su [guía de integración](docs/INTEGRACION_EVENTOS_SINTAQUILLA.md) define el intercambio.
 
 ### La zona se hereda de la banda
 
@@ -443,10 +445,12 @@ ninguna otra mesa puede ocuparlas.
 
 El editor conserva los lugares y su mesa física. Los controles de venta completa se retiraron:
 la modalidad pertenecerá al evento en Sin Taquilla, siguiendo el contrato de recinto y evento.
-En la previsualización actual se seleccionan lugares individualmente y no se calcula un importe.
+Sin evento conectado se seleccionan lugares individualmente y no se calcula un importe.
 La importación conserva `completa: true` de mapas antiguos como antecedente inactivo.
-Las funciones puras de selección conjunta se conservan como base para la futura generalización
-a mesas y palcos; la configuración del evento y su validación en servidor siguen pendientes.
+El conector aplica una modalidad común a mesas y palcos: por lugar o por conjunto de todos sus
+lugares físicamente utilizables. Un integrante requerido excluido, reservado, vendido o sin estado
+confirmado impide seleccionar el conjunto; nunca se recorta. Su importe suma los integrantes.
+El servidor de Sin Taquilla aún debe configurar, validar y reservar esas selecciones en una transacción.
 
 ### Mesas redondas
 
@@ -982,7 +986,29 @@ datos, nunca en el navegador.
 El [contrato de recinto y evento](docs/CONTRATO_RECINTO_EVENTO.md) define identidad física,
 numeración oficial, tarifas por evento, venta agrupada y revisiones. Complementa y actualiza
 el [contrato de lugares para Sin Taquilla](docs/CONTRATO_LUGARES_SINTAQUILLA.md).
-La integración aún no está implementada.
+El conector del selector está implementado en fase 6. La administración, persistencia y venta real
+del lado de Sin Taquilla siguen pendientes; ver la [guía de entrega](docs/INTEGRACION_EVENTOS_SINTAQUILLA.md).
+
+### Conectar un evento (fase 6)
+
+La API `window.SelectorAsientos` recibe un mapa publicado y un snapshot separado con categorías,
+tarifas, exclusiones, modalidad de grupos e IDs y estados de los lugares del evento. La revisión
+queda fija y la compra no permite editar ni cambiar de recinto. Los niveles conservan la selección.
+Nombres físicos vienen del recinto, importes del evento; no se guardan datos comerciales en el mapa.
+
+Se pueden excluir niveles, zonas, sectores, filas, grupos o lugares; se aplica la unión de
+exclusiones según pertenencias, sin imponer un árbol. Las tarifas contradictorias se rechazan.
+La disponibilidad ausente es desconocida. Los conteos separan inventario, utilizables, habilitados,
+libres y comprables: un lugar libre de un conjunto incompleto no es comprable.
+
+El anfitrión recibe selecciones por callback o evento DOM, consulta y reserva mediante rutas del
+mismo origen con CSRF. Las peticiones envían IDs opacos del evento; el importe mostrado no autoriza
+una venta. Errores de consulta suspenden la compra hasta confirmar de nuevo disponibilidad.
+Actualizaciones validan revisión, identidades y versión, y avisan al soltar selecciones afectadas.
+
+La entrega externa funciona con `style-src 'self'` y `script-src 'self'`. El HTML autónomo sigue
+funcionando sin servidor. El [ejemplo completo](docs/ejemplo-conector-evento.json) usa tres niveles,
+fila compartida, mesa y palco ficticios; no representa el Clavijero.
 
 ## Sobre three.js
 
