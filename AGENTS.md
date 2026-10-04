@@ -510,7 +510,8 @@ comentarios `// ----`.
   descartan los campos desconocidos y se comprueba que las mesas quepan. No se confía en el archivo.
 - **Las bloqueadas son una lista de ids** (`plano.bloqueadas`). `bloqueadasAlFinal` de las plantillas
   solo se usa si no hay lista.
-- **Formato del mapa, versión 6:** inventario físico, numeración oficial, IDs retirados y revisiones.
+- **Formato del mapa, versión 7:** niveles y regiones independientes, filas libres y correcciones.
+  La versión 6 añadió inventario físico, numeración oficial, IDs retirados y revisiones.
   La versión 5 quitó precios activos y venta completa activa; conserva
   antecedentes comerciales validados de mapas antiguos. En versión 4, `zona` es opcional en mesas, bloques y butacas sueltas (sin ella,
   heredan) y las bandas que no son de filas pueden llevarla. La versión 3 añadió `lienzo`,
@@ -520,6 +521,20 @@ comentarios `// ----`.
   versión 3 no se toca al leerlo: sus mesas no traían zona, así que pasan a heredar la de su banda. Si cambias el formato otra vez, sube `VERSION_MAPA` y convierte los mapas
   viejos en lugar de
   rechazarlos.
+
+- **Nivel visible e inventario completo son distintos:** `butacas` conserva todos los niveles;
+  `butacasVisibles` alimenta dibujo, teclado, encuadre, colisiones y acciones por área. Las listas
+  de piezas, muebles y escenario representan el nivel activo. Selección y aforo son del recinto.
+  Guardar pasa por `cambiarNivelPlano` hacia el primer nivel; cambiar de vista no cambia la revisión.
+- **La geometría libre conserva correcciones por ID:** `ajustes` contiene desplazamiento relativo
+  y giro, asociado al ID físico; `sincronizarIdentidad` elimina las de lugares retirados. Duplicar
+  conserva desplazamientos con IDs nuevos. Nunca deducir identidad ni numeración de las coordenadas.
+  Las filas clásicas conservan giros de 90°; solo los bloques libres admiten fracciones y arcos.
+- **Colisiones por huellas:** `ocuparRectangulo` indexa cuadrados por celdas y conserva sus medidas
+  exactas. `choqueDeRectangulo` distingue compartir una celda de solaparse. `ocuparPieza` registra
+  las huellas nuevas al transformar varias piezas; no reservar el rectángulo vacío de un arco.
+- **Región gráfica no cambia pertenencia:** solo transforma sus bloques vinculados; una transformación
+  imposible no mueve ninguno. Al eliminarla sobreviven los lugares y su identidad física.
 
 ## Trampas conocidas
 
@@ -665,15 +680,14 @@ validación son históricas; el redibujado se comparó en Chrome sin interfaz el
 | `dibujarTodo` repetido con 18.720 butacas | mediana 1.119 → 625 ms, 56.160 nodos |
 | Elegir una butaca en Previsualizar | menos de 1 ms |
 | Zoom y desplazamiento | imperceptible (mueven el `viewBox`) |
-| JSON de un mapa así | unos pocos KB |
+| JSON de un mapa así | la medición anterior no incluía inventario; desde v6 crece por lugar |
 | Acercamiento máximo | ~40 px por butaca en cualquier recinto |
 
 Lo que hay que entender de esa tabla: **vender va instantáneo a cualquier aforo**, porque elegir una
 butaca conmuta clases sobre el nodo que ya existe y no redibuja nada. Cada acción del editor pasa
 por `regenerar` → `dibujarTodo`: ahora conserva los nodos de butacas con el mismo ID y solo rehace
-los otros elementos del plano. La primera pintura no se acelera. El JSON es pequeño
-porque un mapa guarda **el diseño, no las butacas**: una banda de 26 filas son tres líneas, generen
-58 o 5.800 asientos.
+los otros elementos del plano. La primera pintura no se acelera. Desde v6 el JSON guarda diseño
+e identidad física por lugar; ya no tiene el tamaño de las bandas geométricas solamente.
 
 Repite la medición con `node medir-render.mjs`; el guion informa una primera pintura y cinco
 redibujados y toma la mediana de estos últimos. La duración no bloquea CI porque depende del equipo.

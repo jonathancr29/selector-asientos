@@ -97,6 +97,10 @@
       <label class="campo" for="tipo-sala" data-tooltip="Tipo de sala"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-sala"></use></svg><span class="solo-lector">Tipo de sala</span></label>
       <select id="tipo-sala"></select>
     </div>
+    <div class="herramientas campo-ancho">
+      <label class="campo" for="nivel-vista">Nivel</label>
+      <select id="nivel-vista" aria-label="Nivel del recinto"></select>
+    </div>
     <details class="grupo" open id="grupo-mapa" hidden>
       <summary>Mapa</summary>
       <div class="herramientas" role="group" aria-label="Historial del plano">
@@ -343,6 +347,52 @@
           <input type="text" id="nombre-pieza" maxlength="40" autocomplete="off" disabled placeholder="Ej.: Lateral izquierdo">
         </div>
         <p class="pista">La modalidad de venta se configura por evento en Sin Taquilla.</p>
+      </details>
+      <details class="grupo numeracion-oficial" id="grupo-niveles">
+        <summary>Niveles y regiones</summary>
+        <label for="nombre-nivel">Nombre del nivel</label><input id="nombre-nivel" maxlength="40" placeholder="Ej.: Galería">
+        <button id="agregar-nivel" type="button">Agregar nivel</button>
+        <button id="renombrar-nivel" type="button">Renombrar nivel actual</button>
+        <button id="eliminar-nivel" type="button">Eliminar nivel actual</button>
+        <label for="region-activa">Región de dibujo</label><select id="region-activa"></select>
+        <form id="formulario-region">
+          <label for="nombre-region">Nombre</label><input id="nombre-region" maxlength="40" placeholder="Ej.: Lateral izquierdo">
+          <label for="region-x">Columna</label><input id="region-x" type="number" step="0.1" value="1">
+          <label for="region-y">Fila</label><input id="region-y" type="number" step="0.1" value="0">
+          <label for="region-ancho">Ancho</label><input id="region-ancho" type="number" step="0.1" value="6">
+          <label for="region-alto">Alto</label><input id="region-alto" type="number" step="0.1" value="8">
+          <label for="region-giro">Giro en grados</label><input id="region-giro" type="number" step="0.1" value="0">
+          <button id="guardar-region" type="submit">Aplicar región</button>
+        </form>
+        <button id="agregar-region" type="button">Agregar región</button>
+        <button id="eliminar-region" type="button">Eliminar región</button>
+        <p class="pista">Las regiones organizan el dibujo. Moverlas transforma sus bloques vinculados y conserva sus zonas físicas.</p>
+      </details>
+      <details class="grupo numeracion-oficial" id="grupo-geometria">
+        <summary>Geometría de filas</summary>
+        <p class="pista">Selecciona un bloque. Su giro y la orientación de cada butaca se configuran por separado.</p>
+        <form id="formulario-geometria">
+          <label for="geometria-tipo">Forma de las filas</label><select id="geometria-tipo"><option value="recta">Rectas</option><option value="arco">Arcos circulares</option></select>
+          <label for="geometria-x">Columna del bloque</label><input id="geometria-x" type="number" step="0.1">
+          <label for="geometria-y">Fila del bloque</label><input id="geometria-y" type="number" step="0.1">
+          <label for="geometria-giro">Giro del bloque en grados</label><input id="geometria-giro" type="number" step="0.1">
+          <label for="geometria-separacion">Separación entre butacas</label><input id="geometria-separacion" type="number" step="0.1">
+          <label for="geometria-separacionFilas">Separación entre filas</label><input id="geometria-separacionFilas" type="number" step="0.1">
+          <label for="geometria-radio">Radio del arco</label><input id="geometria-radio" type="number" step="0.1">
+          <label for="geometria-apertura">Apertura del arco en grados</label><input id="geometria-apertura" type="number" step="0.1">
+          <label for="geometria-orientacion">Orientación de butacas</label><select id="geometria-orientacion"><option value="fila">Según la fila</option><option value="escenario">Hacia el escenario</option><option value="manual">Ángulo manual</option></select>
+          <label for="geometria-anguloButacas">Ángulo manual relativo al bloque</label><input id="geometria-anguloButacas" type="number" step="0.1">
+          <label for="geometria-region">Región de dibujo</label><select id="geometria-region"></select>
+          <button id="guardar-geometria" type="submit">Aplicar geometría</button>
+        </form>
+        <button id="herramienta-ajustar" type="button" aria-pressed="false">Ajustar una butaca</button>
+        <form id="formulario-ajuste">
+          <label for="id-lugar-ajuste">ID del lugar</label><input id="id-lugar-ajuste" readonly>
+          <label for="ajuste-dx">Desplazamiento en la fila</label><input id="ajuste-dx" type="number" step="0.1" value="0">
+          <label for="ajuste-dy">Desplazamiento entre filas</label><input id="ajuste-dy" type="number" step="0.1" value="0">
+          <label for="ajuste-giro">Corrección de orientación en grados</label><input id="ajuste-giro" type="number" step="0.1" value="0">
+          <button id="guardar-ajuste" type="submit">Guardar ajuste</button>
+        </form>
       </details>
       <details class="grupo numeracion-oficial" open>
         <summary>Numeración oficial</summary>

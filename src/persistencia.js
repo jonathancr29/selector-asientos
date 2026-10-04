@@ -11,7 +11,7 @@ function actualizarResumen() {
 
   const cubos = new Map();
   for (const b of lista) {
-    const clave = b.grupo ? 'mesa:' + b.grupo.id : 'zona:' + b.zona;
+    const clave = b.nivel + ':' + (b.grupo ? 'mesa:' + b.grupo.id : 'zona:' + b.zona);
     if (!cubos.has(clave)) cubos.set(clave, []);
     cubos.get(clave).push(b);
   }
@@ -25,7 +25,7 @@ function actualizarResumen() {
     const cuantos = (items[0].grupo && items[0].grupo.completa ? 'mesa completa, ' : '') +
                     (items.length === 1 ? '1 lugar' : items.length + ' lugares');
     const cuales = items.map((b) => (b.grupo ? b.numero : b.fila + b.numero)).join(', ');
-    li.textContent = nombre + ' · ' + cuantos + ' (' + cuales + ')';
+    li.textContent = (salaActual.niveles.length > 1 ? items[0].nombreNivel + ' · ' : '') + nombre + ' · ' + cuantos + ' (' + cuales + ')';
     detalle.appendChild(li);
   }
 }
@@ -53,6 +53,7 @@ function actualizarAforo(sala) {
     ...(butacasSueltas.length ? [plural(butacasSueltas.length, 'butaca suelta', 'butacas sueltas')] : []),
     ...(formas.length ? [plural(formas.length, 'forma', 'formas')] : []),
     ...(escenario.ausente ? ['sin escenario'] : []),
+    ...(sala.niveles.length > 1 ? [butacasVisibles().length + ' lugares en ' + sala.niveles.find((n) => n.id === sala.nivel).nombre] : []),
     butacas.length + ' lugares en total',
   ].join(' · ');
 }
@@ -159,6 +160,7 @@ function guardarMapa() {
   }
   if (TIPOS_DE_SALA[clave] && clave !== tipoActual &&
       !confirm('Ya hay un mapa llamado «' + nombre + '». ¿Sobrescribirlo?')) return;
+  const nivelAntes = salaActual.nivel;
   const mapa = mapaDesdePlano(nombre, planoEditable(), new Date().toISOString(), idsActuales());
   almacen[nombre] = mapa;
   if (!escribirAlmacen(almacen)) {
@@ -171,6 +173,7 @@ function guardarMapa() {
   delete historiales[clave];
   construirSelector(clave);
   redibujar(clave);
+  if (salaActual.niveles.some((n) => n.id === nivelAntes) && salaActual.nivel !== nivelAntes) cambiarNivelVista(nivelAntes);
   anunciar('Mapa «' + nombre + '» guardado en este navegador.');
 }
 

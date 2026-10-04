@@ -217,7 +217,7 @@ Las usadas no se eliminan, y se conservan la zona de mesas y al menos una zona p
 El mapa físico no configura precios ni venta completa. Sin un evento conectado, el resumen
 muestra **Precio no disponible**. Cero no se inventa: los importes llegarán desde Sin Taquilla.
 Las herramientas de venta agrupada siguen como base interna para fases posteriores, sin controles
-comerciales en el editor. El conector y los niveles aún no están implementados.
+comerciales en el editor. El conector aún no está implementado.
 
 ### La zona se hereda de la banda
 
@@ -667,7 +667,7 @@ cero, por ejemplo un salón de eventos. Al elegirla se abre directamente el modo
   fila, para ubicarse. No son butacas ni se venden.
 - **Escenario:** el botón **Agregar escenario** de la barra lo pone en el primer hueco libre: a todo
   el ancho si cabe, si no de 8 o de 4 columnas. Después se mueve y cambia de tamaño como siempre.
-- **Guardar:** con un nombre, en «Mis mapas», como cualquier mapa (versión 6 del formato).
+- **Guardar:** con un nombre, en «Mis mapas», como cualquier mapa (versión 7 del formato).
 
 ### Butacas sueltas y formas
 
@@ -775,7 +775,7 @@ y mesas no guardan venta completa activa. Los precios y mesas completas de mapas
 conservan en antecedentes comerciales pendientes de revisión. Se mantienen al guardar y abrir,
 pero no activan precios ni selección conjunta. No se fusionan zonas ni se adivina su significado.
 
-**Versión 6** (actual) añade identidad física por lugar, IDs retirados, numeración oficial y revisión.
+**Versión 6** añadió identidad física por lugar, IDs retirados, numeración oficial y revisión.
 La clave del generador identifica una posición dentro de una pieza; el ID identifica el lugar.
 Acortar y volver a ampliar da IDs nuevos a los lugares retirados, sin recuperar sus bloqueos.
 Los mapas v1–v5 se materializan conservando sus IDs, coordenadas, zonas y etiquetas actuales.
@@ -802,7 +802,7 @@ los lugares de una mesa estén en la misma zona física. Una zona llamada *Zona*
 provisional. Los mapas viejos se siguen abriendo; si tienen `zonasDeAsiento`, antes de exportar el
 catálogo hay que revisar esas asignaciones con *Revisar zonas físicas asignadas*. La confirmación
 se guarda como `zonasFisicasConfirmadas`, asociada al ID y al valor de zona; cambiar la zona vuelve
-a exigir revisión. El catálogo físico es versión 3, incluye revisión e IDs retirados, y Sin Taquilla decidirá categoría, importe y modalidad al configurar
+a exigir revisión. El catálogo físico es versión 4, incluye nivel, revisión e IDs retirados, y Sin Taquilla decidirá categoría, importe y modalidad al configurar
 el evento. Aún no publica el mapa ni conecta la venta.
 
 Los mapas de la versión 1 (que guardaban `"pasillos": "ambos"`) se siguen leyendo: se convierten a
@@ -830,6 +830,49 @@ propias y se recuperan al recargar.
   aforo máximo actual no se nota.
 - **Más formas:** escenario secundario, cabina de DJ, columna u otros obstáculos del recinto.
 
+## Niveles, regiones y filas libres (fase 4)
+
+El mapa **versión 7** conserva hasta 12 niveles con IDs estables, nombres y geometría propia.
+Los mapas v1–v6 se abren como *Planta baja*, sin alterar sus lugares. El selector *Nivel* está
+disponible al editar y previsualizar; conserva la selección de todo el recinto y la vista de
+cada piso durante la sesión. El resumen y las etiquetas accesibles incluyen el nivel cuando
+hay varios. Las coordenadas iguales en pisos diferentes no chocan. El aforo de 20.000 lugares
+se aplica al recinto completo. Guardar usa siempre el primer nivel como raíz del documento;
+cambiar de vista no crea una revisión ni cambios pendientes.
+
+En *Niveles y regiones* se agrega, renombra o elimina un nivel. Eliminar muestra los lugares
+afectados y retira sus IDs; los contadores no retroceden, incluso al deshacer. El último nivel
+no se elimina. Cada nivel conserva sus columnas, bandas, escenario y piezas. Las operaciones
+por área afectan solo al piso visible; zonas, inventario y revisión pertenecen al recinto.
+
+Las **regiones** son contornos de dibujo independientes (hasta 100 por nivel). Tienen posición,
+medidas y ángulo propios; admiten laterales, alas y distribuciones asimétricas. Se vinculan
+bloques desde *Geometría de filas*. Mover o girar una región transforma sus bloques vinculados
+como grupo, y se rechaza todo el cambio si uno no cabe. Eliminar el contorno conserva los bloques.
+Una región no es una zona física, no genera lugares y no determina precios. Las mesas y otras
+piezas conservan sus controles actuales; el vínculo gráfico de región se ofrece para bloques.
+
+Selecciona un bloque y abre **Geometría de filas**. Admite filas rectas o arcos circulares,
+ángulos arbitrarios, posiciones fraccionarias, separación entre butacas y filas, radio y apertura.
+La orientación de las butacas es independiente: según la fila, hacia el escenario del nivel
+o ángulo manual relativo al bloque. Las mesas conservan giros de 90°. La geometría clásica de
+los mapas existentes conserva su distribución hasta activar expresamente la geometría libre.
+
+*Ajustar una butaca* permite elegir con clic o Enter, editar desplazamientos relativos a la fila
+y corregir su orientación. Las correcciones se asocian al ID del lugar, viajan y giran con su
+fila y sobreviven al cambiar radio o separación. Se conservan al duplicar con IDs nuevos.
+Al retirar un lugar se descarta su corrección; ampliar de nuevo crea otro ID sin recuperarla.
+Las etiquetas oficiales siguen conservándose. Cualquier solapamiento entre butacas o con
+obstáculos, o salida del lienzo, rechaza el cambio. Las huellas de los asientos se comprueban
+como cuadrados de una celda, incluso en coordenadas fraccionarias; tocar bordes no es solaparse.
+Las flechas siguen la fila y columna local de un bloque libre, aunque el arco retroceda en
+coordenadas; entre bloques buscan el lugar más cercano en la dirección elegida del piso visible.
+
+El catálogo físico **versión 4** agrega nivel y orientación. Su etiqueta completa distingue
+dos lugares con la misma fila/número en pisos diferentes. Sectores oficiales, entidades de fila,
+palcos, imágenes de fondo y curvas generales siguen pendientes. Esta fase no construye ni
+confirma el plano o aforo del Clavijero; prepara las herramientas para trazarlo con documentación.
+
 ## Pruebas
 
 ```bash
@@ -840,7 +883,7 @@ node --test pruebas-navegador.mjs
 
 Cubren la rejilla, el reparto de mesas, el aforo de la tabla anterior, la conciliación de la
 selección al cambiar de sala, los tipos de sala y las bandas, y las reglas del editor: geometría de las mesas, hacia dónde
-mira cada silla, dónde caben, girar, alargar, cabeceras, un solo lado y sitio para mesas nuevas; también el mapa en blanco (lienzo, espacios, guías, escenario opcional y mapas versión 6), butacas sueltas y formas, duplicar piezas y bandas, renombrar bandas, subtítulos y selección de bandas por clic. No hay copia del código: `pruebas.mjs` lee `index.html` y
+mira cada silla, dónde caben, girar, alargar, cabeceras, un solo lado y sitio para mesas nuevas; también el mapa en blanco (lienzo, espacios, guías, escenario opcional y mapas versión 7), butacas sueltas y formas, duplicar piezas y bandas, renombrar bandas, subtítulos y selección de bandas por clic. No hay copia del código: `pruebas.mjs` lee `index.html` y
 evalúa la parte del script anterior a la marca *«Fin de la parte sin DOM»*, así que se prueba el
 HTML que se entrega, y la API que ven las pruebas se escanea del propio archivo: una
 función nueva se prueba sin tocar el arnés. Requiere Node 18 o posterior.
@@ -872,7 +915,7 @@ ambas versiones en el mismo equipo:
 | Redibujarlo tras editar | ~625 ms de mediana; antes ~1.119 ms |
 | **Elegir una butaca** | **menos de 1 ms** |
 | Zoom y desplazamiento | imperceptible |
-| Tamaño del mapa guardado | unos pocos KB |
+| Tamaño del mapa guardado | crece con el inventario físico desde v6 |
 
 Puedes repetir la medición con `node medir-render.mjs` (Node 22 y Chrome o Edge). Informa la primera
 pintura y cinco redibujados; la mediana anterior excluye la primera. No es una prueba de CI porque

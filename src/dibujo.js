@@ -13,9 +13,9 @@ const formatoDinero = new Intl.NumberFormat('es-MX', { style: 'currency', curren
 const dinero = (centavos) => formatoDinero.format(centavos / 100);
 const porId = new Map();   // id -> butaca, para no recorrer la lista en cada interaccion
 // La zona abre la etiqueta, como saldra en el boleto; el id queda aparte.
-const etiquetaDe = (b) => (b.grupo ? zonas[b.zona].nombre + ', mesa ' + b.numeroMesa +
+const etiquetaDe = (b) => ((salaActual?.niveles?.length > 1 ? b.nombreNivel + ', ' : '') + (b.grupo ? zonas[b.zona].nombre + ', mesa ' + b.numeroMesa +
   (b.grupo.completa ? ' completa' : '') + ', lugar ' + b.numero
-  : b.seccion + ', fila ' + b.fila + ', butaca ' + b.numero);
+  : b.seccion + ', fila ' + b.fila + ', butaca ' + b.numero));
 
 function nodo(nombre, atributos) {
   const el = document.createElementNS(NS, nombre);
@@ -40,6 +40,11 @@ function marcarTableroDeMesa(tablero, id) {
 }
 
 function dibujarMuebles() {
+  for (const r of planos[tipoActual]?.regionesLibres || TIPOS_DE_SALA[tipoActual].regionesLibres || []) {
+    const g = nodo('g', { class: 'region-libre', 'aria-hidden': 'true', transform: `translate(${r.x * PASO} ${r.y * PASO}) rotate(${r.giro})` });
+    g.append(nodo('rect', { x: 0, y: 0, width: r.ancho * PASO, height: r.alto * PASO, rx: 2 }), texto('subtitulo', 3, 5, r.nombre));
+    capaMuebles.appendChild(g);
+  }
   for (const m of muebles) {
     if (m.tipo === 'escenario') {
       const rect = nodo('rect', { class: 'escenario', x: m.x * PASO, y: m.y * PASO,
@@ -200,14 +205,14 @@ function dibujarButacas() {
   porId.clear();
   const bloqueando = modo === 'editor' && herramienta === 'bloquear';
   const pintando = modo === 'editor' && herramienta === 'zona';
-  const numerando = modo === 'editor' && herramienta === 'numeracion';
+  const numerando = modo === 'editor' && ['numeracion', 'ajustar'].includes(herramienta);
   const pincel = document.getElementById('zona-pincel').value;
   // En el primer dibujo se injerta un fragmento. En los siguientes, cada id conserva
   // su nodo, foco y lugar en el arbol si no cambio; solo se mueven los que cambiaron
   // de orden y se quitan los ids que ya no existen.
   const trozo = anteriores.size ? null : document.createDocumentFragment();
   let siguiente = capaButacas.firstElementChild;
-  butacas.forEach((b, indice) => {
+  butacasVisibles().forEach((b, indice) => {
     const seleccionable = b.estado === 'libre';
     const elegida = elegidas.has(b.id);
     // Al bloquear, cada butaca es un checkbox de «bloqueada»; las ocupadas no se tocan.
@@ -241,7 +246,7 @@ function dibujarButacas() {
       : pintando ? ', zona ' + zonas[b.zona].nombre + (b.estado === 'ocupada' ? ', ocupada' : '')
       : (seleccionable ? '' : ', ' + b.estado));
     // tabindex movil: un solo punto de tabulacion. Colocando mesas, ninguno.
-    const tabindex = (modo === 'vista' || bloqueando || pintando) && indice === 0 ? '0' : '-1';
+    const tabindex = (modo === 'vista' || conButacas()) && indice === 0 ? '0' : '-1';
     const apariencia = [clase, marcada, inactiva, etiqueta, tabindex, pieza].join('\u0000');
     if (g._apariencia !== apariencia) {
       g.setAttribute('class', clase);
@@ -300,13 +305,16 @@ function dibujarPiezas() {
     // Varias pueden estar seleccionadas; la principal es la que lleva el tabindex.
     const activa = piezasActivas.has(m.id);
     const principal = m.id === mesaActiva;
-    const pieza = nodo('rect', {
+    const pieza = nodo(m.geo.libre ? 'path' : 'rect', {
       class: 'pieza' + (activa ? ' activa' : ''), x: m.x * PASO + 0.5, y: m.y * PASO + 0.5,
       width: m.geo.ancho * PASO - 1, height: m.geo.alto * PASO - 1, rx: 3,
       role: 'button', 'aria-label': etiquetaPieza(m), 'aria-describedby': 'pista',
       'aria-pressed': String(activa),
       tabindex: (hayActiva ? principal : indice === 0) ? '0' : '-1',
     });
+    if (m.geo.libre) {
+      pieza.setAttribute('d', m.geo.lugares.map((l) => `M${(m.x+l.dx)*PASO+.5},${(m.y+l.dy)*PASO+.5}h${PASO-1}v${PASO-1}h${1-PASO}z`).join(' '));
+    }
     pieza.dataset.pieza = m.id;
     capaPiezas.appendChild(pieza);
   });

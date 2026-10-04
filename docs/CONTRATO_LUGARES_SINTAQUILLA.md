@@ -1,14 +1,14 @@
-# Contrato de lugares para Sin Taquilla (fase 4)
+# Contrato de lugares para Sin Taquilla (integración inicial)
 
-La fase 3 del plan revisado añade mapa v6 y catálogo v3, con inventario físico, numeración
-oficial y revisiones locales congeladas. La integración de eventos sigue pendiente.
+La fase 4 del plan revisado añade mapa v7 y catálogo v4, con niveles, regiones y geometría libre,
+sobre el inventario físico, numeración oficial y revisiones de fase 3. La integración sigue pendiente.
 
 Las decisiones nuevas de separación física/comercial y venta agrupada se recogen en
 [Contrato de recinto, evento y conector](CONTRATO_RECINTO_EVENTO.md), que prevalece en esas
 materias. Las secciones siguientes conservan el contexto histórico de la integración inicial.
 
-**Estado actual:** el selector exporta un catálogo físico versión 3 sin precios y mapas versión 6
-con identidad materializada, numeración oficial, revisiones y zonas independientes de bandas.
+**Estado actual:** el selector exporta un catálogo físico versión 4 sin precios y mapas versión 7
+con niveles, geometría libre, identidad materializada, numeración oficial y revisiones.
 Precios y venta completa anteriores son antecedentes de
 migración, no políticas activas. Todavía no hay integración ni migración de datos en Sin Taquilla.
 Las secciones numeradas siguientes describen el contrato histórico; para las decisiones vigentes,
