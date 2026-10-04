@@ -1,7 +1,8 @@
 # Contrato de lugares para Sin Taquilla (integración inicial)
 
 La fase 5 del plan revisado añade mapa v8 y catálogo v5, con sectores, filas físicas y palcos,
-sobre los niveles y geometría libre de fase 4. La integración sigue pendiente.
+sobre los niveles y geometría libre de fase 4. La fase 6 implementa el conector del selector;
+la integración de servidor sigue pendiente. Ver [guía de entrega](INTEGRACION_EVENTOS_SINTAQUILLA.md).
 
 Las decisiones nuevas de separación física/comercial y venta agrupada se recogen en
 [Contrato de recinto, evento y conector](CONTRATO_RECINTO_EVENTO.md), que prevalece en esas
@@ -10,7 +11,8 @@ materias. Las secciones siguientes conservan el contexto histórico de la integr
 **Estado actual:** el selector exporta un catálogo físico versión 5 sin precios y mapas versión 8
 con ubicación completa, grupos físicos, geometría libre, identidad, numeración y revisiones.
 Precios y venta completa anteriores son antecedentes de
-migración, no políticas activas. Todavía no hay integración ni migración de datos en Sin Taquilla.
+migración, no políticas activas. El conector admite tarifas externas, aforo parcial y grupos;
+todavía no hay integración ni migración de datos en Sin Taquilla.
 Las secciones numeradas siguientes describen el contrato histórico; para las decisiones vigentes,
 incluidas mesas y palcos completos, consultar el contrato de recinto, evento y conector.
 **Revisado contra:** este selector en `f9be0cb` y la copia local de Sin Taquilla en

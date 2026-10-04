@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
-import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 
 const carpeta = fileURLToPath(new URL('.', import.meta.url));
 const html = await readFile(join(carpeta, 'index.html'));
+const ejemploEvento = JSON.parse(await readFile(join(carpeta, 'docs/ejemplo-conector-evento.json'), 'utf8'));
 const pausa = (ms) => new Promise((resolver) => setTimeout(resolver, ms));
 
 function chromeDisponible() {
@@ -105,7 +106,25 @@ class ProtocoloChrome {
 test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad', { timeout: 60000 }, async (t) => {
   const chrome = chromeDisponible();
   assert.ok(chrome, 'Chrome o Edge no esta instalado; fija CHROME_BIN');
-  const servidor = createServer((peticion, respuesta) => {
+  let eventoServidor = structuredClone(ejemploEvento.evento);
+  const solicitudesAPI = [];
+  const servidor = createServer(async (peticion, respuesta) => {
+    if (peticion.url === '/evento' || peticion.url === '/reserva') {
+      if (peticion.method === 'POST') {
+        let cuerpo=''; for await (const parte of peticion) cuerpo+=parte;
+        const solicitud=JSON.parse(cuerpo);solicitudesAPI.push({solicitud,csrf:peticion.headers['x-csrf-token']});
+        eventoServidor.evento.versionEstado++;
+        for(const p of eventoServidor.lugares) if(solicitud.event_place_ids.includes(p.event_place_id)||
+          eventoServidor.grupos.some(g=>solicitud.event_group_ids.includes(g.event_group_id)&&ejemploEvento.mapa.identidadFisica[p.local_place_id]?.grupoId===g.id)) p.estado='reservado';
+      }
+      respuesta.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({evento:eventoServidor,resultado:{reserva:'res_ejemplo'}}));return;
+    }
+    if (peticion.url?.startsWith('/integracion/')) {
+      const archivos={'/integracion/index.html':['index.html','text/html'],'/integracion/selector-asientos.js':['selector-asientos.js','text/javascript'],'/integracion/selector-asientos.css':['selector-asientos.css','text/css']};
+      const archivo=archivos[peticion.url];if(!archivo){respuesta.writeHead(404).end();return;}
+      respuesta.writeHead(200,{'Content-Type':archivo[1]+'; charset=utf-8','Content-Security-Policy':"default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'self'"});
+      respuesta.end(await readFile(join(carpeta,'integracion',archivo[0])));return;
+    }
     if (peticion.url?.split('?')[0] !== '/index.html') {
       respuesta.writeHead(404).end();
       return;
@@ -525,6 +544,130 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       await protocolo.evaluar(`(() => { cambiarModo('vista'); alternar(document.querySelector('.butaca')); window.__elegidaFisica=[...elegidas][0]; cambiarModo('editor'); document.querySelector('#fisica-miembros').click(); document.querySelector('#nombre-nivel').value='Superior'; document.querySelector('#agregar-nivel').click(); })()`);
       assert.equal(await protocolo.evaluar('seleccionFisica.size'),0);
       assert.equal(await protocolo.evaluar('elegidas.has(window.__elegidaFisica)'),true);
+    });
+
+    await t.test('conector: carga revision publicada con tarifas externas y cierra el editor', async () => {
+      await protocolo.evaluar(`window.__fixtureEvento=${JSON.stringify(ejemploEvento)}; window.__cambiosEvento=[];
+        SelectorAsientos.cargarEvento({...__fixtureEvento,alSeleccionar:s=>__cambiosEvento.push(s)});`);
+      assert.equal(await protocolo.evaluar('document.querySelector("#modo-editor").disabled'),true);
+      assert.equal(await protocolo.evaluar('document.querySelector("#tipo-sala").disabled'),true);
+      assert.equal(await protocolo.evaluar('document.querySelector("#nuevo-borrador").disabled'),true);
+      assert.equal(await protocolo.evaluar('document.querySelector("#revision-publicada").hidden'),true);
+      assert.equal(await protocolo.evaluar('modo'),'vista');
+      assert.deepEqual(await protocolo.evaluar('SelectorAsientos.seleccion().conteos'),ejemploEvento.esperado);
+      assert.match(await protocolo.evaluar('document.querySelector("#aforo").textContent'),/15 inventariados.*13 utilizables.*11 habilitados/);
+      await protocolo.evaluar(`cambiarModo('editor')`);assert.equal(await protocolo.evaluar('modo'),'vista');
+      assert.match(await protocolo.evaluar('document.querySelector("#estado").textContent'),/revisión fija/);
+      assert.equal(await protocolo.evaluar('document.querySelector(".butaca[data-id=F2-1-1]").getAttribute("aria-disabled")'),'true');
+      assert.match(await protocolo.evaluar('document.querySelector(".butaca[data-id=F2-1-1]").getAttribute("aria-label")'),/no habilitado/);
+    });
+
+    await t.test('conector: teclado selecciona palco completo y conserva compra entre niveles', async () => {
+      await protocolo.evaluar(`window.__muebleAntes=capaMuebles.firstElementChild;document.querySelector('.butaca[data-id="F3-1-1"]').focus()`);
+      await protocolo.tecla('Enter','Enter',13);assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'),2);
+      assert.equal(await protocolo.evaluar('capaMuebles.firstElementChild===window.__muebleAntes'),true);
+      assert.match(await protocolo.evaluar('document.activeElement.getAttribute("aria-label")'),/selecciona el palco completo/);
+      assert.match(await protocolo.evaluar('document.querySelector("#total").textContent'),/700/);
+      assert.match(await protocolo.evaluar('document.querySelector("#detalle").textContent'),/palco completo/);
+      await protocolo.evaluar(`cambiarNivelVista('n2');document.querySelector('.butaca[data-id="F4-1-1"]').focus()`);
+      await protocolo.tecla(' ','Space',32);assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'),3);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().totalCentavos'),90000);
+      await protocolo.evaluar(`cambiarNivelVista('n1')`);
+      assert.equal(await protocolo.evaluar('document.querySelector(".butaca[data-id=F3-1-2]").getAttribute("aria-checked")'),'true');
+      assert.equal(await protocolo.evaluar('window.__cambiosEvento.at(-1).cantidad'),3);
+    });
+
+    await t.test('conector: disponibilidad cambiante suelta todo el grupo y rechaza snapshots antiguos', async () => {
+      await protocolo.evaluar(`window.__actualizacion=structuredClone(__fixtureEvento.evento);__actualizacion.evento.versionEstado=2;
+        __actualizacion.lugares.find(p=>p.local_place_id==='F3-1-1').estado='reservado';SelectorAsientos.actualizarEvento(__actualizacion);`);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'),1);
+      assert.match(await protocolo.evaluar('document.querySelector("#estado").textContent'),/soltaron 2/);
+      assert.match(await protocolo.evaluar('document.querySelector(".butaca[data-id=F3-1-2]").getAttribute("aria-label")'),/conjunto completo no disponible/);
+      assert.equal(await protocolo.evaluar(`(()=>{try{SelectorAsientos.actualizarEvento(__fixtureEvento.evento);return false;}catch(e){return /más reciente/.test(e.message);}})()`),true);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.actualizarEvento(__actualizacion).cantidad'),1);
+      assert.equal(await protocolo.evaluar(`(()=>{const d=structuredClone(__actualizacion);d.lugares[0].estado='vendido';try{SelectorAsientos.actualizarEvento(d);return false;}catch(e){return /datos diferentes/.test(e.message);}})()`),true);
+      assert.equal(await protocolo.evaluar('eventoConectado.cabecera.versionEstado'),2);
+      assert.equal(await protocolo.evaluar('butacas.find(b=>b.id==="F3-1-2").estado'),'bloqueada');
+    });
+
+    await t.test('conector: refresca y reserva por HTTP solo con IDs opacos y CSRF', async () => {
+      await protocolo.evaluar(`SelectorAsientos.cerrarEvento();SelectorAsientos.cargarEvento(__fixtureEvento);`);
+      await protocolo.evaluar(`SelectorAsientos.refrescar({url:'/evento'})`);
+      await protocolo.evaluar(`document.querySelector('.butaca[data-id="F1-1-1"]').focus()`);await protocolo.tecla('Enter','Enter',13);
+      const respuesta=await protocolo.evaluar(`SelectorAsientos.reservar({url:'/reserva',csrf:'csrf_de_prueba',requestKey:'solicitud_prueba_1234'})`);
+      assert.equal(respuesta.resultado.reserva,'res_ejemplo');assert.equal(respuesta.seleccion.cantidad,0);
+      assert.equal(solicitudesAPI.length,1);assert.equal(solicitudesAPI[0].csrf,'csrf_de_prueba');
+      assert.equal(solicitudesAPI[0].solicitud.request_key,'solicitud_prueba_1234');
+      assert.equal(solicitudesAPI[0].solicitud.event_place_ids.length,1);assert.deepEqual(solicitudesAPI[0].solicitud.event_group_ids,[]);
+      assert.ok(!JSON.stringify(solicitudesAPI[0].solicitud).includes('precio'));
+      assert.equal(await protocolo.evaluar(`(()=>{try{urlDelConector('https://otro.example/reservar');return false;}catch{return true;}})()`),true);
+      assert.equal(await protocolo.evaluar(`(()=>{try{urlDelConector();return false;}catch{return true;}})()`),true);
+      assert.equal(await protocolo.evaluar(`SelectorAsientos.reservar({url:'/reserva'}).then(()=>false,()=>true)`),true);
+    });
+
+    await t.test('conector: fallo de red suspende compra, permite recuperar y no guarda tarifas', async () => {
+      await protocolo.evaluar(`document.querySelector('.butaca[data-id="F1-1-2"]').focus()`);await protocolo.tecla('Enter','Enter',13);
+      assert.equal(await protocolo.evaluar(`SelectorAsientos.refrescar({url:'/no-existe'}).then(()=>false,()=>true)`),true);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'),0);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().conteos.comprables'),0);
+      assert.match(await protocolo.evaluar('document.querySelector("#estado").textContent'),/sin confirmar.*soltaron 1/);
+      await protocolo.evaluar(`SelectorAsientos.refrescar({url:'/evento'})`);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().conteos.comprables'),10);
+      assert.equal(await protocolo.evaluar(`Object.values(JSON.parse(localStorage.getItem('selector-asientos:mapas'))).some(m=>JSON.stringify(m).includes('ett_luneta'))`),false);
+      await protocolo.evaluar('SelectorAsientos.cerrarEvento()');
+      assert.equal(await protocolo.evaluar('document.querySelector("#modo-editor").disabled'),false);
+      assert.equal(await protocolo.evaluar('document.querySelector("#total").textContent'),'Precio no disponible');
+    });
+
+    await t.test('conector: mesa completa, modalidad individual y formulario anfitrion', async () => {
+      await protocolo.evaluar(`SelectorAsientos.cargarEvento(__fixtureEvento);alternarMesaPorTablero('M1');`);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'),4);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().totalCentavos'),200000);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().solicitud.event_group_ids.length'),1);
+      await protocolo.evaluar(`window.__individual=structuredClone(__fixtureEvento.evento);__individual.evento.versionEstado=2;
+        __individual.grupos.forEach(g=>g.modalidad='individual');SelectorAsientos.actualizarEvento(__individual);`);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'),4);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().solicitud.event_place_ids.length'),4);
+      await protocolo.evaluar(`alternar(document.querySelector('.butaca[data-id="M1-N1"]'));`);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'),3);
+      const proyeccion=await protocolo.evaluar('SelectorAsientos.evaluarConfiguracion(__fixtureEvento.mapa,__individual)');
+      assert.equal(proyeccion.zonas.find(z=>z.id==='luneta').nombre,'Luneta');assert.equal(proyeccion.lugares.find(p=>p.local_place_id==='F2-1-1').habilitado,false);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'),3);
+      await protocolo.evaluar('SelectorAsientos.cerrarEvento()');
+    });
+
+    await t.test('conector: respuestas tardias no alteran otra sesion ni disponibilidad mas reciente', async () => {
+      await protocolo.evaluar(`SelectorAsientos.cargarEvento(__fixtureEvento);window.__fetchOriginal=window.fetch;
+        window.fetch=()=>new Promise(r=>window.__resolverFetch=r);window.__peticion=SelectorAsientos.refrescar({url:'/evento'}).then(()=>false,()=>true);
+        SelectorAsientos.cerrarEvento();window.__otroEvento=structuredClone(__fixtureEvento.evento);__otroEvento.evento.id='evt_otro';SelectorAsientos.cargarEvento({mapa:__fixtureEvento.mapa,evento:__otroEvento});
+        __resolverFetch({ok:true,json:async()=>({evento:__fixtureEvento.evento})});`);
+      assert.equal(await protocolo.evaluar('__peticion'),true);assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().solicitud.event_id'),'evt_otro');
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().conteos.comprables'),11);
+      await protocolo.evaluar(`SelectorAsientos.cerrarEvento();SelectorAsientos.cargarEvento(__fixtureEvento);
+        window.__peticion=SelectorAsientos.refrescar({url:'/evento'}).then(()=>false,()=>true);
+        window.__nuevoEvento=structuredClone(__fixtureEvento.evento);__nuevoEvento.evento.versionEstado=2;SelectorAsientos.actualizarEvento(__nuevoEvento);
+        __resolverFetch({ok:true,json:async()=>({evento:__fixtureEvento.evento})});`);
+      assert.equal(await protocolo.evaluar('__peticion'),true);assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().conteos.comprables'),11);
+      await protocolo.evaluar('window.fetch=__fetchOriginal;SelectorAsientos.cerrarEvento()');
+    });
+
+    await t.test('conector: recursos externos funcionan bajo CSP sin estilos ni scripts inline', async () => {
+      await protocolo.evaluar('for(const h of Object.values(historiales))h.marcarGuardado();actualizarEstadoEdicion()');
+      await protocolo.enviar('Page.addScriptToEvaluateOnNewDocument',{source:"window.__cspViolaciones=[];document.addEventListener('securitypolicyviolation',e=>__cspViolaciones.push(e.violatedDirective));"});
+      await protocolo.enviar('Page.navigate',{url:`http://127.0.0.1:${puertoWeb}/integracion/index.html`});
+      await esperar(()=>protocolo.evaluar('location.pathname === "/integracion/index.html" && document.readyState === "complete" && !!window.SelectorAsientos && !!document.querySelector(".butaca")'),'entrega CSP');
+      assert.equal(await protocolo.evaluar('document.querySelectorAll("style,script:not([src]),[style],[onclick]").length'),0);
+      const estilo=await protocolo.evaluar('getComputedStyle(document.body).backgroundColor');assert.notEqual(estilo,'rgba(0, 0, 0, 0)');
+      await protocolo.evaluar(`SelectorAsientos.cargarEvento(${JSON.stringify(ejemploEvento)});`);
+      await protocolo.evaluar(`document.querySelector('.butaca[data-id="F3-1-1"]').focus()`);await protocolo.tecla('Enter','Enter',13);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'),2);
+      assert.deepEqual(await protocolo.evaluar('window.__cspViolaciones'),[]);
+      if(process.env.SELECTOR_CAPTURA){
+        await protocolo.enviar('Emulation.setDeviceMetricsOverride',{width:1440,height:900,deviceScaleFactor:1,mobile:false});
+        await protocolo.evaluar('reencuadrar()');
+        const captura=await protocolo.enviar('Page.captureScreenshot',{format:'png'});await writeFile(process.env.SELECTOR_CAPTURA,Buffer.from(captura.data,'base64'));
+      }
+      await protocolo.evaluar('SelectorAsientos.cerrarEvento()');
     });
 
     assert.deepEqual(protocolo.excepciones, [], 'errores JavaScript en el navegador');

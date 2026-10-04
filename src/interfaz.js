@@ -897,6 +897,21 @@ function alternar(elemento) {
     return;
   }
   const b = elemento && porNodo(elemento);
+  if (eventoConectado) {
+    const elegida = alternarLugarEvento(elegidas, b?.id, eventoConectado);
+    if (elegida === null) return;
+    const grupo = eventoConectado.grupos.get(b.grupo?.id);
+    const afectados = grupo?.modalidad === 'completa' ? grupo.requeridos : [b.id];
+    // Elegir no regenera geometria: conserva el coste de la compra por lugar/grupo.
+    for (const id of afectados) {
+      const x = porId.get(id);
+      if (!x?.nodo) continue;
+      if (elegida) ponerMarca(x);
+      x.nodo.classList.toggle('elegida', elegida); x.nodo.setAttribute('aria-checked', String(elegida));
+    }
+    if (grupo?.modalidad === 'completa') marcarTableroElegido(grupo.id, elegida);
+    actualizarResumen(); notificarSeleccionEvento(); return;
+  }
   const elegida = alternarEleccion(elegidas, b, butacas);
   if (elegida === null) return;
   // El DOM refleja el dato; nunca se lee de vuelta. En una mesa completa cambian todos

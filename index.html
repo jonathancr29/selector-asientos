@@ -981,7 +981,7 @@ const ZONAS_POR_DEFECTO = [
 ];
 // Catalogo independiente del numero de bandas.
 const ZONAS_MAXIMAS = 40;
-const PRECIO_MAXIMO = 100000000;   // solo para validar antecedentes de mapas antiguos
+const PRECIO_MAXIMO = 100000000;   // tarifas de evento y antecedentes; nunca precios del recinto
 const zonas = {};
 
 // Rellena el indice 'zonas' con una lista, en su orden.
@@ -4575,6 +4575,168 @@ function crearHistorial(inicial, maximo = 51) {
   };
 }
 
+// El evento vive aparte: nunca se escribe en planos, mapas ni localStorage.
+let eventoConectado = null;
+
+const TIPOS_REFERENCIA_EVENTO = ['nivel', 'zona', 'sector', 'fila', 'grupo', 'lugar'];
+const ESTADOS_EVENTO = ['libre', 'reservado', 'vendido', 'desconocido'];
+const idDeEventoValido = (id) => typeof id === 'string' && /^[A-Za-z][A-Za-z0-9_-]{2,99}$/.test(id);
+
+function referenciasDeLugar(p) {
+  return { nivel: p.level.id, zona: p.physical_zone.id, sector: p.sector?.id,
+    fila: p.physical_row?.id, grupo: p.physical_group?.id, lugar: p.local_place_id };
+}
+
+// Sin prioridad implicita: dos categorias distintas sobre un mismo lugar son error.
+// El resultado materializa pertenencias cruzadas, sin suponer que forman un arbol.
+function resolverEventoDeMapa(datoMapa, dato) {
+  const exportacion = exportarLugaresDeMapa(datoMapa);
+  if (exportacion.errores) return exportacion;
+  const catalogo = exportacion.catalogo;
+  const r = catalogo.revision;
+  const error = (mensaje) => ({ errores: [mensaje] });
+  if (r.estado !== 'publicada') return error('el evento requiere una revisión física publicada');
+  if (!dato || dato.formato !== 'sintaquilla/evento-asientos' || dato.version !== 1) return error('formato de evento no compatible');
+  const e = dato.evento;
+  if (!e || !idDeEventoValido(e.id) || typeof e.nombre !== 'string' || !e.nombre.trim() || e.nombre.length > 180 ||
+      e.moneda !== 'MXN' || !Number.isSafeInteger(e.versionEstado) || e.versionEstado < 0) return error('cabecera del evento inválida');
+  if (!e.revision || e.revision.recintoId !== r.recintoId || e.revision.numero !== r.numero || e.revision.huella !== r.huella) return error('el evento corresponde a otra revisión del recinto');
+  const lista = (v, max) => Array.isArray(v) && v.length <= max;
+  if (!lista(dato.categorias, 20) || !lista(dato.asignaciones, BUTACAS_MAXIMAS * 6) ||
+      !lista(dato.grupos, BUTACAS_MAXIMAS) || !lista(dato.lugares, BUTACAS_MAXIMAS)) return error('listas del evento inválidas');
+  const categorias = new Map();
+  for (const c of dato.categorias) {
+    if (!c || !idDeEventoValido(c.id) || categorias.has(c.id) || typeof c.nombre !== 'string' || !c.nombre.trim() ||
+        c.nombre.length > 80 || typeof c.activa !== 'boolean' || !esEntero(c.precioCentavos, 0, PRECIO_MAXIMO)) return error('categoría o precio del evento inválido');
+    categorias.set(c.id, { id: c.id, nombre: c.nombre, activa: c.activa, precioCentavos: c.precioCentavos });
+  }
+  const indices = Object.fromEntries(TIPOS_REFERENCIA_EVENTO.map((t) => [t, new Set()]));
+  for (const p of catalogo.lugares) for (const [t, id] of Object.entries(referenciasDeLugar(p))) if (id) indices[t].add(id);
+  // Tambien se pueden cerrar grupos o zonas vacios, sin fabricar lugares.
+  for (const z of datoMapa.zonas) indices.zona.add(z.id);
+  for (const n of catalogo.niveles) indices.nivel.add(n.id);
+  for (const s of catalogo.sectores) indices.sector.add(s.id);
+  for (const f of catalogo.filas) indices.fila.add(f.id);
+  for (const g of catalogo.grupos) indices.grupo.add(g.id);
+  const exclusiones = Object.create(null);
+  for (const t of TIPOS_REFERENCIA_EVENTO) {
+    const v = dato.exclusiones?.[t];
+    if (!lista(v, BUTACAS_MAXIMAS) || new Set(v).size !== v.length || v.some((id) => !indices[t].has(id))) return error('exclusiones de ' + t + ' inválidas');
+    exclusiones[t] = new Set(v);
+  }
+  const asignaciones = Object.fromEntries(TIPOS_REFERENCIA_EVENTO.map((t) => [t, new Map()]));
+  for (const a of dato.asignaciones) {
+    if (!a || !TIPOS_REFERENCIA_EVENTO.includes(a.tipo) || !indices[a.tipo].has(a.id) || !categorias.has(a.categoriaId) ||
+        asignaciones[a.tipo].has(a.id)) return error('asignación de tarifa inválida o repetida');
+    asignaciones[a.tipo].set(a.id, a.categoriaId);
+  }
+  const grupos = new Map();
+  const idsPublicos = new Set();
+  for (const g of dato.grupos) {
+    if (!g || !indices.grupo.has(g.id) || grupos.has(g.id) || !idDeEventoValido(g.event_group_id) ||
+        idsPublicos.has(g.event_group_id) || !['individual', 'completa'].includes(g.modalidad)) return error('grupo del evento inválido');
+    idsPublicos.add(g.event_group_id);
+    grupos.set(g.id, { id: g.id, event_group_id: g.event_group_id, modalidad: g.modalidad, requeridos: [], comprable: false });
+  }
+  if (grupos.size !== catalogo.grupos.length) return error('falta la modalidad de un grupo físico');
+  const estados = new Map();
+  for (const p of dato.lugares) {
+    if (!p || !indices.lugar.has(p.local_place_id) || estados.has(p.local_place_id) || !idDeEventoValido(p.event_place_id) ||
+        idsPublicos.has(p.event_place_id) || (p.estado !== undefined && !ESTADOS_EVENTO.includes(p.estado))) return error('identidad o estado de un lugar del evento inválido');
+    idsPublicos.add(p.event_place_id);
+    estados.set(p.local_place_id, { event_place_id: p.event_place_id, estado: p.estado ?? 'desconocido' });
+  }
+  if (estados.size !== catalogo.lugares.length) return error('faltan identidades de lugares del evento');
+  const lugares = new Map();
+  for (const p of catalogo.lugares) {
+    const refs = referenciasDeLugar(p);
+    const excluido = Object.entries(refs).some(([t, id]) => exclusiones[t].has(id));
+    const tarifas = new Set(Object.entries(refs).map(([t, id]) => asignaciones[t].get(id)).filter(Boolean));
+    if (tarifas.size > 1) return error('tarifas contradictorias para ' + p.label);
+    const categoria = categorias.get([...tarifas][0]);
+    const habilitado = !p.blocked && !excluido;
+    if (habilitado && (!categoria || !categoria.activa)) return error('falta una categoría activa para ' + p.label);
+    const estado = estados.get(p.local_place_id);
+    const disponible = habilitado && estado.estado === 'libre';
+    lugares.set(p.local_place_id, { ...p, ...estado, categoria: categoria || null, habilitado, disponible,
+      comprable: disponible, motivo: p.blocked ? 'físicamente inutilizable' : excluido ? 'no habilitado para esta función' :
+        estado.estado === 'desconocido' ? 'disponibilidad sin confirmar' : estado.estado === 'reservado' ? 'reservado' : estado.estado === 'vendido' ? 'vendido' : '' });
+    if (p.physical_group && !p.blocked) grupos.get(p.physical_group.id).requeridos.push(p.local_place_id);
+  }
+  for (const g of grupos.values()) {
+    g.comprable = g.requeridos.length > 0 && g.requeridos.every((id) => lugares.get(id).disponible);
+    if (g.modalidad === 'completa' && !g.comprable) for (const id of g.requeridos) {
+      const p = lugares.get(id); p.comprable = false;
+      if (p.disponible) p.motivo = 'conjunto completo no disponible';
+    }
+  }
+  return { evento: { cabecera: { id: e.id, nombre: e.nombre, moneda: e.moneda, versionEstado: e.versionEstado,
+    revision: { ...r } }, lugares, grupos, categorias, catalogo } };
+}
+
+function conteosDeEvento(evento) {
+  const lista = [...evento.lugares.values()];
+  return { inventariados: lista.length, utilizables: lista.filter((p) => !p.blocked).length,
+    habilitados: lista.filter((p) => p.habilitado).length, disponibles: lista.filter((p) => p.disponible).length,
+    comprables: lista.filter((p) => p.comprable).length,
+    conjuntosComprables: [...evento.grupos.values()].filter((g) => g.modalidad === 'completa' && g.comprable).length };
+}
+
+function firmaDeEvento(evento) {
+  const ordenar = (lista) => lista.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  return JSON.stringify({ cabecera: evento.cabecera,
+    lugares: ordenar([...evento.lugares.values()].map((p) => [p.local_place_id, p.event_place_id, p.estado,
+      p.habilitado, p.categoria?.id ?? null, p.categoria?.precioCentavos ?? null])),
+    grupos: ordenar([...evento.grupos.values()].map((g) => [g.id, g.event_group_id, g.modalidad])) });
+}
+
+function motivoCambioDeEvento(actual, nuevo) {
+  if (nuevo.cabecera.id !== actual.cabecera.id) return 'La respuesta pertenece a otro evento.';
+  for (const [id, p] of actual.lugares) if (nuevo.lugares.get(id)?.event_place_id !== p.event_place_id) return 'Cambió la identidad de un lugar del evento.';
+  for (const [id, g] of actual.grupos) if (nuevo.grupos.get(id)?.event_group_id !== g.event_group_id) return 'Cambió la identidad de un grupo del evento.';
+  return null;
+}
+
+function alternarLugarEvento(ids, id, evento) {
+  const p = evento.lugares.get(id);
+  if (!p?.comprable) return null;
+  const g = evento.grupos.get(p.physical_group?.id);
+  const afectados = g?.modalidad === 'completa' ? g.requeridos : [id];
+  const quitar = afectados.some((x) => ids.has(x));
+  for (const x of afectados) if (quitar) ids.delete(x); else ids.add(x);
+  return !quitar;
+}
+
+// No completa selecciones parciales tras un cambio comercial: exige elegir de nuevo.
+function conciliarSeleccionEvento(ids, evento) {
+  const quitados = new Set([...ids].filter((id) => !evento.lugares.get(id)?.comprable));
+  for (const g of evento.grupos.values()) if (g.modalidad === 'completa') {
+    const parcial = g.requeridos.some((id) => ids.has(id)) && !g.requeridos.every((id) => ids.has(id));
+    if (!g.comprable || parcial) for (const id of g.requeridos) if (ids.has(id)) quitados.add(id);
+  }
+  for (const id of quitados) ids.delete(id);
+  return [...quitados];
+}
+
+function solicitudDeSeleccionEvento(ids, evento) {
+  const lugares = [], grupos = new Set();
+  let totalCentavos = 0;
+  for (const id of ids) {
+    const p = evento.lugares.get(id);
+    if (!p?.comprable) return { errores: ['la selección incluye un lugar no comprable'] };
+    const g = evento.grupos.get(p.physical_group?.id);
+    if (g?.modalidad === 'completa') {
+      if (!g.requeridos.every((x) => ids.has(x))) return { errores: ['la selección contiene un conjunto parcial'] };
+      grupos.add(g.event_group_id);
+    } else lugares.push(p.event_place_id);
+    totalCentavos += p.categoria.precioCentavos;
+  }
+  if (!Number.isSafeInteger(totalCentavos)) return { errores: ['importe fuera de rango'] };
+  return { solicitud: { event_id: evento.cabecera.id, revision: { ...evento.cabecera.revision },
+    state_version: evento.cabecera.versionEstado, event_place_ids: lugares, event_group_ids: [...grupos] },
+    cantidad: ids.size, totalCentavos };
+}
+
 // === Fin de la parte sin DOM. pruebas.mjs evalua todo lo anterior en Node. ===
 
 // ---------------------------------------------------------------------------
@@ -4839,7 +5001,7 @@ function dibujarButacas() {
     const etiqueta = etiquetaDe(b) + (bloqueando
       ? (b.estado === 'ocupada' ? ', ocupada' : ', bloquear')
       : pintando ? ', zona ' + zonas[b.zona].nombre + (b.estado === 'ocupada' ? ', ocupada' : '')
-      : (seleccionable ? '' : ', ' + b.estado));
+      : (b.motivoEvento ? ', ' + b.motivoEvento : seleccionable ? '' : ', ' + b.estado));
     // tabindex movil: un solo punto de tabulacion. Colocando mesas, ninguno.
     const tabindex = (modo === 'vista' || conButacas()) && indice === 0 ? '0' : '-1';
     const apariencia = [clase, marcada, inactiva, etiqueta, tabindex, pieza].join('\u0000');
@@ -4916,6 +5078,7 @@ function dibujarPiezas() {
 }
 
 function dibujarTodo() {
+  if (eventoConectado) aplicarEventoAButacas();
   if (herramienta === 'zona') llenarPincel();
   capaMuebles.textContent = '';
   capaSubtitulos.textContent = '';
@@ -5827,6 +5990,21 @@ function alternar(elemento) {
     return;
   }
   const b = elemento && porNodo(elemento);
+  if (eventoConectado) {
+    const elegida = alternarLugarEvento(elegidas, b?.id, eventoConectado);
+    if (elegida === null) return;
+    const grupo = eventoConectado.grupos.get(b.grupo?.id);
+    const afectados = grupo?.modalidad === 'completa' ? grupo.requeridos : [b.id];
+    // Elegir no regenera geometria: conserva el coste de la compra por lugar/grupo.
+    for (const id of afectados) {
+      const x = porId.get(id);
+      if (!x?.nodo) continue;
+      if (elegida) ponerMarca(x);
+      x.nodo.classList.toggle('elegida', elegida); x.nodo.setAttribute('aria-checked', String(elegida));
+    }
+    if (grupo?.modalidad === 'completa') marcarTableroElegido(grupo.id, elegida);
+    actualizarResumen(); notificarSeleccionEvento(); return;
+  }
   const elegida = alternarEleccion(elegidas, b, butacas);
   if (elegida === null) return;
   // El DOM refleja el dato; nunca se lee de vuelta. En una mesa completa cambian todos
@@ -6840,6 +7018,7 @@ const PISTAS = {
 };
 
 function cambiarModo(nuevo) {
+  if (eventoConectado && nuevo === 'editor') { anunciar('La compra utiliza una revisión fija. Abre el editor fuera del evento.'); return; }
   if (nuevo === 'editor' && TIPOS_DE_SALA[tipoActual].revisionFisica?.estado === 'publicada') {
     anunciar('Esta revisión está publicada. Crea una nueva revisión en borrador para editar.'); return;
   }
@@ -7342,8 +7521,9 @@ function actualizarIdentidadControles() {
   const r = plano?.revisionFisica || TIPOS_DE_SALA[tipoActual].revisionFisica;
   const publicada = r?.estado === 'publicada';
   document.getElementById('revision-fisica').textContent = r ? 'Revisión ' + r.numero + ' · ' + r.estado : 'Revisión 1 · borrador';
-  document.getElementById('revision-publicada').hidden = !publicada;
-  document.getElementById('modo-editor').disabled = Boolean(publicada);
+  document.getElementById('revision-publicada').hidden = !publicada || Boolean(eventoConectado);
+  document.getElementById('nuevo-borrador').disabled = Boolean(eventoConectado);
+  document.getElementById('modo-editor').disabled = Boolean(publicada || eventoConectado);
   document.getElementById('modo-numeracion').value = plano?.modoNumeracion || TIPOS_DE_SALA[tipoActual].modoNumeracion || 'automatica';
   const oficial = document.getElementById('modo-numeracion').value === 'oficial';
   document.getElementById('herramienta-numeracion').disabled = !oficial;
@@ -7479,7 +7659,9 @@ function actualizarResumen() {
   // En orden de plano, no de clic: el detalle sale estable.
   const lista = butacas.filter((b) => elegidas.has(b.id));
   document.getElementById('cuenta').textContent = String(lista.length);
-  document.getElementById('total').textContent = 'Precio no disponible';
+  const seleccionEvento = eventoConectado && solicitudDeSeleccionEvento(elegidas, eventoConectado);
+  document.getElementById('total').textContent = seleccionEvento && !seleccionEvento.errores
+    ? dinero(seleccionEvento.totalCentavos) : 'Precio no disponible';
   document.getElementById('vacio').hidden = lista.length > 0;
   document.getElementById('detalle-vacio').hidden = lista.length > 0;
 
@@ -7496,10 +7678,11 @@ function actualizarResumen() {
     const zonasDelGrupo = new Set(items.map((b) => b.zona));
     const nombre = items[0].grupo ? items[0].grupo.nombre + ' · ' +
       (zonasDelGrupo.size === 1 ? zonas[items[0].zona].nombre : 'varias zonas') : items[0].seccion;
-    const cuantos = (items[0].grupo && items[0].grupo.completa ? 'mesa completa, ' : '') +
+    const cuantos = (items[0].grupo && items[0].grupo.completa ? (items[0].grupo.tipo === 'palco' ? 'palco completo, ' : 'mesa completa, ') : '') +
                     (items.length === 1 ? '1 lugar' : items.length + ' lugares');
     const cuales = items.map((b) => (b.grupo ? b.numero : b.fila + b.numero)).join(', ');
-    li.textContent = (salaActual.niveles.length > 1 ? items[0].nombreNivel + ' · ' : '') + nombre + ' · ' + cuantos + ' (' + cuales + ')';
+    li.textContent = (salaActual.niveles.length > 1 ? items[0].nombreNivel + ' · ' : '') + nombre + ' · ' + cuantos + ' (' + cuales + ')' +
+      (eventoConectado ? ' · ' + dinero(items.reduce((s, b) => s + eventoConectado.lugares.get(b.id).categoria.precioCentavos, 0)) : '');
     detalle.appendChild(li);
   }
 }
@@ -7514,6 +7697,12 @@ const frase = (ids, singular, plural) => (!ids.length ? ''
 
 
 function actualizarAforo(sala) {
+  if (eventoConectado) {
+    const c = conteosDeEvento(eventoConectado);
+    document.getElementById('aforo').textContent = c.inventariados + ' inventariados · ' + c.utilizables + ' utilizables · ' +
+      c.habilitados + ' habilitados · ' + c.disponibles + ' libres · ' + c.comprables + ' comprables · ' + c.conjuntosComprables + ' conjuntos completos disponibles';
+    return;
+  }
   const bandasDeFilas = hojasDe(sala.bandas).filter((b) => b.tipo === 'filas');
   const filas = bandasDeFilas.reduce((s, b) => s + b.filas, 0);
   // «de 12 butacas» solo si todas las filas ocupan el ancho de la sala.
@@ -7533,6 +7722,7 @@ function actualizarAforo(sala) {
 }
 
 function redibujar(tipo) {
+  if (eventoConectado && tipo !== tipoActual) { anunciar('El evento conserva su recinto y revisión.'); return; }
   seleccionFisica.clear();
   if (arrastreMesa) terminarArrastreMesa(false);
   tipoActual = tipo;
@@ -7681,6 +7871,7 @@ document.getElementById('publicar-revision').addEventListener('click', () => {
 });
 
 document.getElementById('nuevo-borrador').addEventListener('click', () => {
+  if (eventoConectado) { anunciar('El evento conserva su revisión publicada. Abre el editor fuera de la compra.'); return; }
   const origen = planoEditable();
   const nuevo = nuevaRevisionFisica(origen);
   const conocidas = Object.values(TIPOS_DE_SALA).map((d) => d.revisionFisica).filter((r) => r?.recintoId === origen.revisionFisica.recintoId);
@@ -7852,6 +8043,171 @@ if (mapasDescartados.length) {
     : 'No se pudieron cargar los mapas guardados «') + mapasDescartados.join('», «') +
     (mapasDescartados.length === 1 ? '»: está dañado.' : '»: están dañados.'));
 }
+
+// El anfitrion suministra datos; no se buscan eventos ni credenciales en la URL.
+// Esta API comparte el motor con la entrega autonoma y con los archivos para CSP.
+let mapaDelEvento = null;
+let contextoAntesDelEvento = null;
+let alSeleccionarEvento = null;
+let sesionDelConector = 0;
+let reservaEnCurso = false;
+let disponibilidadPerdida = false;
+
+function aplicarEventoAButacas() {
+  for (const b of butacas) {
+    const p = eventoConectado.lugares.get(b.id);
+    b.estado = p?.comprable ? 'libre' : p?.estado === 'vendido' || p?.estado === 'reservado' ? 'ocupada' : 'bloqueada';
+    b.motivoEvento = p?.motivo || (!p ? 'disponibilidad sin confirmar' : '');
+    if (b.grupo) {
+      b.grupo = { ...b.grupo, completa: eventoConectado.grupos.get(b.grupo.id)?.modalidad === 'completa' };
+      if (p?.comprable && b.grupo.completa) b.motivoEvento = b.grupo.tipo === 'palco' ? 'selecciona el palco completo' : 'selecciona la mesa completa';
+    }
+  }
+  for (const m of mesas) m.completa = eventoConectado.grupos.get(m.id)?.modalidad === 'completa';
+}
+
+function notificarSeleccionEvento() {
+  const seleccion = seleccionDelEvento();
+  document.dispatchEvent(new CustomEvent('selector-asientos:seleccion', { detail: seleccion }));
+  if (alSeleccionarEvento) alSeleccionarEvento(copiarDatos(seleccion));
+}
+
+function seleccionDelEvento() {
+  if (!eventoConectado) throw new Error('No hay un evento conectado.');
+  const s = solicitudDeSeleccionEvento(elegidas, eventoConectado);
+  if (s.errores) throw new Error(s.errores.join('; '));
+  return copiarDatos({ ...s, conteos: conteosDeEvento(eventoConectado) });
+}
+
+function validarDatosEvento(mapa, dato) {
+  let r;
+  // La validacion fisica usa los generadores globales; siempre reponer la vista actual.
+  try { r = resolverEventoDeMapa(mapa, dato); }
+  finally { if (salaActual) { salaActual = generarPlano(tipoActual, planos[tipoActual]); if (eventoConectado) aplicarEventoAButacas(); } }
+  if (r.errores) throw new Error(r.errores.join('; '));
+  return r.evento;
+}
+
+function cargarEvento({ mapa, evento, alSeleccionar } = {}) {
+  if (alSeleccionar !== undefined && typeof alSeleccionar !== 'function') throw new Error('El callback de selección no es válido.');
+  const resuelto = validarDatosEvento(mapa, evento);
+  if (eventoConectado) cerrarEvento();
+  contextoAntesDelEvento = { tipo: tipoActual, elegidas: [...elegidas] };
+  cambiarModo('vista'); elegidas.clear();
+  mapaDelEvento = copiarDatos(mapa);
+  const clave = 'evento:' + resuelto.cabecera.id;
+  TIPOS_DE_SALA[clave] = definicionDeMapa(mapaDelEvento);
+  construirSelector(clave); redibujar(clave);
+  eventoConectado = resuelto;
+  alSeleccionarEvento = alSeleccionar || null;
+  disponibilidadPerdida = false; sesionDelConector++;
+  selector.disabled = true; document.getElementById('modo-editor').disabled = true;
+  actualizarIdentidadControles();
+  dibujarTodo(); actualizarAforo(salaActual); actualizarResumen();
+  anunciar('Evento «' + resuelto.cabecera.nombre + '». Tarifas y disponibilidad proporcionadas por Sin Taquilla.');
+  notificarSeleccionEvento();
+  return seleccionDelEvento();
+}
+
+function actualizarEvento(dato) {
+  if (!eventoConectado) throw new Error('No hay un evento conectado.');
+  const nuevo = validarDatosEvento(mapaDelEvento, dato);
+  const motivo = motivoCambioDeEvento(eventoConectado, nuevo);
+  if (motivo) throw new Error(motivo);
+  if (nuevo.cabecera.versionEstado < eventoConectado.cabecera.versionEstado) throw new Error('La respuesta de disponibilidad no es más reciente.');
+  if (nuevo.cabecera.versionEstado === eventoConectado.cabecera.versionEstado && !disponibilidadPerdida) {
+    if (firmaDeEvento(nuevo) !== firmaDeEvento(eventoConectado)) throw new Error('La misma versión contiene datos diferentes.');
+    return seleccionDelEvento();
+  }
+  eventoConectado = nuevo; disponibilidadPerdida = false;
+  const quitados = conciliarSeleccionEvento(elegidas, nuevo);
+  dibujarTodo(); actualizarResumen(); actualizarAforo(salaActual);
+  anunciar(quitados.length ? 'Se soltaron ' + quitados.length + ' lugares por cambios del evento: ' + quitados.map((id) => nuevo.lugares.get(id)?.label || id).join('; ') + '.' : 'Disponibilidad actualizada.');
+  notificarSeleccionEvento();
+  return seleccionDelEvento();
+}
+
+function cerrarEvento() {
+  if (!eventoConectado) return;
+  const clave = tipoActual;
+  eventoConectado = null; mapaDelEvento = null; alSeleccionarEvento = null;
+  disponibilidadPerdida = false; sesionDelConector++;
+  delete TIPOS_DE_SALA[clave]; delete planos[clave]; delete historiales[clave];
+  elegidas.clear();
+  for (const id of contextoAntesDelEvento.elegidas) elegidas.add(id);
+  selector.disabled = false; document.getElementById('modo-editor').disabled = false;
+  construirSelector(contextoAntesDelEvento.tipo); redibujar(contextoAntesDelEvento.tipo);
+  contextoAntesDelEvento = null;
+}
+
+function perderDisponibilidadEvento(mensaje) {
+  if (!eventoConectado) return;
+  disponibilidadPerdida = true;
+  for (const p of eventoConectado.lugares.values()) {
+    p.estado = 'desconocido'; p.disponible = false; p.comprable = false;
+    if (p.habilitado) p.motivo = 'disponibilidad sin confirmar';
+  }
+  for (const g of eventoConectado.grupos.values()) g.comprable = false;
+  const quitados = conciliarSeleccionEvento(elegidas, eventoConectado);
+  dibujarTodo(); actualizarResumen(); actualizarAforo(salaActual);
+  anunciar(mensaje + (quitados.length ? ' Se soltaron ' + quitados.length + ' lugares; vuelve a confirmar su disponibilidad.' : ''));
+  notificarSeleccionEvento();
+}
+
+function urlDelConector(url) {
+  if (typeof url !== 'string' || !url.trim()) throw new Error('Falta la URL del conector.');
+  const u = new URL(url, location.href);
+  if (!['http:', 'https:'].includes(u.protocol) || u.origin !== location.origin || u.username || u.password || u.hash) throw new Error('El conector requiere una URL del mismo origen, sin credenciales ni fragmento.');
+  return u.href;
+}
+
+async function intercambiarEvento({ url, csrf, signal, requestKey } = {}, reservar = false) {
+  if (!eventoConectado) throw new Error('No hay un evento conectado.');
+  const destino = urlDelConector(url);
+  if (reservar && (typeof csrf !== 'string' || !csrf.trim())) throw new Error('Falta el token CSRF proporcionado por Sin Taquilla.');
+  if (reservar && reservaEnCurso) throw new Error('Ya hay una reserva en curso.');
+  const seleccion = seleccionDelEvento();
+  if (reservar && !seleccion.cantidad) throw new Error('Selecciona lugares antes de reservar.');
+  if (reservar && requestKey !== undefined && (typeof requestKey !== 'string' || !/^[A-Za-z0-9_-]{16,100}$/.test(requestKey))) throw new Error('La clave de solicitud no es válida.');
+  const sesion = sesionDelConector;
+  const version = eventoConectado.cabecera.versionEstado;
+  const headers = { Accept: 'application/json' };
+  let body;
+  if (reservar) {
+    headers['Content-Type'] = 'application/json'; headers['X-CSRF-Token'] = csrf;
+    body = JSON.stringify({ ...seleccion.solicitud, request_key: requestKey || crypto.randomUUID() });
+    reservaEnCurso = true;
+  }
+  try {
+    const respuesta = await fetch(destino, { method: reservar ? 'POST' : 'GET', credentials: 'same-origin',
+      cache: 'no-store', redirect: 'error', headers, ...(body ? { body } : {}), signal });
+    if (sesion !== sesionDelConector) throw new Error('La respuesta llegó después de cerrar o cambiar el evento.');
+    if (!respuesta.ok) throw new Error(respuesta.status === 409 ? 'La selección cambió; confirma la disponibilidad de nuevo.' : 'Sin Taquilla no pudo confirmar la disponibilidad.');
+    const datos = await respuesta.json();
+    if (sesion !== sesionDelConector) throw new Error('La respuesta pertenece a una sesión anterior.');
+    const actualizada = actualizarEvento(datos.evento);
+    return { seleccion: actualizada, ...(reservar ? { resultado: copiarDatos(datos.resultado ?? null) } : {}) };
+  } catch (error) {
+    if (sesion === sesionDelConector && eventoConectado.cabecera.versionEstado === version) perderDisponibilidadEvento('Disponibilidad sin confirmar.');
+    throw error;
+  } finally { if (reservar) reservaEnCurso = false; }
+}
+
+// Proyeccion para el formulario del anfitrion; no guarda precios en el recinto.
+function evaluarConfiguracionEvento(mapa, dato) {
+  const e = validarDatosEvento(mapa, dato);
+  return copiarDatos({ evento: e.cabecera, conteos: conteosDeEvento(e),
+    lugares: [...e.lugares.values()].map((p) => ({ local_place_id: p.local_place_id, event_place_id: p.event_place_id,
+      habilitado: p.habilitado, disponible: p.disponible, comprable: p.comprable, categoriaId: p.categoria?.id ?? null,
+      precioCentavos: p.categoria?.precioCentavos ?? null, motivo: p.motivo })),
+    zonas: mapa.zonas.map((z) => { const ps = [...e.lugares.values()].filter((p) => p.physical_zone.id === z.id);
+      return { id: z.id, nombre: z.nombre, inventariados: ps.length, utilizables: ps.filter((p) => !p.blocked).length,
+        habilitados: ps.filter((p) => p.habilitado).length, comprables: ps.filter((p) => p.comprable).length }; }) });
+}
+
+window.SelectorAsientos = Object.freeze({ version: 1, cargarEvento, actualizarEvento, cerrarEvento,
+  seleccion: seleccionDelEvento, evaluarConfiguracion: evaluarConfiguracionEvento,
+  refrescar: (opciones) => intercambiarEvento(opciones), reservar: (opciones) => intercambiarEvento(opciones, true) });
 </script>
 </body>
 </html>

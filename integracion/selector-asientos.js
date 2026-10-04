@@ -3903,3 +3903,3474 @@ function solicitudDeSeleccionEvento(ids, evento) {
 }
 
 // === Fin de la parte sin DOM. pruebas.mjs evalua todo lo anterior en Node. ===
+
+// ---------------------------------------------------------------------------
+// Render
+// ---------------------------------------------------------------------------
+const svg = document.getElementById('plano');
+const capaMuebles = document.getElementById('muebles');
+const capaButacas = document.getElementById('butacas');
+const capaPiezas = document.getElementById('piezas');
+const capaSeleccion = document.getElementById('seleccion-banda');
+const capaArea = document.getElementById('area');
+const capaSubtitulos = document.getElementById('subtitulos');
+const capaRotuloSeleccion = document.getElementById('rotulo-seleccion');
+const formatoDinero = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+const dinero = (centavos) => formatoDinero.format(centavos / 100);
+const porId = new Map();   // id -> butaca, para no recorrer la lista en cada interaccion
+// La zona abre la etiqueta, como saldra en el boleto; el id queda aparte.
+const etiquetaDe = (b) => ((salaActual?.niveles?.length > 1 ? b.nombreNivel + ', ' : '') + (b.sectorFisico ? b.sectorFisico.nombre + ', ' : '') + (b.grupo?.tipo === 'palco' ? zonas[b.zona].nombre + ', ' + b.grupo.nombre + ', lugar ' + b.numero : b.grupo ? zonas[b.zona].nombre + ', mesa ' + b.numeroMesa +
+  (b.grupo.completa ? ' completa' : '') + ', lugar ' + b.numero
+  : b.seccion + ', fila ' + b.fila + ', butaca ' + b.numero));
+
+function nodo(nombre, atributos) {
+  const el = document.createElementNS(NS, nombre);
+  for (const [k, v] of Object.entries(atributos)) el.setAttribute(k, v);
+  return el;
+}
+
+function texto(clase, x, y, contenido) {
+  const t = nodo('text', { class: clase, x, y });
+  t.textContent = contenido;
+  return t;
+}
+
+// Un tablero de mesa completa: se puede tocar (en Previsualizar) y se marca elegido
+// cuando sus lugares lo estan.
+function marcarTableroDeMesa(tablero, id) {
+  const mesa = mesas.find((m) => m.id === id);
+  if (!mesa || !mesa.completa) return;
+  tablero.classList.add('completa');
+  const libres = butacas.filter((b) => b.grupo && b.grupo.id === id && b.estado === 'libre');
+  if (libres.length && libres.every((b) => elegidas.has(b.id))) tablero.classList.add('elegida');
+}
+
+function dibujarMuebles() {
+  const palcos = new Map();
+  for (const b of butacasVisibles()) if (b.grupo?.tipo === 'palco') {
+    if (!palcos.has(b.grupo.id)) palcos.set(b.grupo.id, []);
+    palcos.get(b.grupo.id).push(b);
+  }
+  for (const lista of palcos.values()) {
+    const x = Math.min(...lista.map((b) => b.x));
+    const y = Math.min(...lista.map((b) => b.y));
+    const ancho = Math.max(...lista.map((b) => b.x)) + 1 - x;
+    const alto = Math.max(...lista.map((b) => b.y)) + 1 - y;
+    const g = nodo('g', { class: 'palco-fisico', 'aria-hidden': 'true' });
+    g.append(nodo('rect', { x: x * PASO - 2, y: y * PASO - 2, width: ancho * PASO + 4, height: alto * PASO + 4, rx: 3 }),
+      texto('subtitulo', x * PASO, y * PASO - 4, lista[0].grupo.nombre));
+    capaMuebles.appendChild(g);
+  }
+  for (const r of planos[tipoActual]?.regionesLibres || TIPOS_DE_SALA[tipoActual].regionesLibres || []) {
+    const g = nodo('g', { class: 'region-libre', 'aria-hidden': 'true', transform: `translate(${r.x * PASO} ${r.y * PASO}) rotate(${r.giro})` });
+    g.append(nodo('rect', { x: 0, y: 0, width: r.ancho * PASO, height: r.alto * PASO, rx: 2 }), texto('subtitulo', 3, 5, r.nombre));
+    capaMuebles.appendChild(g);
+  }
+  for (const m of muebles) {
+    if (m.tipo === 'escenario') {
+      const rect = nodo('rect', { class: 'escenario', x: m.x * PASO, y: m.y * PASO,
+        width: m.w * PASO, height: m.h * PASO, rx: 3 });
+      const cx = (m.x + m.w / 2) * PASO, cy = (m.y + m.h / 2) * PASO;
+      const rotulo = texto('escenario-texto', cx, cy, 'ESCENARIO');
+      if (m.h > m.w) rotulo.setAttribute('transform', `rotate(-90 ${cx} ${cy})`);
+      rect.dataset.pieza = rotulo.dataset.pieza = 'escenario';
+      capaMuebles.append(rect, rotulo);
+    } else if (m.tipo === 'mesa') {
+      const rect = nodo('rect', { class: 'mueble', x: m.x * PASO + 1, y: m.y * PASO + 1,
+        width: m.w * PASO - 2, height: m.h * PASO - 2, rx: 4 });
+      // En una celda sola «Mesa 4» no cabe: solo el numero. En vertical, el texto se gira.
+      const cx = (m.x + m.w / 2) * PASO, cy = (m.y + m.h / 2) * PASO;
+      const unaCelda = m.w === 1 && m.h === 1;
+      const rotulo = texto('rotulo', cx, cy, unaCelda ? m.numero : m.texto);
+      if (!unaCelda && m.h > m.w) rotulo.setAttribute('transform', `rotate(-90 ${cx} ${cy})`);
+      rect.dataset.pieza = rotulo.dataset.pieza = m.mesa;
+      marcarTableroDeMesa(rect, m.mesa);
+      capaMuebles.append(rect, rotulo);
+    } else if (m.tipo === 'mesa-redonda') {
+      const cx = (m.x + m.w / 2) * PASO, cy = (m.y + m.h / 2) * PASO;
+      const circulo = nodo('circle', { class: 'mueble', cx, cy, r: (m.w * PASO) / 2 - 1 });
+      // En una mesa de una celda «Mesa 4» no cabe: solo el numero.
+      const rotulo = texto('rotulo', cx, cy, m.w === 1 ? m.numero : m.texto);
+      circulo.dataset.pieza = rotulo.dataset.pieza = m.mesa;
+      marcarTableroDeMesa(circulo, m.mesa);
+      capaMuebles.append(circulo, rotulo);
+    } else if (m.tipo === 'forma') {
+      const rect = nodo('rect', { class: 'forma-' + m.forma, x: m.x * PASO + 1, y: m.y * PASO + 1,
+        width: m.w * PASO - 2, height: m.h * PASO - 2, rx: 3 });
+      const cx = (m.x + m.w / 2) * PASO, cy = (m.y + m.h / 2) * PASO;
+      const rotulo = texto('rotulo forma-texto', cx, cy, m.texto);
+      if (m.h > m.w) rotulo.setAttribute('transform', `rotate(-90 ${cx} ${cy})`);
+      rect.dataset.pieza = rotulo.dataset.pieza = m.pieza;
+      capaMuebles.append(rect, rotulo);
+    } else if (m.tipo === 'rotulo') {
+      capaMuebles.appendChild(texto('rotulo', (m.x + 0.5) * PASO, (m.y + 0.5) * PASO, m.texto));
+    } else if (m.tipo === 'guia') {
+      capaMuebles.appendChild(texto('rotulo guia', (m.x + 0.5) * PASO, (m.y + 0.5) * PASO, m.texto));
+    } else if (m.tipo === 'subtitulo') {
+      (m.lugar === 'margen' ? capaMuebles : capaSubtitulos).appendChild(dibujarSubtitulo(m));
+    }
+  }
+  if (modo !== 'editor') return;
+  // Borde superior de cada banda (y de cada banda dentro de una vertical) y borde
+  // izquierdo de cada vertical que no empieza en la primera columna.
+  for (const r of salaActual.regiones) {
+    if (r.tipo === 'banda' && r.y > 0) {
+      const x1 = r.profundidad ? r.x * PASO : 0;
+      const x2 = r.profundidad ? (r.x + r.ancho) * PASO : (salaActual.ancho + 1) * PASO;
+      capaMuebles.appendChild(nodo('line', { class: 'limite-banda', x1, y1: r.y * PASO, x2, y2: r.y * PASO }));
+    }
+    if (r.tipo === 'vertical' && r.x > 1) {
+      capaMuebles.appendChild(nodo('line', { class: 'limite-vertical', x1: r.x * PASO, y1: r.y * PASO,
+        x2: r.x * PASO, y2: (r.y + r.alto) * PASO }));
+    }
+  }
+}
+
+// En el margen, texto alineado a la derecha antes de la columna de rotulos. En un
+// borde, una etiqueta con fondo sobre la linea, para que se lea encima del limite.
+function dibujarSubtitulo(m) {
+  if (m.lugar === 'margen') {
+    const t = texto('subtitulo', -1, (m.y + 0.5) * PASO, m.texto);
+    t.dataset.subtitulo = m.banda;
+    return t;
+  }
+  const g = nodo('g', { class: 'subtitulo-borde' });
+  g.append(nodo('rect', { x: m.x * PASO + 1.5, y: m.y * PASO - 2, width: m.texto.length * 1.8 + 3, height: 4, rx: 1.2 }),
+           texto('', m.x * PASO + 3, m.y * PASO, m.texto));
+  g.dataset.subtitulo = m.banda;
+  if (m.vertical) g.dataset.vertical = m.vertical;
+  return g;
+}
+
+// Cada capa (banda, vertical o franja) tiene su color, por su orden en el arbol.
+// Todos pasan 3:1 contra el fondo del plano y ninguno es el azul de las piezas,
+// el rojo de ocupada ni el verde de la sombra.
+const COLORES_DE_CAPA = ['#fbbf24', '#a78bfa', '#2dd4bf', '#f472b6', '#fb923c', '#22d3ee', '#bef264', '#e879f9'];
+// El color es de la **zona**: dos bandas que comparten zona se ven del mismo color, en el
+// panel y en el plano, porque comparten nombre y precio. Las que no tienen zona (un
+// espacio sin precio, una franja o una vertical) toman el suyo por su orden en el árbol.
+function colorDeCapa(id) {
+  const banda = bandaDe(salaActual, id);
+  const zona = banda && zonaDeBanda(banda);
+  if (zona) {
+    const i = Object.keys(zonas).indexOf(zona);
+    return i < 0 ? null : COLORES_DE_CAPA[i % COLORES_DE_CAPA.length];
+  }
+  const i = capasDe(salaActual.bandas).indexOf(id);
+  return i < 0 ? null : COLORES_DE_CAPA[i % COLORES_DE_CAPA.length];
+}
+
+// Contorno de la banda seleccionada y su subtitulo resaltado. Solo en el editor.
+// Su nombre se muda a una etiqueta rellena en el borde inferior, en la capa mas
+// alta del plano: no la tapan butacas, mesas ni piezas. El subtitulo de siempre se
+// oculta mientras (salvo uno compartido con su vertical, que tambien nombra a la otra).
+function dibujarSeleccionBanda() {
+  capaSeleccion.textContent = '';
+  capaRotuloSeleccion.textContent = '';
+  const activa = modo === 'editor' ? bandaActiva : null;
+  const color = activa && colorDeCapa(activa);
+  for (const n of svg.querySelectorAll('[data-subtitulo]')) {
+    const compartido = Boolean(n.dataset.vertical) && n.dataset.vertical !== n.dataset.subtitulo;
+    n.classList.toggle('oculta', Boolean(color) && !compartido && n.dataset.subtitulo === activa);
+  }
+  const r = color && salaActual.regiones.find((region) => region.id === activa && region.tipo !== 'resto');
+  if (!r) return;
+  const contorno = nodo('rect', { class: 'contorno-banda', x: r.x * PASO + 0.7, y: r.y * PASO + 0.7,
+    width: r.ancho * PASO - 1.4, height: r.alto * PASO - 1.4, rx: 2 });
+  contorno.style.setProperty('--capa', color);
+  capaSeleccion.appendChild(contorno);
+  const nombre = bandaDe(salaActual, activa).nombre;
+  const abajo = (r.y + r.alto) * PASO;
+  const rotulo = nodo('g', { class: 'rotulo-seleccion', 'aria-hidden': 'true' });
+  rotulo.append(nodo('rect', { x: r.x * PASO + 1.5, y: abajo - 3, width: nombre.length * 2.3 + 4, height: 6, rx: 1.5 }),
+                texto('', r.x * PASO + 3.5, abajo, nombre));
+  rotulo.style.setProperty('--capa', color);
+  capaRotuloSeleccion.appendChild(rotulo);
+}
+
+// El icono de butaca en la celda (x, y), girado 'mira' grados sobre su centro:
+// hacia el tablero en un lugar de mesa, hacia el escenario en una butaca de fila.
+function glifoButaca(x, y, mira = 0) {
+  const glifo = nodo('use', { href: '#butaca',
+    x: x * PASO + (PASO - GLIFO) / 2, y: y * PASO + (PASO - GLIFO) / 2, width: GLIFO, height: GLIFO });
+  if (mira) glifo.setAttribute('transform', `rotate(${mira} ${(x + 0.5) * PASO} ${(y + 0.5) * PASO})`);
+  return glifo;
+}
+
+// La marca de estado de una butaca: la palomita de elegida, el aspa de ocupada o la raya
+// de bloqueada. Se pone encima del glifo, asi que va como ultimo hijo.
+function ponerMarca(b) {
+  if (b.nodo.querySelector('.marca')) return;
+  const libre = b.estado === 'libre';
+  const cual = libre ? 'elegida' : b.estado;
+  const marca = nodo('use', { class: 'marca marca-' + cual, href: '#marca-' + cual,
+    x: b.x * PASO + (PASO - GLIFO) / 2, y: b.y * PASO + (PASO - GLIFO) / 2,
+    width: GLIFO, height: GLIFO });
+  // El hueco del icono, donde va la marca, es horizontal con el asiento a 0 o
+  // 180 grados y vertical a 90 o 270. Solo en esos dos giros la marca gira con
+  // el asiento: derecha no cabe en el hueco y se pisa con respaldo y asiento.
+  if (b.mira % 180 === 90) {
+    marca.setAttribute('transform', `rotate(${b.mira} ${(b.x + 0.5) * PASO} ${(b.y + 0.5) * PASO})`);
+  }
+  b.nodo.appendChild(marca);
+}
+
+let origenButacasDibujadas = null;
+function dibujarButacas() {
+  // Un mismo id puede representar otro lugar en otro mapa. La reutilizacion solo
+  // vale dentro de la misma definicion; al cambiarla se dibuja desde cero.
+  const origen = TIPOS_DE_SALA[tipoActual];
+  if (origen !== origenButacasDibujadas) capaButacas.textContent = '';
+  origenButacasDibujadas = origen;
+  const anteriores = new Map([...capaButacas.children].map((g) => [g.dataset.id, g]));
+  porId.clear();
+  const bloqueando = modo === 'editor' && herramienta === 'bloquear';
+  const pintando = modo === 'editor' && herramienta === 'zona';
+  const numerando = modo === 'editor' && ['numeracion', 'ajustar', 'fisica'].includes(herramienta);
+  const pincel = document.getElementById('zona-pincel').value;
+  // En el primer dibujo se injerta un fragmento. En los siguientes, cada id conserva
+  // su nodo, foco y lugar en el arbol si no cambio; solo se mueven los que cambiaron
+  // de orden y se quitan los ids que ya no existen.
+  const trozo = anteriores.size ? null : document.createDocumentFragment();
+  let siguiente = capaButacas.firstElementChild;
+  butacasVisibles().forEach((b, indice) => {
+    const seleccionable = b.estado === 'libre';
+    const elegida = modo === 'editor' && herramienta === 'fisica' ? seleccionFisica.has(b.id) : elegidas.has(b.id);
+    // Al bloquear, cada butaca es un checkbox de «bloqueada»; las ocupadas no se tocan.
+    // Con el pincel, cada butaca es un checkbox de «de la zona elegida», marcada con la
+    // palomita si ya es de esa zona. Las ocupadas no cambian de zona.
+    const dePincel = pintando && b.zona === pincel;
+    const marcada = bloqueando ? b.estado === 'bloqueada' : pintando ? dePincel : elegida;
+    const inactiva = numerando ? false : bloqueando || pintando ? b.estado === 'ocupada' : !seleccionable;
+    const g = anteriores.get(b.id) || nodo('g', { role: 'checkbox' });
+    if (!anteriores.has(b.id)) {
+      g.dataset.id = b.id;
+      // El area sensible ocupa exactamente la celda. El glifo queda encima.
+      g.appendChild(nodo('rect', { class: 'toque', x: b.x * PASO, y: b.y * PASO,
+        width: PASO, height: PASO, rx: 2 }));
+      g.appendChild(glifoButaca(b.x, b.y, b.mira));
+    }
+    const geometria = b.x + ',' + b.y + ',' + b.mira;
+    const cambioGeometria = g._geometria !== undefined && g._geometria !== geometria;
+    if (cambioGeometria) {
+      g.firstElementChild.setAttribute('x', b.x * PASO);
+      g.firstElementChild.setAttribute('y', b.y * PASO);
+      g.replaceChild(glifoButaca(b.x, b.y, b.mira), g.children[1]);
+    }
+    g._geometria = geometria;
+    const pieza = b.grupo && b.grupo.tipo !== 'palco' ? b.grupo.id : b.bloque || b.suelta || '';
+    const clase = 'butaca' + (seleccionable ? '' : ' ' + b.estado) +
+      (modo === 'editor' && herramienta === 'fisica' && seleccionFisica.has(b.id) ? ' fisica-seleccionada' : '') +
+      (elegida || dePincel ? ' elegida' : '') +
+      (piezasActivas.has(pieza) && modo === 'editor' && !conButacas() ? ' de-pieza-activa' : '');
+    const etiqueta = etiquetaDe(b) + (bloqueando
+      ? (b.estado === 'ocupada' ? ', ocupada' : ', bloquear')
+      : pintando ? ', zona ' + zonas[b.zona].nombre + (b.estado === 'ocupada' ? ', ocupada' : '')
+      : (b.motivoEvento ? ', ' + b.motivoEvento : seleccionable ? '' : ', ' + b.estado));
+    // tabindex movil: un solo punto de tabulacion. Colocando mesas, ninguno.
+    const tabindex = (modo === 'vista' || conButacas()) && indice === 0 ? '0' : '-1';
+    const apariencia = [clase, marcada, inactiva, etiqueta, tabindex, pieza].join('\u0000');
+    if (g._apariencia !== apariencia) {
+      g.setAttribute('class', clase);
+      g.setAttribute('aria-checked', String(marcada));
+      g.setAttribute('aria-label', etiqueta);
+      g.setAttribute('tabindex', tabindex);
+      if (inactiva) g.setAttribute('aria-disabled', 'true');
+      else g.removeAttribute('aria-disabled');
+      if (pieza) g.dataset.pieza = pieza;
+      else delete g.dataset.pieza;
+      g._apariencia = apariencia;
+    }
+    b.nodo = g;
+    porId.set(b.id, b);
+    // La marca solo se crea si se va a ver. La de una butaca libre sin elegir estaba ahi
+    // igualmente, oculta por CSS: en un recinto grande son 18.000 nodos que nadie mira, la
+    // cuarta parte del plano. Al elegirla la pone 'alternar'.
+    const marca = !seleccionable ? b.estado : elegida || dePincel ? 'elegida' : null;
+    const anterior = g.lastElementChild?.classList.contains('marca') ? g.lastElementChild : null;
+    if (!marca) anterior?.remove();
+    else if (cambioGeometria || anterior?.getAttribute('href') !== '#marca-' + marca) {
+      anterior?.remove();
+      ponerMarca(b);
+    }
+    if (trozo) trozo.appendChild(g);
+    else if (g === siguiente) siguiente = siguiente.nextElementSibling;
+    else capaButacas.insertBefore(g, siguiente);
+  });
+  if (trozo) capaButacas.appendChild(trozo);
+  for (const [id, g] of anteriores) if (!porId.has(id)) g.remove();
+}
+
+// Solo en el editor: una zona por pieza (mesa o bloque de filas) que cubre toda su
+// huella. Es lo que se agarra con el raton y lo que recibe el foco con el teclado.
+const etiquetaPieza = (m) => (esEscenario(m)
+  ? 'Escenario, ' + m.ancho + ' × ' + m.alto + ' celdas'
+  : esMesaRedonda(m)
+  ? m.nombre + ', redonda, ' + plural(m.lugares, 'lugar', 'lugares') + (m.giro ? ', girada ' + m.giro + '°' : '')
+  : esForma(m)
+  ? m.nombre + ', ' + FORMAS[m.forma].nombre.toLowerCase() + ' de ' + m.ancho + ' × ' + m.alto + ' celdas'
+  : esButacaSuelta(m)
+  ? m.nombre + ', zona ' + zonas[m.zonaEfectiva].nombre + (m.giro ? ', girada ' + m.giro + '°' : '')
+  : esBloqueFilas(m)
+  ? m.nombre + ', bloque de ' + m.filas + ' × ' + m.ancho + ' butacas, zona ' + zonas[m.zonaEfectiva].nombre +
+    (m.giro ? ', girado ' + m.giro + '°' : '')
+  : m.nombre + ', ' + m.geo.lugares.length + ' lugares' +
+    (m.giro ? ', girada ' + m.giro + '°' : '') + (m.cabeceras ? ', con cabeceras' : '') +
+    (m.unLado ? ', un solo lado' : '')) + ', columna ' + m.x + ', fila ' + m.y;
+
+function dibujarPiezas() {
+  if (modo !== 'editor' || conButacas()) return;
+  const piezas = [...(escenario.ausente ? [] : [escenario]), ...mesas, ...bloquesFilas, ...formas, ...butacasSueltas];
+  // Si la pieza activa ya no existe (se elimino), el punto de tabulacion va a la primera.
+  const hayActiva = piezas.some((m) => m.id === mesaActiva);
+  piezas.forEach((m, indice) => {
+    // Varias pueden estar seleccionadas; la principal es la que lleva el tabindex.
+    const activa = piezasActivas.has(m.id);
+    const principal = m.id === mesaActiva;
+    const pieza = nodo(m.geo.libre ? 'path' : 'rect', {
+      class: 'pieza' + (activa ? ' activa' : ''), x: m.x * PASO + 0.5, y: m.y * PASO + 0.5,
+      width: m.geo.ancho * PASO - 1, height: m.geo.alto * PASO - 1, rx: 3,
+      role: 'button', 'aria-label': etiquetaPieza(m), 'aria-describedby': 'pista',
+      'aria-pressed': String(activa),
+      tabindex: (hayActiva ? principal : indice === 0) ? '0' : '-1',
+    });
+    if (m.geo.libre) {
+      pieza.setAttribute('d', m.geo.lugares.map((l) => `M${(m.x+l.dx)*PASO+.5},${(m.y+l.dy)*PASO+.5}h${PASO-1}v${PASO-1}h${1-PASO}z`).join(' '));
+    }
+    pieza.dataset.pieza = m.id;
+    capaPiezas.appendChild(pieza);
+  });
+}
+
+function dibujarTodo() {
+  if (eventoConectado) aplicarEventoAButacas();
+  if (herramienta === 'zona') llenarPincel();
+  capaMuebles.textContent = '';
+  capaSubtitulos.textContent = '';
+  capaPiezas.textContent = '';
+  dibujarMuebles();
+  dibujarButacas();
+  dibujarPiezas();
+  dibujarBandas();
+  dibujarZonas();
+  dibujarSeleccionBanda();
+  dibujarTiradores();
+}
+
+// ---------------------------------------------------------------------------
+// Panel de bandas (editor). Es HTML normal: una lista con botones, recorrible
+// con Tab. Se rehace entero con cada cambio y el foco vuelve al mismo control.
+// ---------------------------------------------------------------------------
+const listaBandas = document.getElementById('lista-bandas');
+
+// Las zonas fisicas que pueden llevar filas (todas menos la de mesas).
+// 'heredada' es la zona que la pieza tomaria de su banda: con ella, la primera opcion
+// es heredarla, que es como nacen las piezas. Sin ella (una pieza fuera de toda banda
+// con zona) hay que elegir una: el plano nunca guarda una butaca sin zona.
+function llenarZonasDeFilas(select, actual, { heredada = null, conMesas = false, mezcla = false } = {}) {
+  select.textContent = '';
+  // Varias piezas con zonas distintas: se ve que no coinciden y elegir una las iguala.
+  if (mezcla) select.appendChild(new Option('— varias zonas —', 'mezcla', false, true));
+  if (heredada && zonas[heredada]) {
+    select.appendChild(new Option('Hereda: ' + zonas[heredada].nombre,
+                                  '', false, !actual && !mezcla));
+  }
+  for (const [id, { nombre }] of Object.entries(zonas)) {
+    if (id !== 'mesas' || conMesas) select.appendChild(new Option(nombre, id, false, id === actual));
+  }
+}
+
+// Un icono del sprite, para los botones que crea el script.
+function iconoDe(id) {
+  const svgIcono = nodo('svg', { class: 'ico', 'aria-hidden': 'true', focusable: 'false' });
+  svgIcono.appendChild(nodo('use', { href: '#i-' + id }));
+  return svgIcono;
+}
+
+// Boton de icono del panel: el nombre va en aria-label y en el tooltip.
+function boton(icono, etiqueta, op, banda, deshabilitado = false) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'icono';
+  b.appendChild(iconoDe(icono));
+  b.setAttribute('aria-label', etiqueta);
+  b.dataset.tooltip = etiqueta;
+  b.dataset.op = op;
+  b.dataset.banda = banda;
+  b.disabled = deshabilitado;
+  return b;
+}
+
+function dibujarBandas() {
+  if (modo !== 'editor') return;
+  // Los campos de columnas muestran la sala actual, salvo mientras se escriben.
+  const { bloques, pasillos } = distribucionDeSala(salaActual);
+  const campoBloques = document.getElementById('bloques-sala');
+  const campoPasillos = document.getElementById('pasillos-sala');
+  if (document.activeElement !== campoBloques) campoBloques.value = bloques.join(', ');
+  if (document.activeElement !== campoPasillos) campoPasillos.value = pasillos.join(', ');
+  // Un lienzo solo muestra su ancho; una plantilla, bloques y pasillos.
+  for (const id of ['columnas-lienzo', 'ayuda-lienzo']) document.getElementById(id).hidden = !salaActual.lienzo;
+  for (const id of ['columnas-plantilla', 'ayuda-columnas']) document.getElementById(id).hidden = salaActual.lienzo;
+  const campoAncho = document.getElementById('ancho-lienzo');
+  if (document.activeElement !== campoAncho) campoAncho.value = String(salaActual.ancho);
+  const activo = document.activeElement;
+  const foco = listaBandas.contains(activo) ? { op: activo.dataset.op, banda: activo.dataset.banda } : null;
+  listaBandas.textContent = '';
+  for (const li of filasDeBandas(salaActual.bandas, false)) listaBandas.appendChild(li);
+  if (foco) {
+    const destino = listaBandas.querySelector(`[data-op="${foco.op}"][data-banda="${foco.banda}"]`);
+    if (destino && !destino.disabled) destino.focus();
+    else document.getElementById('agregar-banda-filas').focus();
+  }
+}
+
+// Catalogo de zonas fisicas, separado de la distribucion: se rehace y el foco
+// vuelve al mismo control.
+const listaZonas = document.getElementById('lista-zonas');
+
+function dibujarZonas() {
+  if (modo !== 'editor') return;
+  const antecedentes = planos[tipoActual]?.antecedentesComerciales || TIPOS_DE_SALA[tipoActual].antecedentesComerciales;
+  const aviso = document.getElementById('antecedentes-comerciales');
+  const precios = antecedentes?.preciosPorZona.length || 0;
+  const completas = antecedentes?.mesasCompletas.length || 0;
+  aviso.hidden = !precios && !completas;
+  aviso.textContent = 'Antecedentes pendientes de revisión: ' + precios + ' precios de zona y ' + completas +
+    ' mesas completas. Se conservan al guardar, pero no configuran este mapa ni futuros eventos.';
+  const activo = document.activeElement;
+  const foco = listaZonas.contains(activo) ? { op: activo.dataset.op, zona: activo.dataset.zona } : null;
+  listaZonas.textContent = '';
+  const usadas = { bandas: salaActual.bandas, mesas, bloquesFilas, butacasSueltas,
+    zonasDeAsiento: Object.fromEntries(butacas.filter((b) => b.zona !== b.zonaOriginal).map((b) => [b.id, b.zona])) };
+  const sueltas = Object.entries(zonas);
+  listaZonas.hidden = false;
+  for (const [id, { nombre }] of sueltas) {
+    const li = document.createElement('li');
+    li.className = 'banda';
+    const campo = (clase, op, valor, etiqueta, extra = {}) => {
+      const input = document.createElement('input');
+      Object.assign(input, { type: 'text', className: clase, value: valor, autocomplete: 'off' }, extra);
+      input.setAttribute('aria-label', etiqueta);
+      input.dataset.op = op;
+      input.dataset.zona = id;
+      return input;
+    };
+    const lugares = butacas.filter((b) => b.zona === id).length;
+    const detalle = document.createElement('span');
+    detalle.className = 'banda-detalle';
+    detalle.textContent = plural(lugares, 'lugar', 'lugares') + (id === 'mesas' ? ' · lugares de mesa' : '');
+    const usos = id === 'mesas' ? 0 : usosDeZona(usadas, id);
+    const eliminar = document.createElement('button');
+    eliminar.type = 'button';
+    eliminar.className = 'icono';
+    eliminar.appendChild(iconoDe('eliminar'));
+    eliminar.setAttribute('aria-label', 'Eliminar la zona ' + nombre);
+    eliminar.dataset.tooltip = 'Eliminar la zona ' + nombre;
+    eliminar.dataset.op = 'eliminar-zona';
+    eliminar.dataset.zona = id;
+    eliminar.disabled = id === 'mesas' || usos > 0 || Object.keys(zonas).filter((z) => z !== 'mesas').length <= 1;
+    li.append(
+      campo('nombre-zona', 'nombre-zona', nombre, 'Nombre de la zona ' + nombre, { maxLength: NOMBRE_MAXIMO }),
+      eliminar, detalle);
+    listaZonas.appendChild(li);
+  }
+  if (foco) {
+    const destino = listaZonas.querySelector('[data-op="' + foco.op + '"][data-zona="' + foco.zona + '"]');
+    if (destino && !destino.disabled) destino.focus();
+    else document.getElementById('agregar-zona').focus();
+  }
+}
+
+function aplicarCampoDeZona(campo) {
+  const { op, zona: id } = campo.dataset;
+  const zona = zonas[id];
+  if (!zona) return;
+  if (op === 'nombre-zona') {
+    const nombre = campo.value.trim();
+    if (nombre === zona.nombre) return;
+    if (!aplicarBandas(editarZona(planoEditable(), id, { nombre }), zona.nombre + ' se llama ahora «' + nombre + '».')) {
+      campo.value = zona.nombre;
+    }
+    return;
+  }
+
+}
+
+listaZonas.addEventListener('change', (e) => {
+  const campo = e.target.closest('input[data-zona]');
+  if (campo) aplicarCampoDeZona(campo);
+});
+listaZonas.addEventListener('keydown', (e) => {
+  const campo = e.target.closest('input[data-zona]');
+  if (!campo) return;
+  if (e.key === 'Enter') {
+    aplicarCampoDeZona(campo);
+  } else if (e.key === 'Escape') {
+    const zona = zonas[campo.dataset.zona];
+    if (zona) campo.value = zona.nombre;
+  }
+});
+listaZonas.addEventListener('click', (e) => {
+  const boton = e.target.closest('button[data-op="eliminar-zona"]');
+  if (!boton) return;
+  const nombre = zonas[boton.dataset.zona].nombre;
+  aplicarBandas(eliminarZona(planoEditable(), boton.dataset.zona), 'Zona «' + nombre + '» eliminada.');
+});
+// Crear zona no modifica la distribucion del plano.
+document.getElementById('agregar-zona').addEventListener('click', () => {
+  if (!aplicarBandas(agregarZona(planoEditable()), 'Zona física agregada. Escribe su nombre.')) return;
+  const campo = listaZonas.querySelector('li:last-child input');
+  if (campo) { campo.focus(); campo.select(); }
+});
+
+// Los botones de información de los grupos: abren y cierran su texto de ayuda. Van
+// dentro del <summary>, así que el clic no debe abrir ni cerrar también el grupo.
+for (const [boton, ayuda] of [['info-columnas', 'ayuda-de-columnas'], ['info-zonas', 'ayuda-de-zonas']]) {
+  document.getElementById(boton).addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const panel = document.getElementById(ayuda);
+    panel.hidden = !panel.hidden;
+    e.currentTarget.setAttribute('aria-expanded', String(!panel.hidden));
+    reencuadrar();   // en pantallas angostas la ayuda empuja el plano
+  });
+}
+
+// Una lista de bandas (de la sala o de una vertical) como elementos <li>.
+// El principio de la fila de una banda o vertical: muestra de su color, su nombre
+// (un campo; vacio, el de por defecto) y la marca de seleccionada.
+function inicioDeFila(item, clase) {
+  const li = document.createElement('li');
+  li.className = clase;
+  li.dataset.banda = item.id;
+  const detalle = document.createElement('span');
+  detalle.className = 'banda-detalle';
+  const nombre = document.createElement('span');
+  nombre.className = 'banda-nombre';
+  if (item.tipo === 'escenario') {
+    nombre.textContent = item.nombre;
+    li.append(nombre, detalle);
+    return { li, detalle };
+  }
+  li.style.setProperty('--capa', colorDeCapa(item.id));
+  if (item.id === bandaActiva) {
+    li.classList.add('activa');
+    li.setAttribute('aria-current', 'true');
+  }
+  const muestra = document.createElement('span');
+  muestra.className = 'muestra-capa';
+  muestra.setAttribute('aria-hidden', 'true');
+  const campo = document.createElement('input');
+  Object.assign(campo, { type: 'text', maxLength: NOMBRE_MAXIMO, autocomplete: 'off',
+                         value: item.nombrePropio || '',
+                         placeholder: item.nombre });
+  campo.setAttribute('aria-label', 'Nombre de ' + item.nombre);
+  campo.dataset.op = 'nombre';
+  campo.dataset.banda = item.id;
+  nombre.appendChild(campo);
+  li.append(muestra, nombre, boton('aplicar', 'Guardar el nombre de ' + item.nombre, 'guardar', item.id), detalle);
+  return { li, detalle };
+}
+
+// Zona fisica asignada a la banda; varias pueden compartir numeracion.
+function selectorDeZona(banda) {
+  const select = document.createElement('select');
+  select.setAttribute('aria-label', 'Zona de ' + banda.nombre);
+  select.dataset.op = 'zona';
+  select.dataset.banda = banda.id;
+  if (banda.tipo !== 'filas' && banda.tipo !== 'mesas') {
+    select.appendChild(new Option('Sin zona', '', false, !banda.zona));
+  }
+  for (const [id, { nombre }] of Object.entries(zonas)) {
+    if (id === 'mesas' && banda.tipo === 'filas') continue;   // la de mesas no numera filas
+    select.appendChild(new Option(nombre, id, false, id === banda.zona));
+  }
+  select.appendChild(new Option('Zona nueva…', 'nueva'));
+  return select;
+}
+
+function filasDeBandas(bandas, enVertical) {
+  return bandas.map((banda, i) => {
+    const { li, detalle } = inicioDeFila(banda, 'banda');
+    const controles = document.createElement('div');
+    controles.className = 'banda-controles';
+    const n = banda.nombre;
+    if (banda.tipo === 'escenario') {
+      detalle.textContent = escenario.ausente
+        ? 'Franja inicial · sin escenario: agrégalo con «Agregar escenario» en la barra del editor'
+        : 'Franja inicial · el escenario se mueve y cambia de tamaño en el plano';
+      return li;
+    }
+    if (banda.tipo === 'filas') {
+      detalle.textContent = plural(banda.filas, 'fila', 'filas') +
+        (enVertical ? ' · ' + plural(banda.anchoOcupado, 'columna', 'columnas') : '');
+      controles.append(
+        boton('menos-fila', 'Quitar una fila a ' + n, 'menos', banda.id, banda.filas <= 1),
+        boton('mas-fila', 'Agregar una fila a ' + n, 'mas', banda.id, banda.filas >= FILAS_MAXIMAS),
+        selectorDeZona(banda));
+    } else if (tieneAlto(banda)) {
+      detalle.textContent = plural(banda.alto, 'fila', 'filas');
+      controles.append(
+        boton('menos-fila', 'Quitar una fila de alto a ' + n, 'menos', banda.id, banda.alto <= 1),
+        boton('mas-fila', 'Agregar una fila de alto a ' + n, 'mas', banda.id, banda.alto >= ALTO_MAXIMO),
+        selectorDeZona(banda));
+      if (banda.tipo === 'espacio') {
+        const guias = boton('guias', 'Guías de fila en ' + n, 'guias', banda.id);
+        guias.setAttribute('aria-pressed', String(Boolean(banda.guias)));
+        controles.appendChild(guias);
+      }
+    } else {
+      detalle.textContent = plural(banda.verticales.length, 'banda vertical', 'bandas verticales') +
+        ' · ' + plural(banda.alto, 'fila', 'filas');
+      controles.append(
+        boton('agregar-vertical', 'Agregar una banda vertical a ' + n, 'agregar-vertical', banda.id,
+              banda.verticales.length >= VERTICALES_MAXIMAS),
+        selectorDeZona(banda));
+    }
+    const anterior = bandas[i - 1];
+    controles.append(
+      boton('arriba', 'Subir ' + n, 'subir', banda.id, !anterior || anterior.tipo === 'escenario'),
+      boton('abajo', 'Bajar ' + n, 'bajar', banda.id, i === bandas.length - 1),
+      boton('duplicar', 'Duplicar ' + n, 'duplicar', banda.id),
+      boton('eliminar', 'Eliminar ' + n, 'eliminar', banda.id));
+    li.appendChild(controles);
+    if (esDivision(banda)) {
+      const ol = document.createElement('ol');
+      ol.setAttribute('aria-label', 'Bandas verticales de ' + n);
+      banda.verticales.forEach((v, k) => ol.appendChild(filaDeVertical(v, k, banda.verticales)));
+      li.appendChild(ol);
+    }
+    return li;
+  });
+}
+
+function filaDeVertical(v, k, verticales) {
+  const { li, detalle } = inicioDeFila(v, 'banda banda-vertical');
+  const ultima = k === verticales.length - 1;
+  detalle.textContent = plural(v.anchoOcupado, 'columna', 'columnas') + (ultima ? ' (el resto)' : '');
+  const n = v.nombre;
+  const controles = document.createElement('div');
+  controles.className = 'banda-controles';
+  controles.append(
+    boton('acortar', 'Quitar una columna de ancho a ' + n, 'angosta', v.id, ultima || v.anchoOcupado <= 1),
+    boton('alargar', 'Agregar una columna de ancho a ' + n, 'ancha', v.id, ultima),
+    boton('izquierda', 'Mover ' + n + ' a la izquierda', 'izquierda', v.id, k === 0),
+    boton('derecha', 'Mover ' + n + ' a la derecha', 'derecha', v.id, ultima),
+    boton('agregar-filas', 'Agregar una banda de filas en ' + n, 'agregar-filas-en', v.id),
+    boton('agregar-mesas', 'Agregar una zona de mesas en ' + n, 'agregar-mesas-en', v.id),
+    boton('agregar-espacio', 'Agregar un espacio en ' + n, 'agregar-espacio-en', v.id),
+    boton('duplicar', 'Duplicar ' + n, 'duplicar', v.id, verticales.length >= VERTICALES_MAXIMAS),
+    boton('eliminar', 'Eliminar ' + n, 'eliminar', v.id, verticales.length === 1));
+  li.appendChild(controles);
+  const ol = document.createElement('ol');
+  ol.setAttribute('aria-label', 'Bandas de ' + n);
+  for (const hija of filasDeBandas(v.bandas, true)) ol.appendChild(hija);
+  li.appendChild(ol);
+  return li;
+}
+
+// Aplica un plano nuevo de bandas si todas las mesas siguen cabiendo. Si alguna
+// no cabe, se vuelve al plano anterior y se explica cual y por que.
+function aplicarBandas(resultado, mensaje) {
+  if (resultado.motivo) {
+    anunciar('No se pudo: ' + resultado.motivo + '.');
+    return false;
+  }
+  const antes = fotoDeButacas();
+  const mesasAntes = new Map([...mesas, ...bloquesFilas, ...formas, ...butacasSueltas].map((m) => [m.id, m.nombre]));
+  const previo = planos[tipoActual];
+  planos[tipoActual] = resultado;
+  salaActual = generarPlano(tipoActual, resultado);
+  const errorDeBandas = salaActual.errorDeBandas || motivoDeAforo(butacas.length);
+  const fallo = !errorDeBandas && primeraPiezaQueNoCabe(salaActual);
+  if (errorDeBandas || fallo) {
+    planos[tipoActual] = previo;
+    salaActual = generarPlano(tipoActual, previo);
+    anunciar('No se pudo: ' + (errorDeBandas || fallo.pieza.nombre + ' ' + fallo.motivo) + '.');
+    return false;
+  }
+  const quitadas = [...mesasAntes].filter(([id]) => !piezasDe(resultado).some((m) => m.id === id))
+                                  .map(([, nombre]) => nombre);
+  regenerar(mensaje + (quitadas.length ? ' Se quitaron con ella: ' + quitadas.join(', ') + '.' : ''), antes);
+  calcularEncuadre();
+  return true;
+}
+
+// Duplica una banda, vertical o franja y selecciona la copia. Si el foco estaba en
+// el panel, pasa al mismo control de la copia.
+function duplicarBandaPorId(id) {
+  const banda = bandaDe(salaActual, id);
+  if (!banda) return;
+  const plano = planoEditable();
+  const nuevoId = 'banda' + plano.siguienteBanda;
+  const esVertical = ubicar(salaActual.bandas, id).esVertical;
+  const op = listaBandas.contains(document.activeElement) && document.activeElement.dataset.op;
+  if (!aplicarBandas(duplicarBanda(plano, salaActual, id), '')) return;
+  const copia = bandaDe(salaActual, nuevoId);
+  const destino = op && listaBandas.querySelector('[data-op="' + op + '"][data-banda="' + nuevoId + '"]');
+  if (destino && !destino.disabled) destino.focus();
+  marcarBandaActiva(nuevoId);
+  anunciar(banda.nombre + ' duplicada: ' + copia.nombre + (esVertical ? ', a su derecha.' : ', debajo.') +
+           ' Queda seleccionada.');
+}
+
+function aplicarNombreDeBanda(campo) {
+  const id = campo.dataset.banda;
+  const banda = bandaDe(salaActual, id);
+  if (!banda) return;
+  const nombre = campo.value.trim().slice(0, NOMBRE_MAXIMO);
+  if (nombre === (banda.nombrePropio || '')) return;
+  aplicarBandas(renombrarBanda(planoEditable(), id, nombre),
+    nombre ? banda.nombre + ' se llama ahora «' + nombre + '».' : banda.nombre + ' vuelve a su nombre por defecto.');
+}
+
+// Selecciona una banda (o ninguna, con null): contorno en el plano y fila marcada
+// en el panel. Sin redibujar, para no perder el foco ni lo que se escribe.
+function marcarBandaActiva(id) {
+  bandaActiva = id;
+  if (id && mesaActiva) marcarActiva(null);
+  for (const li of listaBandas.querySelectorAll('li[data-banda]')) {
+    const si = li.dataset.banda === id;
+    li.classList.toggle('activa', si);
+    if (si) li.setAttribute('aria-current', 'true');
+    else li.removeAttribute('aria-current');
+  }
+  dibujarSeleccionBanda();
+}
+
+listaBandas.addEventListener('click', (e) => {
+  const control = e.target.closest('button[data-op]');
+  if (!control) return;
+  const { op, banda: id } = control.dataset;
+  const plano = planoEditable();
+  const banda = bandaDe(salaActual, id);
+  const n = banda.nombre;
+  if (op === 'menos' || op === 'mas') {
+    const delta = op === 'mas' ? 1 : -1;
+    const resultado = redimensionarBanda(plano, salaActual, id, delta);
+    const valor = banda.tipo === 'filas' ? banda.filas + delta : banda.alto + delta;
+    aplicarBandas(resultado, n + ': ' + (banda.tipo === 'filas'
+      ? plural(valor, 'fila', 'filas') + '.' : plural(valor, 'fila', 'filas') + ' de alto.'));
+  } else if (op === 'subir' || op === 'bajar') {
+    aplicarBandas(moverBanda(plano, salaActual, id, op === 'subir' ? -1 : 1),
+                  n + (op === 'subir' ? ' subida.' : ' bajada.'));
+  } else if (op === 'izquierda' || op === 'derecha') {
+    aplicarBandas(moverBanda(plano, salaActual, id, op === 'izquierda' ? -1 : 1),
+                  n + ' movida a la ' + op + '.');
+  } else if (op === 'angosta' || op === 'ancha') {
+    const delta = op === 'ancha' ? 1 : -1;
+    aplicarBandas(cambiarAnchoVertical(plano, salaActual, id, delta),
+                  n + ': ' + plural(banda.anchoOcupado + delta, 'columna', 'columnas') + '.');
+  } else if (op === 'agregar-vertical') {
+    aplicarBandas(agregarVertical(plano, salaActual, id), 'Banda vertical agregada a ' + n + '.');
+  } else if (op === 'agregar-filas-en' || op === 'agregar-mesas-en' || op === 'agregar-espacio-en') {
+    const tipo = op.split('-')[1];
+    aplicarBandas(agregarBandaEnVertical(plano, salaActual, id, tipo),
+                  { filas: 'Banda de 2 filas agregada', mesas: 'Zona de mesas de 4 filas agregada',
+                    espacio: 'Espacio de 4 filas agregado' }[tipo] + ' en ' + n + '.');
+  } else if (op === 'guias') {
+    aplicarBandas(alternarGuias(plano, id), (banda.guias ? 'Sin guías de fila en ' : 'Guías de fila en ') + n + '.');
+  } else if (op === 'guardar') {
+    const campo = control.closest('li[data-banda]').querySelector('input[data-op="nombre"]');
+    if (campo) aplicarNombreDeBanda(campo);
+  } else if (op === 'duplicar') {
+    duplicarBandaPorId(id);
+  } else if (op === 'eliminar') {
+    aplicarBandas(eliminarBanda(plano, salaActual, id), n + ' eliminada.');
+  }
+});
+
+// Tocar cualquier control de una banda la selecciona.
+listaBandas.addEventListener('focusin', (e) => {
+  const li = e.target.closest('li[data-banda]');
+  if (li && li.dataset.banda !== 'escenario' && li.dataset.banda !== bandaActiva) marcarBandaActiva(li.dataset.banda);
+});
+
+listaBandas.addEventListener('keydown', (e) => {
+  const campo = e.target.closest('input[data-op]');
+  if (!campo) return;
+  const esNombre = campo.dataset.op === 'nombre';
+  if (e.key === 'Enter') {
+    if (esNombre) aplicarNombreDeBanda(campo);
+  } else if (e.key === 'Escape') {
+    const banda = bandaDe(salaActual, campo.dataset.banda);
+    campo.value = (banda && banda.nombrePropio) || '';
+  }
+});
+
+listaBandas.addEventListener('change', (e) => {
+  const campo = e.target.closest('input[data-op]');
+  if (campo) {
+    if (campo.dataset.op === 'nombre') aplicarNombreDeBanda(campo);
+    return;
+  }
+  const control = e.target.closest('select[data-op]');
+  if (!control) return;
+  const { op, banda: id } = control.dataset;
+  const antes = bandaDe(salaActual, id).nombre;
+  if (control.value === 'nueva') {
+    if (aplicarBandas(zonaNuevaParaBanda(planoEditable(), id, antes), '')) {
+      const puesta = bandaDe(salaActual, id);
+      anunciar(antes + ' pasa a la zona física «' + zonas[puesta.zona].nombre + '».');
+    }
+    return;
+  }
+  aplicarBandas(cambiarZonaBanda(planoEditable(), id, control.value),
+                control.value ? antes + ' pasa a la zona ' + zonas[control.value].nombre + '.'
+                              : antes + ' se queda sin zona: lo de dentro hereda de más afuera.');
+});
+
+function aplicarColumnas() {
+  const { distribucion, motivo } = leerDistribucion(
+    document.getElementById('bloques-sala').value, document.getElementById('pasillos-sala').value);
+  if (motivo) {
+    anunciar('No se pudo: ' + motivo + '.');
+    return;
+  }
+  const { bloques, pasillos } = distribucion;
+  const butacasPorFila = bloques.reduce((s, b) => s + b, 0);
+  aplicarBandas(cambiarDistribucion(planoEditable(), salaActual, distribucion),
+    'Columnas: ' + bloques.join(', ') +
+    (pasillos.length ? ' · pasillos de ' + pasillos.join(', ') : ' · sin pasillos') +
+    ' · ' + plural(butacasPorFila, 'butaca', 'butacas') + ' por fila.');
+}
+
+document.getElementById('aplicar-columnas').addEventListener('click', aplicarColumnas);
+for (const id of ['bloques-sala', 'pasillos-sala']) {
+  document.getElementById(id).addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') aplicarColumnas();
+  });
+}
+
+document.getElementById('agregar-banda-filas').addEventListener('click', () => {
+  aplicarBandas(agregarBanda(planoEditable(), 'filas'), 'Banda de 2 filas agregada al final.');
+});
+document.getElementById('agregar-banda-mesas').addEventListener('click', () => {
+  aplicarBandas(agregarBanda(planoEditable(), 'mesas'), 'Zona de mesas de 4 filas agregada al final.');
+});
+document.getElementById('agregar-espacio').addEventListener('click', () => {
+  aplicarBandas(agregarBanda(planoEditable(), 'espacio'), 'Espacio de 4 filas agregado al final.');
+});
+
+function aplicarAnchoLienzo() {
+  const texto = document.getElementById('ancho-lienzo').value.trim();
+  const ancho = /^\d+$/.test(texto) ? Number(texto) : NaN;
+  if (ancho === salaActual.ancho) return;
+  aplicarBandas(cambiarAnchoLienzo(planoEditable(), salaActual, ancho),
+                'Lienzo de ' + plural(ancho, 'columna', 'columnas') + '.');
+}
+document.getElementById('aplicar-ancho-lienzo').addEventListener('click', aplicarAnchoLienzo);
+document.getElementById('ancho-lienzo').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') aplicarAnchoLienzo();
+});
+
+document.getElementById('agregar-division').addEventListener('click', () => {
+  aplicarBandas(agregarBanda(planoEditable(), 'division', salaActual.ancho),
+                'Franja con dos bandas verticales agregada al final, cada una con un espacio vacío de 4 filas.');
+});
+
+// ---------------------------------------------------------------------------
+// Zoom y desplazamiento: se mueve el viewBox, no el DOM.
+// ---------------------------------------------------------------------------
+let vista, vistaInicial;
+
+// El encuadre abarca todo lo dibujado, butacas y muebles (escenario, mesas,
+// rotulos de fila), y la sala entera aunque una zona de mesas este vacia, mas
+// una celda de margen. Cada elemento ocupa una celda
+// salvo que declare w y h.
+//
+// Si el plano tiene un alto fijo (Previsualizar: ajustado a la pantalla), el encuadre
+// se ensancha o se alarga para tener la misma proporcion que el <svg>, centrado. Asi
+// el viewBox llena el elemento sin franjas y cada pixel sigue siendo una misma
+// distancia en unidades, que es lo que suponen enUnidades y el arrastre.
+function calcularEncuadre() {
+  const cajas = [...butacasVisibles(), ...muebles, { x: 0, y: 0, w: salaActual.ancho + 1, h: salaActual.alto }];
+  const margen = PASO;
+  let x = Math.min(...cajas.map((c) => c.x)) * PASO - margen;
+  let y = Math.min(...cajas.map((c) => c.y)) * PASO - margen;
+  let w = Math.max(...cajas.map((c) => c.x + (c.w || 1))) * PASO + margen - x;
+  let h = Math.max(...cajas.map((c) => c.y + (c.h || 1))) * PASO + margen - y;
+  const caja = svg.getBoundingClientRect();
+  if (caja.width > 0 && caja.height > 0) {
+    const proporcion = caja.width / caja.height;
+    if (w / h < proporcion) {
+      const ancho = h * proporcion;
+      x -= (ancho - w) / 2;
+      w = ancho;
+    } else {
+      const alto = w / proporcion;
+      y -= (alto - h) / 2;
+      h = alto;
+    }
+  }
+  vistaInicial = { x, y, w, h };
+  vista = { ...vistaInicial };
+  aplicarVista();
+}
+
+// El alto del plano lo da el CSS: en escritorio, el hueco entre el encabezado y el pie
+// (la sala se ve completa sin scroll); en pantallas angostas o bajas, el ancho. Aqui solo
+// se limpia un alto puesto a mano por una version anterior.
+function ajustarAltoDelPlano() {
+  if (svg.style.height) svg.style.height = '';
+}
+
+// Vuelve a ajustar el alto y el encuadre. Con 'conservarZoom', mantiene el centro y la
+// proporcion de zoom de la vista actual (al cambiar el tamaño de la ventana).
+function reencuadrar(conservarZoom = false) {
+  const anterior = conservarZoom && vista && vistaInicial
+    ? { factor: vista.w / vistaInicial.w, cx: vista.x + vista.w / 2, cy: vista.y + vista.h / 2 } : null;
+  ajustarAltoDelPlano();
+  calcularEncuadre();
+  if (anterior && anterior.factor < 0.999) {
+    vista.w = vistaInicial.w * anterior.factor;
+    vista.h = vistaInicial.h * anterior.factor;
+    vista.x = anterior.cx - vista.w / 2;
+    vista.y = anterior.cy - vista.h / 2;
+    aplicarVista();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Paneles del encabezado (hojas de informacion) y del pie (detalle de la seleccion).
+// En escritorio flotan sobre el plano; en pantallas angostas empujan el contenido y hay
+// que reencuadrar. Se cierran con su boton, con Esc o al tocar el plano.
+// ---------------------------------------------------------------------------
+const hojasInfo = document.getElementById('hojas-info');
+const hojas = [...hojasInfo.querySelectorAll('.hoja')];
+const puntos = [...hojasInfo.querySelectorAll('.punto')];
+let hojaActual = 0;
+
+function abrirPanel(panel, boton, abrir) {
+  if (panel.hidden === !abrir) return;
+  panel.hidden = !abrir;
+  boton.setAttribute('aria-expanded', String(abrir));
+  reencuadrar(true);
+}
+
+function mostrarHoja(indice) {
+  hojaActual = Math.max(0, Math.min(hojas.length - 1, indice));
+  hojas.forEach((hoja, i) => { hoja.hidden = i !== hojaActual; });
+  puntos.forEach((punto, i) => {
+    if (i === hojaActual) punto.setAttribute('aria-current', 'true');
+    else punto.removeAttribute('aria-current');
+  });
+  document.getElementById('hoja-anterior').disabled = hojaActual === 0;
+  document.getElementById('hoja-siguiente').disabled = hojaActual === hojas.length - 1;
+}
+
+const cerrarPlegables = () => {
+  abrirPanel(hojasInfo, document.getElementById('boton-info'), false);
+  abrirPanel(document.getElementById('panel-detalle'), document.getElementById('boton-detalle'), false);
+};
+svg.addEventListener('pointerdown', cerrarPlegables);
+
+document.getElementById('boton-info').addEventListener('click', () => {
+  const abrir = hojasInfo.hidden;
+  abrirPanel(hojasInfo, document.getElementById('boton-info'), abrir);
+  if (abrir) mostrarHoja(hojaActual);
+});
+document.getElementById('hoja-anterior').addEventListener('click', () => mostrarHoja(hojaActual - 1));
+document.getElementById('hoja-siguiente').addEventListener('click', () => mostrarHoja(hojaActual + 1));
+for (const punto of puntos) punto.addEventListener('click', () => mostrarHoja(Number(punto.dataset.hoja)));
+document.getElementById('cerrar-info').addEventListener('click', () => {
+  abrirPanel(hojasInfo, document.getElementById('boton-info'), false);
+  document.getElementById('boton-info').focus();
+});
+// Las flechas del teclado pasan de hoja mientras el foco esta en el panel.
+hojasInfo.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    e.preventDefault();
+    mostrarHoja(hojaActual + (e.key === 'ArrowRight' ? 1 : -1));
+  }
+});
+document.getElementById('boton-detalle').addEventListener('click', () => {
+  const panel = document.getElementById('panel-detalle');
+  abrirPanel(panel, document.getElementById('boton-detalle'), panel.hidden);
+});
+
+let esperaDeTamano = null;
+addEventListener('resize', () => {
+  clearTimeout(esperaDeTamano);
+  esperaDeTamano = setTimeout(() => reencuadrar(true), 120);
+});
+
+function aplicarVista() {
+  // La vista no puede salir del encuadre inicial: el plano nunca se pierde de
+  // vista. Como el zoom minimo ES el encuadre inicial, el rango nunca es vacio.
+  const limitar = (v, min, max) => Math.min(Math.max(v, min), max);
+  vista.x = limitar(vista.x, vistaInicial.x, vistaInicial.x + vistaInicial.w - vista.w);
+  vista.y = limitar(vista.y, vistaInicial.y, vistaInicial.y + vistaInicial.h - vista.h);
+  svg.setAttribute('viewBox', [vista.x, vista.y, vista.w, vista.h].join(' '));
+}
+
+// Lo mas cerca que se deja llegar. No puede salir del encuadre inicial: ese encuadre se
+// estira a la proporcion del hueco del plano, asi que cuanto mas alto es el recinto mas
+// ancho es, y «seis veces mas cerca» acerca cada vez menos. En un recinto de 20.000
+// butacas el tope dejaba 2,6 px por butaca, ilegible (paso). Topado en celdas, en
+// cualquier recinto se llega a ver el ancho de una sala clasica: unos 40 px por butaca.
+const VISTA_MINIMA = ANCHO_SALA * PASO;
+
+// Devuelve si la vista cambio, para que la rueda sepa si debe ceder el scroll
+// a la pagina.
+function escalar(factor, centro) {
+  // Si el recinto entero cabe en menos que eso, el tope es el propio encuadre.
+  const minimo = Math.min(vistaInicial.w, VISTA_MINIMA);
+  const nuevoAncho = Math.min(vistaInicial.w, Math.max(minimo, vista.w * factor));
+  const razon = nuevoAncho / vista.w;
+  if (Math.abs(razon - 1) < 1e-9) return false;
+  const c = centro || { x: vista.x + vista.w / 2, y: vista.y + vista.h / 2 };
+  vista.x = c.x - (c.x - vista.x) * razon;
+  vista.y = c.y - (c.y - vista.y) * razon;
+  vista.w = nuevoAncho;   // exacto, no w *= razon: asi el tope se alcanza sin error de redondeo
+  vista.h *= razon;
+  aplicarVista();
+  return true;
+}
+
+function enUnidades(evento) {
+  const caja = svg.getBoundingClientRect();
+  return {
+    x: vista.x + ((evento.clientX - caja.left) / caja.width) * vista.w,
+    y: vista.y + ((evento.clientY - caja.top) / caja.height) * vista.h,
+  };
+}
+
+svg.addEventListener('wheel', (e) => {
+  // Proporcional al delta, no un paso fijo por evento: una muesca de rueda
+  // (~100 px) da x1.15, y un trackpad, que manda muchos deltas pequenos, avanza
+  // suave. El pellizco de trackpad llega como wheel con ctrlKey y deltas cortos.
+  const porModo = e.deltaMode === 1 ? 0.05 : e.deltaMode === 2 ? 1 : 0.002;
+  const factor = Math.pow(2, e.deltaY * porModo * (e.ctrlKey ? 10 : 1));
+  // En el tope del zoom la rueda vuelve a desplazar la pagina. Con ctrlKey se
+  // bloquea siempre, o el navegador haria zoom de la pagina entera.
+  if (escalar(factor, enUnidades(e)) || e.ctrlKey) e.preventDefault();
+}, { passive: false });
+
+// Punteros activos (raton, dedos, lapiz) por pointerId. Con uno se arrastra;
+// con dos se arrastra y se pellizca a la vez.
+const punteros = new Map();
+let arrastre = null;
+// Con la barra espaciadora pulsada, el arrastre siempre mueve el plano: es la salida
+// para desplazarse mientras una herramienta de butacas se queda con el arrastre.
+let espacioPulsado = false;
+document.addEventListener('keydown', (e) => {
+  // En un campo de texto, la barra escribe un espacio: ahi no es para el plano.
+  if (e.code === 'Space' && !e.repeat && !e.target.closest('input, select, textarea')) espacioPulsado = true;
+});
+document.addEventListener('keyup', (e) => {
+  if (e.code === 'Space') espacioPulsado = false;
+});
+window.addEventListener('blur', () => { espacioPulsado = false; });
+
+function centroDePunteros() {
+  const [a, b] = punteros.values();
+  if (!b) return { x: a.x, y: a.y, d: 0 };
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) };
+}
+
+svg.addEventListener('pointerdown', (e) => {
+  // El boton central siempre mueve el plano, tambien mientras se pinta por area.
+  if (e.button !== 0 && e.button !== 1) return;   // el derecho no elige butaca
+  const soloMover = e.button === 1 || espacioPulsado;
+  if (e.button === 1) e.preventDefault();
+  punteros.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  svg.setPointerCapture(e.pointerId);
+  if (punteros.size === 1) {
+    // En el editor, agarrar una mesa la mueve; agarrar el fondo mueve el plano.
+    if (arrastreMesa) terminarArrastreMesa(false);   // nunca dos arrastres de mesa a la vez
+    // Un tirador se lleva el gesto: ni mueve el plano ni selecciona nada hasta soltar.
+    const tirador = !soloMover && modo === 'editor' && !conButacas() && e.target.closest('[data-tirador]');
+    if (tirador) {
+      const { tirador: tipo, banda, vertical } = tirador.dataset;
+      arrastreTirador = { tipo, banda: banda || null, vertical: vertical || null, pointerId: e.pointerId };
+      dibujarFantasma({});
+      return;
+    }
+    const pieza = modo === 'editor' && e.target.closest('.pieza');
+    if (pieza) {
+      // Ctrl (o Cmd) mete o saca la pieza de la selección en vez de arrastrarla.
+      if (e.ctrlKey || e.metaKey) {
+        alternarPiezaActiva(pieza.dataset.pieza);
+        return;
+      }
+      arrastreMesa = iniciarArrastreMesa(pieza, e);
+      return;
+    }
+    arrastre = {
+      x: e.clientX, y: e.clientY, movido: 0,
+      // Con la herramienta de zona o de bloqueo, arrastrar dibuja un rectangulo en vez
+      // de mover el plano; Alt lo deshace (zona de siempre, o desbloquear).
+      area: modo === 'editor' && ['zona', 'bloquear'].includes(herramienta) && !soloMover ? { desde: celdaBajo(e), alt: e.altKey } : null,
+      // Colocando piezas, arrastrar el fondo las selecciona; con Ctrl, se suman a las
+      // que ya estaban.
+      marco: modo === 'editor' && !conButacas() && !soloMover
+        ? { desde: celdaBajo(e), suma: e.ctrlKey || e.metaKey } : null,
+      // La butaca se anota AQUI, no en pointerup: setPointerCapture retargetea al
+      // <svg> todos los eventos de puntero siguientes, asi que al soltar el boton
+      // e.target ya es el <svg> y closest('.butaca') devuelve null.
+      butaca: e.target.closest('.butaca'),
+      tablero: modo === 'vista' ? e.target.closest('.mueble.completa') : null,
+      celda: modo === 'editor' ? celdaBajo(e) : null,
+    };
+  } else {
+    // Un segundo dedo convierte el toque en gesto de plano: si se movia una
+    // mesa, se cancela y el pellizco sigue normal.
+    if (arrastreMesa) terminarArrastreMesa(false);
+    if (arrastre && arrastre.area) {
+      arrastre.area = null;
+      dibujarArea(null);
+    }
+    if (arrastre) arrastre.movido = Infinity;
+    else arrastre = { x: e.clientX, y: e.clientY, movido: Infinity, butaca: null };
+  }
+});
+svg.addEventListener('pointermove', (e) => {
+  if (arrastreTirador) {
+    if (e.pointerId === arrastreTirador.pointerId) dibujarFantasma(medidasDeTirador(e));
+    return;
+  }
+  if (arrastreMesa) {
+    if (e.pointerId === arrastreMesa.pointerId) moverSombra(e);
+    return;
+  }
+  if (!arrastre || !punteros.has(e.pointerId)) return;
+  // Incremental: se compara el centro antes y despues de ESTE movimiento. Asi
+  // poner o levantar un dedo no hace saltar el plano.
+  const antes = centroDePunteros();
+  punteros.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const despues = centroDePunteros();
+
+  if (punteros.size === 1) {
+    arrastre.movido = Math.max(arrastre.movido,
+      Math.abs(e.clientX - arrastre.x) + Math.abs(e.clientY - arrastre.y));
+  }
+  if (arrastre.movido > 4) svg.classList.add('arrastrando');
+  if (arrastre.area) {
+    arrastre.area.hasta = celdaBajo(e);
+    dibujarArea(areaDeCeldas(arrastre.area.desde, arrastre.area.hasta), arrastre.area.alt);
+    return;   // el plano se queda quieto: el gesto es del rectangulo
+  }
+  if (arrastre.marco) {
+    arrastre.marco.hasta = celdaBajo(e);
+    const marco = areaDeCeldas(arrastre.marco.desde, arrastre.marco.hasta);
+    dibujarArea(marco, false, plural(piezasEnMarco(piezasDelPlano(), marco).length, 'pieza', 'piezas'));
+    return;
+  }
+
+  const caja = svg.getBoundingClientRect();
+  vista.x -= ((despues.x - antes.x) / caja.width) * vista.w;
+  vista.y -= ((despues.y - antes.y) / caja.height) * vista.h;
+  aplicarVista();
+  if (antes.d && despues.d) {
+    escalar(antes.d / despues.d, enUnidades({ clientX: despues.x, clientY: despues.y }));
+  }
+});
+function soltarPuntero(e, cancelado) {
+  if (!punteros.delete(e.pointerId)) return;
+  if (svg.hasPointerCapture(e.pointerId)) svg.releasePointerCapture(e.pointerId);
+  if (arrastreTirador) {
+    terminarArrastreTirador(!cancelado, e);
+    return;
+  }
+  if (arrastreMesa) {
+    terminarArrastreMesa(!cancelado);
+    return;
+  }
+  if (punteros.size) return;   // queda un dedo: el gesto sigue
+  svg.classList.remove('arrastrando');
+  // Un rectangulo solo cuenta si hubo arrastre de verdad: un temblor de la mano al
+  // hacer clic no puede comerse el clic (que selecciona la banda o toca la butaca).
+  const rectangulo = arrastre && arrastre.movido > 4 &&
+    ((arrastre.marco && arrastre.marco.hasta && 'marco') || (arrastre.area && arrastre.area.hasta && 'area'));
+  if (arrastre && (arrastre.marco || arrastre.area)) dibujarArea(null);
+  if (rectangulo) {
+    const gesto = arrastre[rectangulo];
+    const caja = areaDeCeldas(gesto.desde, gesto.hasta);
+    if (!cancelado) {
+      if (rectangulo === 'marco') aplicarMarco(caja, gesto.suma);
+      else aplicarArea(caja, gesto.alt);
+    }
+    arrastre = null;
+    return;
+  }
+  // Un arrastre no debe contar como clic sobre la butaca que quedo debajo.
+  if (!cancelado && arrastre && arrastre.movido <= 4) {
+    // En el editor, un clic en el fondo selecciona la banda de debajo (y otro clic,
+    // la que la contiene); con la herramienta de bloqueo, el clic en una butaca la
+    // bloquea o desbloquea.
+    if (modo === 'editor' && !conButacas()) seleccionarBandaEnPlano(arrastre.celda);
+    else if (arrastre.tablero && !arrastre.butaca) alternarMesaPorTablero(arrastre.tablero.dataset.pieza);
+    else alternar(arrastre.butaca);
+  }
+  arrastre = null;
+}
+svg.addEventListener('pointerup', (e) => soltarPuntero(e, false));
+
+function seleccionarBandaEnPlano(c) {
+  const id = c && Number.isFinite(c.x) ? bandaEnCelda(salaActual, c.x, c.y, bandaActiva) : null;
+  if (!id) {
+    marcarActiva(null);
+    marcarBandaActiva(null);
+    return;
+  }
+  marcarBandaActiva(id);
+  anunciar(bandaDe(salaActual, id).nombre + ' seleccionada.');
+}
+
+// Doble clic en un subtitulo: selecciona su banda y lleva a su nombre en el panel.
+svg.addEventListener('dblclick', (e) => {
+  if (modo !== 'editor' || conButacas()) return;
+  const subtitulo = e.target.closest('[data-subtitulo]');
+  if (!subtitulo) return;
+  const id = subtitulo.dataset.subtitulo;
+  marcarBandaActiva(id);
+  const campo = listaBandas.querySelector('input[data-op="nombre"][data-banda="' + id + '"]');
+  if (campo) {
+    campo.focus();
+    campo.select();
+  }
+});
+svg.addEventListener('pointercancel', (e) => soltarPuntero(e, true));
+
+document.getElementById('acercar').addEventListener('click', () => escalar(1 / 1.3));
+document.getElementById('alejar').addEventListener('click', () => escalar(1.3));
+document.getElementById('ajustar').addEventListener('click', () => {
+  vista = { ...vistaInicial };
+  aplicarVista();
+});
+
+// ---------------------------------------------------------------------------
+// Seleccion y teclado
+// ---------------------------------------------------------------------------
+const porNodo = (elemento) => porId.get(elemento.dataset.id);
+
+function alternar(elemento) {
+  if (modo === 'editor') {        // en el editor no se elige: se coloca o se bloquea
+    if (herramienta === 'bloquear' && elemento) alternarBloqueo(elemento);
+    if (herramienta === 'zona' && elemento) pintarZona(elemento);
+    if (herramienta === 'numeracion' && elemento) elegirEtiquetaOficial(elemento);
+    else if (herramienta === 'ajustar' && elemento) elegirLugarAjuste(elemento);
+    else if (herramienta === 'fisica' && elemento) elegirLugarFisico(elemento);
+    return;
+  }
+  const b = elemento && porNodo(elemento);
+  if (eventoConectado) {
+    const elegida = alternarLugarEvento(elegidas, b?.id, eventoConectado);
+    if (elegida === null) return;
+    const grupo = eventoConectado.grupos.get(b.grupo?.id);
+    const afectados = grupo?.modalidad === 'completa' ? grupo.requeridos : [b.id];
+    // Elegir no regenera geometria: conserva el coste de la compra por lugar/grupo.
+    for (const id of afectados) {
+      const x = porId.get(id);
+      if (!x?.nodo) continue;
+      if (elegida) ponerMarca(x);
+      x.nodo.classList.toggle('elegida', elegida); x.nodo.setAttribute('aria-checked', String(elegida));
+    }
+    if (grupo?.modalidad === 'completa') marcarTableroElegido(grupo.id, elegida);
+    actualizarResumen(); notificarSeleccionEvento(); return;
+  }
+  const elegida = alternarEleccion(elegidas, b, butacas);
+  if (elegida === null) return;
+  // El DOM refleja el dato; nunca se lee de vuelta. En una mesa completa cambian todos
+  // sus lugares y el tablero.
+  const afectadas = b.grupo && b.grupo.completa ? lugaresDeMesa(b.grupo.id, butacas).filter((x) => x.estado === 'libre') : [b];
+  for (const x of afectadas) {
+    // La palomita de una butaca libre no existe hasta que se elige.
+    if (elegida) ponerMarca(x);
+    x.nodo.classList.toggle('elegida', elegida);
+    x.nodo.setAttribute('aria-checked', String(elegida));
+  }
+  if (b.grupo && b.grupo.completa) marcarTableroElegido(b.grupo.id, elegida);
+  actualizarResumen();
+}
+
+function marcarTableroElegido(id, elegida) {
+  for (const n of capaMuebles.querySelectorAll('.mueble[data-pieza="' + id + '"]')) n.classList.toggle('elegida', elegida);
+}
+
+// Clic en el tablero de una mesa completa: la elige como si fuera uno de sus lugares.
+function alternarMesaPorTablero(id) {
+  const primera = butacas.find((b) => b.grupo && b.grupo.id === id && b.grupo.completa && b.estado === 'libre');
+  if (primera) alternar(primera.nodo);
+}
+
+function moverFoco(desde, dx, dy) {
+  const origen = porNodo(desde);
+  if (!origen) return;
+  const destino = vecinoDeLugar(butacasVisibles(), origen, dx, dy);
+  if (!destino) return;
+  destino.nodo.focus();   // el tabindex y el encuadre los ajusta 'focusin'
+}
+
+// Desplaza el viewBox lo justo para que la caja (en celdas) quede dentro, con
+// media celda de margen. Sin esto, con zoom, el foco podia irse fuera de vista.
+function asegurarVisible({ x: cx, y: cy, w = 1, h = 1 }) {
+  const margen = PASO / 2;
+  const x = cx * PASO, y = cy * PASO, ancho = w * PASO, alto = h * PASO;
+  if (x - margen < vista.x) vista.x = x - margen;
+  else if (x + ancho + margen > vista.x + vista.w) vista.x = x + ancho + margen - vista.w;
+  if (y - margen < vista.y) vista.y = y - margen;
+  else if (y + alto + margen > vista.y + vista.h) vista.y = y + alto + margen - vista.h;
+  aplicarVista();
+}
+
+// El foco puede llegar por flechas o por clic: en ambos casos el elemento
+// enfocado pasa a ser el unico punto de tabulacion de su capa (butacas en la
+// previsualizacion, mesas en el editor).
+svg.addEventListener('focusin', (e) => {
+  const elemento = e.target.closest('.butaca, .pieza');
+  if (!elemento) return;
+  for (const n of elemento.parentNode.querySelectorAll('[tabindex="0"]')) {
+    if (n !== elemento) n.setAttribute('tabindex', '-1');
+  }
+  elemento.setAttribute('tabindex', '0');
+  // Durante un clic no se reencuadra: moveria el plano bajo el puntero y el
+  // arrastre, que parte de la vista anterior, lo haria saltar.
+  const esPieza = elemento.classList.contains('pieza');
+  // Tocar una pieza que ya está en la selección no la deshace: pasa a ser la principal,
+  // que es lo que deja arrastrar el grupo desde cualquiera de las suyas.
+  if (esPieza && piezasActivas.has(elemento.dataset.pieza)) {
+    mesaActiva = elemento.dataset.pieza;
+    actualizarControles();
+  } else if (esPieza) {
+    marcarActiva(elemento.dataset.pieza);
+  }
+  if (arrastre || arrastreMesa) return;
+  const m = esPieza && piezaPorId(elemento.dataset.pieza);
+  const caja = m ? { x: m.x, y: m.y, w: m.geo.ancho, h: m.geo.alto } : porNodo(elemento);
+  if (caja) asegurarVisible(caja);
+});
+
+svg.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && arrastreTirador) {
+    e.preventDefault();
+    terminarArrastreTirador(false);
+    anunciar('Cambio de tamaño cancelado.');
+    return;
+  }
+  if (e.key === 'Escape' && arrastreMesa) {
+    e.preventDefault();
+    terminarArrastreMesa(false);
+    anunciar('Movimiento cancelado.');
+    return;
+  }
+  const pieza = e.target.closest('.pieza');
+  if (pieza) {
+    const id = pieza.dataset.pieza;
+    const flecha = FLECHAS[e.key];
+    const accion = ATAJOS[e.key];
+    if (flecha) {
+      e.preventDefault();
+      moverMesaConTeclado(id, flecha);
+    } else if (accion) {
+      e.preventDefault();
+      ejecutarAccion(accion, id);
+      // El DOM se rehizo: el foco vuelve a la pieza activa (la copia, al duplicar), o
+      // a la primera si se elimino.
+      const destino = capaPiezas.querySelector('[data-pieza="' + (mesaActiva || id) + '"]') ||
+                      capaPiezas.querySelector('.pieza');
+      if (destino) destino.focus();
+    }
+    return;
+  }
+  const elemento = e.target.closest('.butaca');
+  if (!elemento) return;
+  const porArea = modo === 'editor' && ['zona', 'bloquear'].includes(herramienta);
+  if (e.key === 'Escape' && areaTeclado) {
+    e.preventDefault();
+    limpiarArea();
+    anunciar('Área cancelada.');
+    return;
+  }
+  // Con una herramienta de butacas, la barra mueve el plano mientras se pinta por
+  // area: ahi no activa la butaca enfocada, que se aplica con Enter.
+  if (e.key === ' ' && porArea) {
+    e.preventDefault();
+    return;
+  }
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    // Con un área extendida con Mayús, Enter la aplica (Alt+Enter la deshace).
+    if (areaTeclado && areaTeclado.hasta) {
+      const area = areaDeCeldas(areaTeclado.desde, areaTeclado.hasta);
+      const id = porNodo(elemento).id;
+      limpiarArea();
+      aplicarArea(area, e.altKey);
+      const vuelta = porId.get(id);
+      if (vuelta) vuelta.nodo.focus({ preventScroll: true });
+      return;
+    }
+    alternar(elemento);
+    return;
+  }
+  const flecha = FLECHAS[e.key];
+  if (flecha && e.shiftKey && porArea) {
+    e.preventDefault();
+    extenderArea(elemento, flecha);
+    return;
+  }
+  if (flecha) {
+    e.preventDefault();
+    if (areaTeclado) limpiarArea();
+    moverFoco(elemento, flecha.dx, flecha.dy);
+  }
+});
+
+const FLECHAS = {
+  ArrowLeft:  { dx: -1, dy: 0, hacia: 'la izquierda' },
+  ArrowRight: { dx: 1,  dy: 0, hacia: 'la derecha' },
+  ArrowUp:    { dx: 0, dy: -1, hacia: 'arriba' },
+  ArrowDown:  { dx: 0, dy: 1,  hacia: 'abajo' },
+};
+
+// ---------------------------------------------------------------------------
+// Modo editor: colocar, girar, alargar, agregar y eliminar mesas.
+// ---------------------------------------------------------------------------
+let modo = 'vista';        // 'vista' (previsualizar, como quien compra) o 'editor'
+let arrastreMesa = null;
+let mesaActiva = null;     // id de la mesa sobre la que actuan los botones y atajos
+// Varias piezas a la vez: 'piezasActivas' las tiene todas y 'mesaActiva' es la principal
+// (la ultima que se toco), que es la que mandan los controles de una sola pieza.
+const piezasActivas = new Set();
+let herramienta = 'mesas'; // en el editor: 'mesas' (colocar), 'bloquear' o 'zona' (butacas)
+// Las herramientas que trabajan sobre butacas: las butacas responden y se recorren.
+const conButacas = () => ['bloquear', 'zona', 'numeracion', 'ajustar', 'fisica'].includes(herramienta);
+let bandaActiva = null;    // id de la banda, vertical o franja seleccionada (excluye a mesaActiva)
+let tipoActual, salaActual;
+// Plano guardado por tipo de sala: { 'mixta-ambos': { bandas, mesas, siguiente,
+// siguienteBanda } }. Cada tipo tiene el suyo; editar uno no toca los otros.
+// 'siguiente' y 'siguienteBanda' solo crecen: un id nuevo nunca reutiliza el de
+// una mesa o banda eliminada.
+const planos = {};
+const historiales = Object.create(null);
+let restaurandoHistorial = false;
+
+// 'mesaActiva' guarda el id de la pieza activa: mesa (M3), bloque (F2), forma (P1),
+// butaca suelta (B4) o el escenario.
+const piezaPorId = (id) => (id === 'escenario' ? (escenario.ausente ? null : escenario)
+  : [...mesas, ...bloquesFilas, ...formas, ...butacasSueltas].find((p) => p.id === id) || null);
+const anunciar = (mensaje) => { document.getElementById('estado').textContent = mensaje; };
+const configDePieza = (p) => (esEscenario(p) ? { id: 'escenario', tipo: 'escenario', ...configDeEscenario(p) }
+  : esBloqueFilas(p) ? configDeBloque(p) : esForma(p) ? configDeForma(p)
+  : esButacaSuelta(p) ? configDeButaca(p) : configDeMesa(p));
+// Concordancia: «Mesa 3 movida», «Bloque 2 movido».
+const genero = (p) => (esBloqueFilas(p) || esEscenario(p) ? 'o' : 'a');
+const resumenDePieza = (p) => (esEscenario(p) || esForma(p) ? p.ancho + ' × ' + p.alto + ' celdas'
+  : esMesaRedonda(p) ? 'redonda, ' + plural(p.lugares, 'lugar', 'lugares')
+  : esButacaSuelta(p) ? 'zona ' + zonas[p.zonaEfectiva].nombre : esBloqueFilas(p)
+  ? p.filas + ' × ' + p.ancho + ' butacas'
+  : p.geo.lugares.length + ' lugares');
+
+// Sombra del destino: contorno de la huella, tablero y lugares. Se rehace con la
+// forma de la mesa al empezar cada arrastre y se desplaza con transform.
+const sombra = nodo('g', { class: 'sombra oculta', 'aria-hidden': 'true' });
+svg.appendChild(sombra);
+
+// La sombra del destino. Recibe una lista de { geo, dx, dy }: al arrastrar varias
+// piezas, cada una va en su sitio relativo a la que se agarró, así que el grupo entero
+// se ve donde va a caer.
+function construirSombra(piezas) {
+  sombra.textContent = '';
+  for (const { geo, dx: cx = 0, dy: cy = 0 } of piezas) {
+    const { ancho, alto, tablero, lugares, redonda } = geo;
+    const g = nodo('g', { transform: 'translate(' + cx * PASO + ' ' + cy * PASO + ')' });
+    g.appendChild(nodo('rect', { class: 'contorno', x: 0.5, y: 0.5,
+      width: ancho * PASO - 1, height: alto * PASO - 1, rx: 3 }));
+    if (redonda) {
+      g.appendChild(nodo('circle', { class: 'tablero', cx: (redonda.dx + redonda.diametro / 2) * PASO,
+        cy: (redonda.dy + redonda.diametro / 2) * PASO, r: (redonda.diametro * PASO) / 2 - 1 }));
+    }
+    if (tablero) {   // los bloques de filas no tienen tablero
+      g.appendChild(nodo('rect', { class: 'tablero', x: tablero.dx * PASO + 1, y: tablero.dy * PASO + 1,
+        width: tablero.w * PASO - 2, height: tablero.h * PASO - 2, rx: 4 }));
+    }
+    for (const { dx, dy, mira } of lugares) g.appendChild(glifoButaca(dx, dy, mira));
+    sombra.appendChild(g);
+  }
+}
+
+// Marca la pieza activa sin redibujar: solo clases, aria-pressed y botones.
+function marcarActiva(id) {
+  marcarActivas(id ? [id] : []);
+}
+
+// Marca varias: la ultima de la lista es la principal.
+function marcarActivas(ids) {
+  piezasActivas.clear();
+  for (const id of ids) piezasActivas.add(id);
+  mesaActiva = ids.length ? ids[ids.length - 1] : null;
+  if (mesaActiva && bandaActiva) marcarBandaActiva(null);
+  pintarActivas();
+  actualizarControles();
+}
+
+// Ctrl (o Cmd) + clic: mete o saca una pieza de la seleccion sin tocar las demas.
+function alternarPiezaActiva(id) {
+  const ids = [...piezasActivas];
+  const fuera = ids.filter((x) => x !== id);
+  marcarActivas(piezasActivas.has(id) ? fuera : [...ids, id]);
+  const pieza = piezaPorId(id);
+  anunciar(pieza.nombre + (piezasActivas.has(id) ? ' añadida a la selección: ' : ' fuera de la selección: ') +
+           (piezasActivas.size ? plural(piezasActivas.size, 'pieza seleccionada', 'piezas seleccionadas') + '.'
+                               : 'ninguna pieza seleccionada.'));
+}
+
+function pintarActivas() {
+  for (const p of capaPiezas.querySelectorAll('.pieza')) {
+    const activa = piezasActivas.has(p.dataset.pieza);
+    p.classList.toggle('activa', activa);
+    p.setAttribute('aria-pressed', String(activa));
+  }
+  // Las butacas de la pieza se marcan con ella: una mesa y sus lugares son una sola cosa.
+  for (const b of capaButacas.querySelectorAll('.butaca')) {
+    b.classList.toggle('de-pieza-activa', piezasActivas.has(b.dataset.pieza));
+  }
+}
+
+const botonesDeMesa = () => document.querySelectorAll('#herramientas-editor [data-accion]');
+
+// Que acciones tiene cada tipo de pieza.
+const ACCIONES_DE = {
+  mesa: new Set(['girar', 'alargar', 'acortar', 'cabeceras', 'unlado', 'duplicar', 'eliminar']),
+  bloque: new Set(['girar', 'alargar', 'acortar', 'masfilas', 'menosfilas', 'duplicar', 'eliminar']),
+  escenario: new Set(['girar', 'alargar', 'acortar', 'masfilas', 'menosfilas']),
+  forma: new Set(['girar', 'alargar', 'acortar', 'masfilas', 'menosfilas', 'duplicar', 'eliminar']),
+  butaca: new Set(['girar', 'duplicar', 'eliminar']),
+  redonda: new Set(['girar', 'alargar', 'acortar', 'duplicar', 'eliminar']),
+};
+const tipoDePieza = (p) => (esEscenario(p) ? 'escenario' : esBloqueFilas(p) ? 'bloque'
+  : esForma(p) ? 'forma' : esButacaSuelta(p) ? 'butaca' : esMesaRedonda(p) ? 'redonda' : 'mesa');
+const aplica = (accion, p) => ACCIONES_DE[tipoDePieza(p)].has(accion);
+
+function actualizarControles() {
+  actualizarIdentidadControles();
+  actualizarControlesGeometria();
+  actualizarControlesFisicos();
+  const m = mesaActiva && piezaPorId(mesaActiva);
+  const varias = piezasActivas.size > 1;
+  const todas = [...piezasActivas].map((id) => piezaPorId(id)).filter(Boolean);
+  // Lo que comparten todas: si no coinciden, el control lo dice con «—» o «mixta».
+  const comun = (valor) => {
+    const valores = new Set(todas.map(valor));
+    return valores.size === 1 ? [...valores][0] : undefined;
+  };
+  document.getElementById('mesa-activa').textContent = varias
+    ? plural(piezasActivas.size, 'pieza seleccionada', 'piezas seleccionadas') + ': mover, duplicar o eliminar'
+    : m ? m.nombre + ' · ' + resumenDePieza(m) : 'Ninguna pieza seleccionada';
+  const bloque = esBloqueFilas(m), forma = esForma(m), suelta = esButacaSuelta(m), redonda = esMesaRedonda(m);
+  for (const boton of botonesDeMesa()) {
+    const accion = boton.dataset.accion;
+    const deEscenario = esEscenario(m);
+    // Largo: ancho del escenario, de una forma o de un bloque; lugares en una mesa redonda.
+    const largo = bloque || deEscenario || forma ? m.ancho : redonda ? m.lugares : m && m.largo;
+    const minimo = redonda ? LUGARES_MINIMOS_REDONDA : 1;
+    const maximo = deEscenario ? ESCENARIO_ANCHO_MAXIMO : forma ? FORMA_ANCHO_MAXIMO
+      : bloque ? ANCHO_BLOQUE_MAXIMO : redonda ? LUGARES_MAXIMOS_REDONDA : LARGO_MAXIMO;
+    const filas = deEscenario || forma ? m.alto : m && m.filas;
+    const filasMaximas = deEscenario ? ESCENARIO_ALTO_MAXIMO : forma ? FORMA_ALTO_MAXIMO : FILAS_MAXIMAS;
+    // Con varias seleccionadas, una acción solo se ofrece si todas la admiten.
+    boton.disabled = !m || !aplica(accion, m) ||
+      (varias && !todas.every((p) => aplica(accion, p))) ||
+      (accion === 'alargar' && largo >= maximo) ||
+      (accion === 'acortar' && largo <= minimo) ||
+      (accion === 'masfilas' && filas >= filasMaximas) ||
+      (accion === 'menosfilas' && filas <= 1);
+    if (accion === 'cabeceras') boton.setAttribute('aria-pressed', String(Boolean(m && m.cabeceras)));
+    if (accion === 'unlado') boton.setAttribute('aria-pressed', String(Boolean(m && m.unLado)));
+  }
+  const botonEscenario = document.getElementById('alternar-escenario');
+  const textoEscenario = escenario.ausente ? 'Agregar escenario' : 'Quitar escenario';
+  botonEscenario.setAttribute('aria-label', textoEscenario);
+  botonEscenario.dataset.tooltip = textoEscenario;
+  botonEscenario.querySelector('use').setAttribute('href', escenario.ausente ? '#i-escenario-agregar' : '#i-escenario-quitar');
+  // Venta por mesa o por butacas: solo para mesas. Con varias, «Venta mixta» cuando no
+  // coinciden; elegir una opción la aplica a todas.
+
+  const soloMesas = todas.length > 0 && todas.every((p) => esMesa(p) && !esEscenario(p));
+  const deMesa = varias ? soloMesas : Boolean(m) && esMesa(m) && !esEscenario(m);
+  // Zona: mesas, bloques y butacas sueltas (lo que tiene butacas). Nombre: bloques y
+  // formas. No se pisa lo que se esta escribiendo.
+  const zona = document.getElementById('zona-pieza');
+  const nombre = document.getElementById('nombre-pieza');
+  // Zona: con varias, la de todas si coinciden y «—» si no. El nombre es de cada pieza,
+  // así que con varias no se edita.
+  const conZona = varias
+    ? todas.length > 0 && todas.every((p) => !esForma(p) && !esEscenario(p))
+    : Boolean(m) && (bloque || suelta || deMesa);
+  zona.disabled = !conZona;
+  nombre.disabled = varias || !(bloque || forma);
+  const propia = varias ? comun((p) => p.zona || '') : conZona ? m.zona : null;
+  const heredada = varias ? comun((p) => zonaEnCelda(salaActual, p.x, p.y))
+    : conZona ? zonaEnCelda(salaActual, m.x, m.y) : null;
+  llenarZonasDeFilas(zona, propia || null, { heredada: heredada || null, conMesas: deMesa,
+                                             mezcla: propia === undefined });
+  if (document.activeElement !== nombre) {
+    nombre.value = !varias && (bloque || forma) ? m.nombrePropio || '' : '';
+    nombre.placeholder = varias ? 'El nombre es de cada pieza' : 'Ej.: Lateral izquierdo';
+  }
+}
+
+// Atenua la mesa original (tablero, rotulo y lugares) mientras se arrastra.
+// Al soltar se limpia todo el plano, no solo esa mesa: no pueden quedar restos.
+function levantar(id, si) {
+  const selector = si ? '[data-pieza="' + id + '"]:not(.pieza)' : '.levantada';
+  for (const n of svg.querySelectorAll(selector)) n.classList.toggle('levantada', si);
+}
+
+const celdaBajo = (e) => {
+  const u = enUnidades(e);
+  return { x: Math.floor(u.x / PASO), y: Math.floor(u.y / PASO) };
+};
+
+function iniciarArrastreMesa(pieza, e) {
+  const mesa = piezaPorId(pieza.dataset.pieza);
+  const agarrada = celdaBajo(e);
+  // Agarrar una pieza del grupo arrastra el grupo; agarrar otra empieza de cero.
+  const grupo = piezasActivas.size > 1 && piezasActivas.has(mesa.id)
+    ? [...piezasActivas].map((id) => piezaPorId(id)).filter(Boolean) : [mesa];
+  if (grupo.length === 1) marcarActiva(mesa.id);
+  construirSombra(grupo.map((p) => ({ geo: p.geo, dx: p.x - mesa.x, dy: p.y - mesa.y })));
+  for (const p of grupo) levantar(p.id, true);
+  return {
+    mesa, grupo, pointerId: e.pointerId, x: e.clientX, y: e.clientY, movido: 0, destino: null,
+    // En que celda de la mesa se agarro: asi no salta a la esquina del puntero.
+    agarre: { dx: agarrada.x - mesa.x, dy: agarrada.y - mesa.y },
+    ocupadas: celdasOcupadas(new Set(grupo.map((p) => p.id))),
+  };
+}
+
+function moverSombra(e) {
+  const a = arrastreMesa;
+  a.movido = Math.max(a.movido, Math.abs(e.clientX - a.x) + Math.abs(e.clientY - a.y));
+  if (a.movido <= 4) return;   // un clic no es un arrastre
+  const c = celdaBajo(e);
+  const x = c.x - a.agarre.dx, y = c.y - a.agarre.dy;
+  // Con el plano sin tamaño (oculto) la celda no se puede calcular: nunca se
+  // guarda una posicion que no sea un numero.
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  if (a.destino && a.destino.x === x && a.destino.y === y) return;
+  // Con varias, el destino solo vale si caben todas: la sombra se pone roja en cuanto
+  // una estorba, y el aviso dice cuál.
+  const dx = x - a.mesa.x, dy = y - a.mesa.y;
+  let motivo = null;
+  for (const p of a.grupo) {
+    const suyo = motivoNoCabe(salaActual, a.ocupadas, { ...configDePieza(p), x: p.x + dx, y: p.y + dy });
+    if (!suyo) continue;
+    motivo = a.grupo.length > 1 ? p.nombre + ' ' + suyo : suyo;
+    break;
+  }
+  a.destino = { x, y, motivo };
+  sombra.setAttribute('transform', 'translate(' + x * PASO + ' ' + y * PASO + ')');
+  sombra.classList.toggle('invalida', Boolean(a.destino.motivo));
+  sombra.classList.remove('oculta');
+  svg.classList.add('moviendo-mesa');
+  levantar(a.mesa.id, true);
+}
+
+function terminarArrastreMesa(confirmar) {
+  const a = arrastreMesa;
+  arrastreMesa = null;
+  sombra.classList.add('oculta');
+  svg.classList.remove('moviendo-mesa');
+  levantar(null, false);
+  // Un clic seco (sin arrastrar) en una pieza del grupo deja seleccionada solo esa: es
+  // la forma de salir de la selección múltiple sin tener que ir al fondo.
+  if (confirmar && !a.destino && a.grupo.length > 1) {
+    marcarActiva(a.mesa.id);
+    anunciar(a.mesa.nombre + ' seleccionada, sola.');
+  }
+  if (!confirmar || !a.destino) return;
+  const { x, y, motivo } = a.destino;
+  if (x === a.mesa.x && y === a.mesa.y) return;
+  if (motivo) {
+    anunciar((a.grupo.length > 1 ? 'No se movieron: ' : a.mesa.nombre + ' no se movió: ') + motivo + '.');
+    return;
+  }
+  if (a.grupo.length > 1) {
+    moverPiezasActivas({ dx: x - a.mesa.x, dy: y - a.mesa.y, hacia: 'donde se soltó' });
+    return;
+  }
+  moverMesa(a.mesa.id, x, y);
+}
+
+function moverMesaConTeclado(id, flecha) {
+  if (piezasActivas.size > 1 && piezasActivas.has(id)) {
+    moverPiezasActivas(flecha);
+    return;
+  }
+  const { dx, dy, hacia } = flecha;
+  const m = piezaPorId(id);
+  const hueco = buscarHueco(salaActual, celdasOcupadas(id), configDePieza(m), dx, dy);
+  if (!hueco) {
+    anunciar(m.nombre + ' no tiene hueco libre hacia ' + hacia + '.');
+    return;
+  }
+  moverMesa(id, hueco.x, hueco.y);
+  // El DOM se rehizo: el foco vuelve a la misma mesa, y 'focusin' la encuadra.
+  capaPiezas.querySelector('[data-pieza="' + id + '"]').focus();
+}
+
+// El plano del tipo de sala actual, creado desde lo que se ve la primera vez
+// que se edita.
+function fotoDelPlano() {
+  const plano = planos[tipoActual] || null;
+  const canonico = plano ? cambiarNivelPlano(plano, nivelesDe(plano)[0].id) : null;
+  if (canonico) delete canonico.nivelEnEdicion;
+  return { plano: plano ? JSON.stringify(plano) : null,
+           firma: JSON.stringify(canonico || planoDesdeSala(tipoActual, salaActual), (k,v) => v && typeof v === 'object' && !Array.isArray(v)
+             ? Object.fromEntries(Object.keys(v).sort().map((key) => [key,v[key]])) : v) };
+}
+
+function actualizarEstadoEdicion() {
+  const historial = historiales[tipoActual];
+  document.getElementById('deshacer').disabled = !historial || !historial.puedeDeshacer();
+  document.getElementById('rehacer').disabled = !historial || !historial.puedeRehacer();
+  document.getElementById('estado-guardado').textContent = historial && historial.tieneCambios()
+    ? 'Cambios sin guardar en este plano.' : 'Sin cambios pendientes.';
+}
+
+function restaurarEdicion(accion) {
+  const actual = planoEditable();
+  const historial = historiales[tipoActual];
+  const estado = historial && historial[accion]();
+  if (!estado) return;
+  if (estado.plano === null) delete planos[tipoActual];
+  else planos[tipoActual] = conciliarIdentidadAlRestaurar(actual, JSON.parse(estado.plano));
+  restaurandoHistorial = true;
+  try {
+    regenerar(accion === 'deshacer' ? 'Último cambio deshecho.' : 'Cambio rehecho.');
+    if (planos[tipoActual]) {
+      historial.actualizarActual(fotoDelPlano()); actualizarEstadoEdicion();
+    }
+  } finally {
+    restaurandoHistorial = false;
+  }
+  calcularEncuadre();
+}
+
+function planoEditable() {
+  if (!planos[tipoActual]) planos[tipoActual] = planoDesdeSala(tipoActual, salaActual);
+  return planos[tipoActual];
+}
+
+// Las configuraciones son datos: se guardan y el plano se regenera desde ellas.
+// Si al regenerar desaparecen lugares (acortar, quitar cabeceras, eliminar, bandas),
+// se avisa de los elegidos que se soltaron y de los ocupados que se quitaron.
+const fotoDeButacas = () => butacas.map((b) => ({ id: b.id, estado: b.estado,
+  sectorId: b.sectorFisico?.id, filaId: b.filaFisica?.id, grupoId: b.grupo?.tipo === 'palco' ? b.grupo.id : undefined }));
+
+// 'antes' se puede pasar hecho cuando el plano ya se genero para validarlo.
+function regenerar(mensaje, antes = fotoDeButacas()) {
+  salaActual = generarPlano(tipoActual, planos[tipoActual]);
+  if (planos[tipoActual]) {
+    planos[tipoActual] = sincronizarIdentidad(planos[tipoActual]);
+    salaActual = generarPlano(tipoActual, planos[tipoActual]);
+  }
+  // Una pieza que quedo fuera de toda banda con zona no tiene de quien heredar: se le
+  // escribe la suya y se anuncia la ubicacion fisica resuelta.
+  let sueltas = { fijadas: [] };
+  if (planos[tipoActual]) {
+    sueltas = fijarZonasSueltas(planos[tipoActual], salaActual);
+    if (sueltas.fijadas.length) {
+      planos[tipoActual] = sueltas.plano;
+      salaActual = generarPlano(tipoActual, sueltas.plano);
+    }
+  }
+  const existe = new Set(butacas.map((b) => b.id));
+  const porIdFisico = new Map(butacas.map((b) => [b.id,b]));
+  const desvinculadas = antes.filter((a) => {
+    const b = porIdFisico.get(a.id);
+    return b && ((a.sectorId && a.sectorId !== b.sectorFisico?.id) || (a.filaId && a.filaId !== b.filaFisica?.id) || (a.grupoId && a.grupoId !== b.grupo?.id));
+  }).map((a) => a.id);
+  const { ausentes, noLibres } = conciliarSeleccion(elegidas, butacas);
+  const completadas = completarMesasElegidas(elegidas, butacas);
+  const ocupadasQuitadas = antes.filter((b) => b.estado === 'ocupada' && !existe.has(b.id))
+                                .map((b) => b.id);
+  for (const id of [...piezasActivas]) if (!piezaPorId(id)) piezasActivas.delete(id);
+  if (!piezaPorId(mesaActiva)) mesaActiva = [...piezasActivas].pop() || null;
+  if (bandaActiva && !ubicar(salaActual.bandas, bandaActiva)) bandaActiva = null;
+  dibujarTodo();
+  actualizarResumen();
+  actualizarAforo(salaActual);
+  actualizarControles();
+  if (!restaurandoHistorial) historiales[tipoActual].registrar(fotoDelPlano());
+  actualizarEstadoEdicion();
+  anunciar(mensaje);
+  document.getElementById('aviso').textContent = [
+    desvinculadas.length ? 'Pertenencias físicas desvinculadas o reasignadas: ' + desvinculadas.join(', ') + '.' : '',
+    frase(ausentes, 'ya no existe en el plano', 'ya no existen en el plano'),
+    frase(noLibres, 'ya no está libre', 'ya no están libres'),
+    ocupadasQuitadas.length
+      ? 'Atención: se quitaron lugares ocupados: ' + ocupadasQuitadas.join(', ') + '.' : '',
+    completadas.length ? 'Se venden completas, así que se eligieron todos sus lugares: ' + completadas.join(', ') + '.' : '',
+    sueltas.fijadas.length
+      ? 'Fuera de toda zona, así que se les asignó ' + zonas[sueltas.zona].nombre + ': ' +
+        sueltas.fijadas.join(', ') + '.' : '',
+    butacas.some((b) => b.zona !== b.zonaOriginal)
+      ? 'Hay lugares con zona física distinta de su región de dibujo. Mover conserva la ubicación; usa Asignar zona para reasignarla.' : '',
+  ].filter(Boolean).join(' ');
+}
+
+function reemplazarMesa(config) {
+  const plano = planoEditable();
+  if (esEscenario(config)) {
+    plano.escenario = configDeEscenario(config);
+    return;
+  }
+  const { lista } = listaDeId(config.id);
+  plano[lista] = plano[lista].map((c) => (c.id === config.id ? config : c));
+}
+
+// Los lugares conservan su id al mover, asi que la seleccion y las reservas no se pierden.
+function moverMesa(id, x, y) {
+  const m = piezaPorId(id);
+  reemplazarMesa({ ...configDePieza(m), x, y });
+  regenerar(m.nombre + ' movid' + genero(m) + ' a columna ' + x + ', fila ' + y + '.');
+}
+
+const posicionTexto = (antes, despues) =>
+  (antes.x === despues.x && antes.y === despues.y ? ''
+    : ' Se desplazó a columna ' + despues.x + ', fila ' + despues.y + ' para caber.');
+
+// Girar, alargar, acortar y cabeceras: se calcula la configuracion nueva, se
+// coloca en su sitio o en el mas cercano, y si no cabe se anuncia por que.
+const TRANSFORMACIONES = {
+  girar:     { calcular: (c) => (esEscenario(c) || esForma(c) ? girarEscenario(c) : girarPieza(c)),
+               fallo: (m) => 'No se pudo girar ' + m.nombre,
+               hecho: (m) => (esEscenario(m) || esForma(m) ? 'girad' + genero(m) + ' 90°'
+                 : m.giro ? 'girad' + genero(m) + ' ' + m.giro + '°' : 'de vuelta a su posición original') },
+  alargar:   { calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, 1, 0) : esForma(c) ? cambiarTamanoForma(c, 1, 0)
+                 : esMesaRedonda(c) ? cambiarLugaresRedonda(c, 1)
+                 : esBloqueFilas(c) ? cambiarAncho(c, 1) : cambiarLargo(c, 1)),
+               tope: (m) => (esMesaRedonda(m) ? 'el máximo de lugares (' + LUGARES_MAXIMOS_REDONDA + ')' : 'el largo máximo'),
+               fallo: (m) => 'No se pudo alargar ' + m.nombre,
+               hecho: (m) => (esMesaRedonda(m) ? 'con dos lugares más' : 'alargad' + genero(m)) },
+  acortar:   { calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, -1, 0) : esForma(c) ? cambiarTamanoForma(c, -1, 0)
+                 : esMesaRedonda(c) ? cambiarLugaresRedonda(c, -1)
+                 : esBloqueFilas(c) ? cambiarAncho(c, -1) : cambiarLargo(c, -1)),
+               tope: (m) => (esMesaRedonda(m) ? 'el mínimo de lugares (' + LUGARES_MINIMOS_REDONDA + ')' : 'el largo mínimo'),
+               fallo: (m) => 'No se pudo acortar ' + m.nombre,
+               hecho: (m) => (esMesaRedonda(m) ? 'con dos lugares menos' : 'acortad' + genero(m)) },
+  masfilas:  { calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, 0, 1)
+                 : esForma(c) ? cambiarTamanoForma(c, 0, 1) : cambiarFilasBloque(c, 1)),
+               tope: 'el máximo de filas',
+               fallo: (m) => 'No se pudo agregar una fila a ' + m.nombre,
+               hecho: () => 'con una fila más' },
+  menosfilas:{ calcular: (c) => (esEscenario(c) ? cambiarTamanoEscenario(c, 0, -1)
+                 : esForma(c) ? cambiarTamanoForma(c, 0, -1) : cambiarFilasBloque(c, -1)),
+               tope: 'una sola fila',
+               fallo: (m) => 'No se pudo quitar una fila a ' + m.nombre,
+               hecho: () => 'con una fila menos' },
+  cabeceras: { calcular: alternarCabeceras,
+               fallo: (m) => (m.cabeceras ? 'No se pudieron quitar las cabeceras de '
+                                          : 'No se pudieron poner cabeceras a ') + m.nombre,
+               hecho: (m) => (m.cabeceras ? 'con cabeceras' : 'sin cabeceras') },
+  unlado:    { calcular: alternarUnLado,
+               fallo: (m) => 'No se pudieron poner lugares en el otro lado de ' + m.nombre,
+               hecho: (m) => (m.unLado ? 'con lugares en un solo lado' : 'con lugares en los dos lados') },
+};
+
+// Como queda el grupo, en femenino plural: «2 piezas giradas». Los textos de una sola
+// pieza concuerdan con ella («girada», «alargado»), asi que no sirven para varias.
+const HECHO_EN_GRUPO = {
+  girar: 'giradas 90°', alargar: 'alargadas', acortar: 'acortadas',
+  masfilas: 'con una fila más', menosfilas: 'con una fila menos',
+  cabeceras: 'con las cabeceras cambiadas', unlado: 'con los lados cambiados',
+};
+
+// Transforma todas las seleccionadas a la vez: cada una sobre su propio sitio (girar
+// sobre su centro, alargar desde su ancla), y todo o nada. Aquí ninguna se desplaza para
+// caber: mover una del grupo desbarataría su distancia con las demás.
+function confirmarRetiroDeFilas(configs) {
+  const retiradas = [];
+  for (const c of configs.filter((c) => c.tipo === 'filas' && c.geometria)) {
+    const claves = new Set(geometriaBloqueFilas(c).lugares.map((l) => c.id + '-' + (l.fila + 1) + '-' + (l.columna + 1)));
+    retiradas.push(...butacasVisibles().filter((b) => b.bloque === c.id && !claves.has(b.claveDiseno)));
+  }
+  return !retiradas.length || confirm('Se retirarán ' + retiradas.length + ' lugares: ' + retiradas.slice(0, 5).map((b) => b.id + ' (' + etiquetaDe(b) + ')').join('; ') + '. Sus IDs no se reutilizarán. ¿Continuar?');
+}
+
+function transformarPiezasActivas(accion) {
+  const t = TRANSFORMACIONES[accion];
+  const piezas = [...piezasActivas].map((id) => piezaPorId(id)).filter(Boolean);
+  const configs = [];
+  for (const m of piezas) {
+    const nueva = t.calcular(configDePieza(m));
+    if (!nueva) {
+      anunciar(m.nombre + ' ya tiene ' + (typeof t.tope === 'function' ? t.tope(m) : t.tope) + '.');
+      return;
+    }
+    configs.push(nueva);
+  }
+  if (!confirmarRetiroDeFilas(configs)) return;
+  const resultado = aplicarConfigs(planoEditable(), salaActual, configs);
+  if (resultado.motivo) {
+    anunciar('No se pudo: ' + resultado.motivo + '.');
+    return;
+  }
+  planos[tipoActual] = resultado.plano;
+  regenerar(plural(configs.length, 'pieza', 'piezas') + ' ' + HECHO_EN_GRUPO[accion] + '.' +
+            (resultado.dx || resultado.dy ? ' El grupo se desplazó para caber.' : ''));
+  const destino = capaPiezas.querySelector('[data-pieza="' + mesaActiva + '"]');
+  if (destino) destino.focus();
+}
+
+function transformarMesa(id, accion) {
+  const m = piezaPorId(id);
+  const t = TRANSFORMACIONES[accion];
+  const nueva = t.calcular(configDePieza(m));
+  if (!nueva) {
+    // 'tope' puede depender de la pieza (una mesa redonda cuenta lugares, no largo).
+    anunciar(m.nombre + ' ya tiene ' + (typeof t.tope === 'function' ? t.tope(m) : t.tope) + '.');
+    return;
+  }
+  if (!confirmarRetiroDeFilas([nueva])) return;
+  const colocada = colocarCerca(salaActual, celdasOcupadas(id), nueva);
+  if (colocada.motivo) {
+    anunciar(t.fallo(m) + ': ' + colocada.motivo + '.');
+    return;
+  }
+  reemplazarMesa(colocada);
+  regenerar('');
+  const despues = piezaPorId(id);
+  anunciar(despues.nombre + ' ' + t.hecho(despues) + ': ' + resumenDePieza(despues) + '.' +
+           posicionTexto(nueva, colocada));
+}
+
+// El camino que comparten las cuatro formas de agregar una pieza: el id y el contador de
+// su lista (de LISTAS_DE_PIEZAS, nunca a mano), el primer hueco libre y, si cabe, a su
+// lista y seleccionada. Lo unico propio de cada tipo es 'colocar', que recibe el hueco
+// encontrado y devuelve la pieza que se guarda; 'buscarCon' le deja volver a buscar con
+// otra configuracion, que es lo que necesita un bloque al girarse hacia el escenario.
+// Devuelve { id, sitio } o null si no cabia, y entonces ya lo ha dicho.
+function agregarPiezaNueva(prefijo, base, sinSitio, colocar = (sitio) => sitio) {
+  const plano = planoEditable();
+  const tipoDeLista = listaDeId(prefijo + '1');
+  const id = prefijo + (plano[tipoDeLista.contador] || 1);
+  const config = { id, x: 0, y: 0, ...base };
+  const ocupadas = celdasOcupadas(null);
+  const buscarCon = (extra) => buscarSitioLibre(salaActual, ocupadas, { ...config, ...extra });
+  const hueco = buscarCon({});
+  if (!hueco) {
+    anunciar(sinSitio);
+    return null;
+  }
+  const sitio = colocar(hueco, buscarCon);
+  nuevoIdDe(plano, tipoDeLista);
+  plano[tipoDeLista.lista] = [...(plano[tipoDeLista.lista] || []), sitio];
+  marcarActivas([id]);
+  return { id, sitio };
+}
+
+// Donde quedo, para el aviso.
+const columnaYFila = (sitio) => 'columna ' + sitio.x + ', fila ' + sitio.y;
+
+// Lleva a la vista la pieza recien agregada. Va despues de regenerar, que es cuando la
+// pieza existe con su huella calculada.
+function mostrarPiezaNueva(id) {
+  const p = piezaPorId(id);
+  if (p) asegurarVisible({ x: p.x, y: p.y, w: p.geo.ancho, h: p.geo.alto });
+}
+
+function agregarMesaNueva(estilo) {
+  const nueva = agregarPiezaNueva('M', { ...ESTILOS[estilo], giro: 0 },
+    'No hay sitio libre para otra mesa. Mueve o acorta alguna antes.');
+  if (!nueva) return;
+  regenerar('Mesa ' + nueva.id.slice(1) + (estilo === 'redonda' ? ' (redonda, 8 lugares)' : '') +
+            ' agregada en ' + columnaYFila(nueva.sitio) + '.');
+  mostrarPiezaNueva(nueva.id);
+}
+
+// Agrega un bloque de filas de 5 × 2 en el primer hueco libre, mirando al escenario.
+function agregarBloqueNuevo() {
+  // Sin zona: hereda la de la banda donde caiga (si no hay, regenerar le pone una).
+  const nueva = agregarPiezaNueva('F', { tipo: 'filas', ancho: 5, filas: 2, giro: 0 },
+    'No hay sitio libre para un bloque de 5 × 2. Haz espacio o agrega una zona de mesas.',
+    // Se orienta hacia el escenario desde donde cupo derecho y se vuelve a buscar con ese
+    // giro. Si girado no cabe en ningun sitio, se queda sin girar.
+    (hueco, buscarCon) => {
+      const giro = giroHaciaEscenario(hueco.x + 2.5, hueco.y + 1);
+      return (giro && buscarCon({ giro })) || hueco;
+    });
+  if (!nueva) return;
+  regenerar('Bloque ' + nueva.id.slice(1) + ' agregado en ' + columnaYFila(nueva.sitio) + '.');
+  mostrarPiezaNueva(nueva.id);
+}
+
+// Duplica una mesa o bloque junto al original; la copia queda activa.
+function duplicarPiezaPorId(id) {
+  const m = piezaPorId(id);
+  const plano = planoEditable();
+  const tipoDeLista = listaDeId(id);
+  const nuevoId = tipoDeLista.prefijo + (plano[tipoDeLista.contador] || 1);
+  const resultado = duplicarPieza(plano, salaActual, id);
+  if (resultado.motivo) {
+    anunciar('No se pudo duplicar ' + m.nombre + ': ' + resultado.motivo + '.');
+    return;
+  }
+  planos[tipoActual] = resultado;
+  marcarActivas([nuevoId]);
+  regenerar('');
+  const copia = piezaPorId(nuevoId);
+  anunciar(m.nombre + ' duplicad' + genero(m) + ': ' + copia.nombre + ' en columna ' + copia.x + ', fila ' + copia.y + '.');
+  asegurarVisible({ x: copia.x, y: copia.y, w: copia.geo.ancho, h: copia.geo.alto });
+}
+
+// Butaca suelta de la zona General en el primer hueco libre, mirando al escenario.
+function agregarButacaNueva() {
+  const nueva = agregarPiezaNueva('B', { tipo: 'butaca', giro: 0 },
+    'No hay sitio libre para otra butaca. Haz espacio o agrega un espacio.',
+    // Una butaca ocupa una celda, asi que girarla nunca la deja sin caber: no hay que
+    // volver a buscar, solo mirar al escenario desde donde quedo.
+    (hueco) => ({ ...hueco, giro: giroHaciaEscenario(hueco.x + 0.5, hueco.y + 0.5) }));
+  if (!nueva) return;
+  // La zona se dice despues de regenerar: es la que hereda de la banda donde cayo.
+  regenerar('');
+  anunciar('Butaca suelta ' + nueva.id.slice(1) + ' agregada en ' + columnaYFila(nueva.sitio) +
+           ', zona ' + zonas[piezaPorId(nueva.id).zonaEfectiva].nombre + '.');
+  mostrarPiezaNueva(nueva.id);
+}
+
+// Pista de baile (4 × 4) o barra (4 × 1) en el primer hueco libre.
+function agregarFormaNueva(forma) {
+  const { nombre, ancho, alto } = FORMAS[forma];
+  const nueva = agregarPiezaNueva('P', { tipo: 'forma', forma, ancho, alto },
+    'No hay sitio libre para ' + nombre.toLowerCase() + ' de ' + ancho + ' × ' + alto + ' celdas.');
+  if (!nueva) return;
+  regenerar(nombre + ' ' + nueva.id.slice(1) + ' agregada en ' + columnaYFila(nueva.sitio) + '.');
+  mostrarPiezaNueva(nueva.id);
+}
+
+// Las piezas que puede atrapar la marquesina: todo menos el escenario, que es único y
+// ni se duplica ni se elimina.
+const piezasDelPlano = () => [...mesas, ...bloquesFilas, ...formas, ...butacasSueltas];
+
+// Aplica la marquesina: lo que atrapa pasa a estar seleccionado (o se suma a lo que ya
+// había, con Ctrl). Un marco vacío sin Ctrl deselecciona.
+function aplicarMarco(marco, suma) {
+  const dentro = piezasEnMarco(piezasDelPlano(), marco);
+  const ids = suma ? [...new Set([...piezasActivas, ...dentro])] : dentro;
+  marcarActivas(ids);
+  // El foco va a la principal: así las flechas mueven el grupo sin tener que tabular.
+  const destino = mesaActiva && capaPiezas.querySelector('[data-pieza="' + mesaActiva + '"]');
+  if (destino) destino.focus({ preventScroll: true });
+  anunciar(ids.length ? plural(ids.length, 'pieza seleccionada', 'piezas seleccionadas') + '.'
+                      : 'Ninguna pieza seleccionada.');
+}
+
+// Duplicar y eliminar el grupo entero. Las copias quedan seleccionadas, como al
+// duplicar una sola.
+function duplicarPiezasActivas() {
+  const ids = [...piezasActivas];
+  const resultado = duplicarPiezas(planoEditable(), salaActual, ids);
+  if (resultado.motivo) {
+    anunciar('No se pudo duplicar: ' + resultado.motivo + '.');
+    return;
+  }
+  planos[tipoActual] = resultado.plano;
+  regenerar('');
+  marcarActivas(resultado.ids);
+  anunciar(plural(ids.length, 'pieza duplicada', 'piezas duplicadas') + '. Las copias quedan seleccionadas.');
+}
+
+function eliminarPiezasActivas() {
+  const ids = [...piezasActivas];
+  planos[tipoActual] = eliminarPiezas(planoEditable(), ids);
+  marcarActivas([]);
+  regenerar(plural(ids.length, 'pieza eliminada', 'piezas eliminadas') + '.');
+}
+
+// Mueve el grupo una celda: todas o ninguna.
+function moverPiezasActivas({ dx, dy, hacia }) {
+  const ids = [...piezasActivas];
+  const resultado = moverPiezas(planoEditable(), salaActual, ids, dx, dy);
+  if (resultado.motivo) {
+    anunciar('No se movieron: ' + resultado.motivo + ' hacia ' + hacia + '.');
+    return;
+  }
+  planos[tipoActual] = resultado;
+  regenerar(plural(ids.length, 'pieza movida', 'piezas movidas') + ' hacia ' + hacia + '.');
+  const destino = capaPiezas.querySelector('[data-pieza="' + mesaActiva + '"]');
+  if (destino) destino.focus();
+}
+
+function eliminarMesa(id) {
+  const m = piezaPorId(id);
+  const plano = planoEditable();
+  const { lista } = listaDeId(id);
+  plano[lista] = plano[lista].filter((c) => c.id !== id);
+  regenerar(m.nombre + ' eliminad' + genero(m) + '.');
+}
+
+// Aplica un cambio de piezas y lo deshace si la sala pasa del aforo maximo. Las
+// piezas se editan sobre el plano guardado, asi que se copia antes.
+function conTopeDeAforo(cambio) {
+  const previo = planos[tipoActual] && copiarPlano(planos[tipoActual]);
+  const activas = [...piezasActivas];
+  cambio();
+  const motivo = motivoDeAforo(butacas.length);
+  if (!motivo) return;
+  if (previo) planos[tipoActual] = previo;
+  else delete planos[tipoActual];
+  marcarActivas(activas);   // la seleccion vuelve a la de antes (no a una copia deshecha)
+  regenerar('No se pudo: ' + motivo + '.');
+}
+
+function ejecutarAccion(accion, id = mesaActiva) {
+  const pieza = id && piezaPorId(id);
+  if (!pieza) return;
+  if (piezasActivas.size > 1 && piezasActivas.has(id)) {
+    // Una acción de grupo solo se ofrece si todas la admiten (lo comprueba el panel).
+    const todas = [...piezasActivas].map((x) => piezaPorId(x)).filter(Boolean);
+    if (accion === 'eliminar') eliminarPiezasActivas();
+    else if (accion === 'duplicar') conTopeDeAforo(duplicarPiezasActivas);
+    else if (todas.every((p) => aplica(accion, p))) conTopeDeAforo(() => transformarPiezasActivas(accion));
+    else anunciar('Esa acción no la admiten todas las piezas seleccionadas.');
+    return;
+  }
+  if (!aplica(accion, pieza)) {
+    anunciar(esEscenario(pieza) ? 'El escenario no admite esa acción.'
+      : 'Esa acción no es para ' + { mesa: 'mesas', bloque: 'bloques de filas', forma: 'formas',
+                                     butaca: 'butacas sueltas' }[tipoDePieza(pieza)] + '.');
+    return;
+  }
+  if (accion === 'eliminar') eliminarMesa(id);
+  else if (accion === 'duplicar') conTopeDeAforo(() => duplicarPiezaPorId(id));
+  else conTopeDeAforo(() => transformarMesa(id, accion));
+}
+
+// La zona de una pieza con butacas. Vacia es heredar la de su banda: se quita la propia.
+document.getElementById('zona-pieza').addEventListener('change', (e) => {
+  if (e.target.value === 'mezcla') return;
+  if (piezasActivas.size > 1) {
+    const ids = [...piezasActivas];
+    planos[tipoActual] = cambiarZonaDePiezas(planoEditable(), ids, e.target.value);
+    regenerar('');
+    const zona = zonas[e.target.value];
+    anunciar(plural(ids.length, 'pieza', 'piezas') +
+             (zona ? ' a la zona ' + zona.nombre + '.'
+                   : ' heredan la zona de su banda.'));
+    return;
+  }
+  const pieza = piezaPorId(mesaActiva);
+  if (!pieza || esForma(pieza) || esEscenario(pieza)) return;
+  planos[tipoActual] = cambiarZonaDePiezas(planoEditable(), [pieza.id], e.target.value);
+  regenerar('');
+  const despues = piezaPorId(pieza.id);
+  const zona = zonas[e.target.value] || zonas[zonaEnCelda(salaActual, despues.x, despues.y)];
+  anunciar(pieza.nombre + (e.target.value ? ' pasa a la zona ' : ' hereda la zona de su banda: ') +
+           zona.nombre + '.');
+});
+function aplicarNombreDeBloque() {
+  const b = piezaPorId(mesaActiva);
+  if (!esBloqueFilas(b) && !esForma(b)) return;
+  const nombre = document.getElementById('nombre-pieza').value.trim().slice(0, 40);
+  if (nombre === (b.nombrePropio || '')) return;
+  const cambio = { ...configDePieza(b) };
+  if (nombre) cambio.nombre = nombre;
+  else delete cambio.nombre;
+  reemplazarMesa(cambio);
+  regenerar(nombre ? b.nombre + ' se llama ahora «' + nombre + '».' : b.nombre + ' vuelve a su nombre por defecto.');
+}
+document.getElementById('nombre-pieza').addEventListener('change', aplicarNombreDeBloque);
+document.getElementById('nombre-pieza').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') aplicarNombreDeBloque();
+});
+
+// ---------------------------------------------------------------------------
+// Tooltip de los botones de icono. Un solo elemento con position: fixed, para que el
+// scroll de los laterales no lo recorte. Se muestra al pasar el raton (tambien sobre
+// botones desactivados, que no reciben eventos: por eso elementFromPoint) o al llegar
+// con Tab. Va a la derecha del control; si no cabe, a la izquierda o debajo.
+// ---------------------------------------------------------------------------
+const tooltip = document.createElement('div');
+tooltip.className = 'tooltip';
+tooltip.setAttribute('aria-hidden', 'true');   // el nombre ya esta en aria-label
+tooltip.hidden = true;
+document.body.appendChild(tooltip);
+let conTooltip = null;
+
+function mostrarTooltip(elemento) {
+  conTooltip = elemento;
+  tooltip.textContent = elemento.dataset.tooltip;
+  tooltip.hidden = false;
+  const r = elemento.getBoundingClientRect();
+  const t = tooltip.getBoundingClientRect();
+  let x = r.right + 8, y = r.top + (r.height - t.height) / 2;
+  if (x + t.width > innerWidth - 4) x = r.left - 8 - t.width;
+  if (x < 4) {
+    x = Math.min(Math.max(4, r.left + (r.width - t.width) / 2), innerWidth - t.width - 4);
+    y = r.bottom + 6;
+  }
+  tooltip.style.left = Math.round(x) + 'px';
+  tooltip.style.top = Math.round(Math.max(4, y)) + 'px';
+}
+function ocultarTooltip() {
+  conTooltip = null;
+  tooltip.hidden = true;
+}
+document.addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'touch') return;
+  const debajo = document.elementFromPoint(e.clientX, e.clientY);
+  const elemento = debajo && debajo.closest('[data-tooltip]');
+  if (elemento === conTooltip) return;
+  if (elemento) mostrarTooltip(elemento);
+  else ocultarTooltip();
+});
+document.addEventListener('focusin', (e) => {
+  const elemento = e.target.closest('[data-tooltip]');
+  if (elemento && e.target.matches(':focus-visible')) mostrarTooltip(elemento);
+  else ocultarTooltip();
+});
+document.addEventListener('focusout', ocultarTooltip);
+document.addEventListener('pointerdown', ocultarTooltip);
+document.addEventListener('scroll', ocultarTooltip, true);
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  ocultarTooltip();
+  // Si el foco estaba en las hojas de informacion, vuelve a su boton al cerrarlas.
+  if (hojasInfo.contains(document.activeElement)) document.getElementById('boton-info').focus();
+  cerrarPlegables();
+});
+
+// Ctrl+D (Cmd+D en Mac) duplica lo seleccionado: la banda o, si no, la pieza activa.
+// En los campos de texto de fuera del panel de bandas no se intercepta.
+document.addEventListener('keydown', (e) => {
+  if (modo !== 'editor' || !(e.ctrlKey || e.metaKey) || e.altKey || e.key.toLowerCase() !== 'd') return;
+  if (e.target.closest && e.target.closest('input, select, textarea') && !listaBandas.contains(e.target)) return;
+  if (bandaActiva) {
+    e.preventDefault();
+    duplicarBandaPorId(bandaActiva);
+  } else if (mesaActiva) {
+    e.preventDefault();
+    const enPlano = svg.contains(document.activeElement);
+    ejecutarAccion('duplicar');
+    const destino = enPlano && capaPiezas.querySelector('[data-pieza="' + mesaActiva + '"]');
+    if (destino) destino.focus();
+  }
+});
+
+const ATAJOS = {
+  r: 'girar', R: 'girar',
+  '+': 'alargar', '=': 'alargar',
+  '-': 'acortar',
+  c: 'cabeceras', C: 'cabeceras',
+  u: 'unlado', U: 'unlado',
+  ']': 'masfilas', '[': 'menosfilas',
+  Delete: 'eliminar', Backspace: 'eliminar',
+};
+
+const PISTAS = {
+  zona: 'Elige una zona y haz clic en una butaca, o Enter sobre ella, para asignársela · otro clic la ' +
+        'devuelve a su zona · arrastra para pintar un área entera, con Alt para devolverla a su zona · ' +
+        'con teclado, Mayús y flechas extienden el área y Enter la aplica · el plano se mueve con la barra ' +
+        'espaciadora, el botón central o dos dedos · las marcadas con la palomita ya son de la zona elegida',
+  bloquear: 'Haz clic en una butaca, o Enter sobre ella, para bloquearla o desbloquearla · arrastra para ' +
+            'bloquear un área entera, con Alt para desbloquearla · con teclado, Mayús y flechas extienden ' +
+            'el área y Enter la aplica · el plano se mueve con la barra espaciadora, el botón central o ' +
+            'dos dedos · las bloqueadas se guardan con el mapa',
+  vista: 'Rueda o pellizco para acercar · arrastra para mover · flechas para recorrer',
+  editor: 'Arrastra el escenario, una mesa, un bloque, una butaca o una forma para moverlo · con teclado, Tab ' +
+          'hasta la pieza: flechas la mueven, R la gira, + y − cambian su largo (o ancho), ] y [ agregan o ' +
+          'quitan filas (o alto, en el escenario y las formas), C pone o quita cabeceras, U alterna uno o dos ' +
+          'lados (en una mesa redonda, + y − quitan y ponen lugares), Ctrl+D la duplica, Supr la elimina · Esc cancela un arrastre · clic en el fondo ' +
+          'selecciona una banda (otro clic, la que la contiene) y Ctrl+D la duplica · doble clic en ' +
+          'un subtítulo para renombrar su banda · arrastra el fondo para seleccionar varias piezas (Ctrl ' +
+          'para sumarlas) y Ctrl+clic para meter o sacar una · arrastra el tirador de la esquina de un espacio o de ' +
+          'una zona de mesas para cambiar su alto (y su ancho, si está en una banda vertical), o el ' +
+          'borde entre verticales para repartir las columnas',
+};
+
+function cambiarModo(nuevo) {
+  if (eventoConectado && nuevo === 'editor') { anunciar('La compra utiliza una revisión fija. Abre el editor fuera del evento.'); return; }
+  if (nuevo === 'editor' && TIPOS_DE_SALA[tipoActual].revisionFisica?.estado === 'publicada') {
+    anunciar('Esta revisión está publicada. Crea una nueva revisión en borrador para editar.'); return;
+  }
+  if (nuevo === modo) return;
+  if (arrastreMesa) terminarArrastreMesa(false);
+  limpiarArea();
+  modo = nuevo;
+  const editando = modo === 'editor';
+  svg.classList.toggle('editando', editando);
+  document.getElementById('modo-vista').setAttribute('aria-pressed', String(!editando));
+  document.getElementById('modo-editor').setAttribute('aria-pressed', String(editando));
+  document.getElementById('herramientas-editor').hidden = !editando;
+  document.getElementById('lateral-configuracion').hidden = !editando;
+  document.getElementById('app').classList.toggle('editando', editando);
+  document.getElementById('panel-bandas').hidden = !editando;
+  // El tipo de sala se ve siempre (es como se cambia de recinto o se abre un mapa
+  // guardado); el resto del grupo Mapa, solo al editar.
+  document.getElementById('grupo-mapa').hidden = !editando;
+  document.getElementById('pista').textContent = PISTAS[modo];
+  document.getElementById('herramienta-numeracion').setAttribute('aria-pressed', 'false');
+  document.getElementById('herramienta-ajustar').setAttribute('aria-pressed', 'false');
+  herramienta = 'mesas';
+  seleccionFisica.clear();
+  svg.classList.remove('bloqueando', 'pintando', 'numerando');
+  document.getElementById('herramienta-bloquear').setAttribute('aria-pressed', 'false');
+  document.getElementById('herramienta-zona').setAttribute('aria-pressed', 'false');
+  document.getElementById('pincel-zona').hidden = true;
+  actualizarAccesoButacas();
+  marcarActivas([]);
+  bandaActiva = null;
+  dibujarTodo();
+  actualizarControles();
+  anunciar(editando
+    ? 'Modo editor: arrastra las mesas para colocarlas.'
+    : 'Previsualización: el plano como lo verá quien compra.');
+  // La pista y los laterales cambian el hueco del plano: se vuelve a ajustar.
+  reencuadrar();
+}
+
+// Colocando mesas, las butacas son decorado y el lector de pantalla recorre mesas.
+// Bloqueando, o en la previsualizacion, las butacas son lo que se recorre.
+function actualizarAccesoButacas() {
+  if (modo === 'editor' && !conButacas()) capaButacas.setAttribute('aria-hidden', 'true');
+  else capaButacas.removeAttribute('aria-hidden');
+}
+
+function cambiarHerramienta(nueva) {
+  if (arrastreMesa) terminarArrastreMesa(false);
+  limpiarArea();
+  herramienta = nueva;
+  const bloqueando = herramienta === 'bloquear';
+  const pintando = herramienta === 'zona';
+  svg.classList.toggle('numerando', ['numeracion', 'ajustar', 'fisica'].includes(herramienta));
+  document.getElementById('herramienta-fisica').setAttribute('aria-pressed', String(herramienta === 'fisica'));
+  document.getElementById('herramienta-numeracion').setAttribute('aria-pressed', String(herramienta === 'numeracion'));
+  document.getElementById('herramienta-ajustar').setAttribute('aria-pressed', String(herramienta === 'ajustar'));
+  svg.classList.toggle('bloqueando', bloqueando);
+  svg.classList.toggle('pintando', pintando);
+  document.getElementById('herramienta-bloquear').setAttribute('aria-pressed', String(bloqueando));
+  document.getElementById('herramienta-zona').setAttribute('aria-pressed', String(pintando));
+  document.getElementById('pincel-zona').hidden = !pintando;
+  if (pintando) llenarPincel();
+  document.getElementById('pista').textContent = herramienta === 'numeracion'
+    ? 'Haz clic en un lugar o pulsa Enter para editar su etiqueta oficial. Las flechas recorren los lugares.'
+    : herramienta === 'fisica' ? 'Haz clic o pulsa Enter para añadir o quitar un lugar de la selección física; después aplica la pertenencia.'
+    : herramienta === 'ajustar' ? 'Haz clic o pulsa Enter en una butaca de bloque libre para ajustar su posición y orientación.'
+    : PISTAS[bloqueando ? 'bloquear' : pintando ? 'zona' : modo];
+  actualizarAccesoButacas();
+  marcarActivas([]);
+  bandaActiva = null;
+  dibujarTodo();
+  actualizarControles();
+  anunciar(bloqueando
+    ? 'Bloquear butacas: haz clic en una butaca para bloquearla o desbloquearla.'
+    : pintando
+    ? 'Asignar zona: elige la zona y haz clic en las butacas. Las marcadas con la palomita ya son de esa zona.'
+    : herramienta === 'fisica' ? 'Seleccionar lugares para asignar su pertenencia física; la selección de compra se conserva.'
+    : 'Colocar mesas.');
+}
+
+function alternarBloqueo(elemento) {
+  const b = porNodo(elemento);
+  if (!b) return;
+  if (b.estado === 'ocupada') {
+    anunciar(etiquetaDe(b) + ' está ocupada: no se puede bloquear.');
+    return;
+  }
+  planos[tipoActual] = alternarBloqueada(planoEditable(), b.id);
+  const bloqueada = planos[tipoActual].bloqueadas.includes(b.id);
+  regenerar(etiquetaDe(b) + (bloqueada ? ' bloqueada.' : ' desbloqueada.'));
+  // El DOM se rehizo: el foco vuelve a la misma butaca.
+  const nueva = porId.get(b.id);
+  if (nueva) nueva.nodo.focus({ preventScroll: true });
+}
+
+document.getElementById('herramienta-bloquear').addEventListener('click', () =>
+  cambiarHerramienta(herramienta === 'bloquear' ? 'mesas' : 'bloquear'));
+document.getElementById('herramienta-zona').addEventListener('click', () =>
+  cambiarHerramienta(herramienta === 'zona' ? 'mesas' : 'zona'));
+
+// Las opciones del pincel: todas las zonas fisicas de la sala. Conserva la
+// elegida si sigue existiendo; si no, General o la primera.
+function llenarPincel() {
+  const select = document.getElementById('zona-pincel');
+  const antes = select.value;
+  select.textContent = '';
+  for (const [id, { nombre }] of Object.entries(zonas)) select.appendChild(new Option(nombre, id));
+  select.value = zonas[antes] ? antes : zonas.general ? 'general' : Object.keys(zonas)[0];
+}
+document.getElementById('zona-pincel').addEventListener('change', () => {
+  dibujarTodo();
+  anunciar('Pincel: ' + zonas[document.getElementById('zona-pincel').value].nombre + '.');
+});
+
+// Toca una butaca con el pincel: pasa a la zona elegida, o vuelve a la suya si ya lo era.
+function pintarZona(elemento) {
+  const b = porNodo(elemento);
+  if (!b) return;
+  if (b.estado === 'ocupada') {
+    anunciar(etiquetaDe(b) + ' está ocupada: no cambia de zona.');
+    return;
+  }
+  const pincel = document.getElementById('zona-pincel').value;
+  const zona = b.zona === pincel ? b.zonaOriginal : pincel;
+  planos[tipoActual] = asignarZonaAsiento(planoEditable(), b.id, zona, b.zonaOriginal);
+  regenerar('');
+  const nueva = porId.get(b.id);
+  anunciar(etiquetaDe(nueva) + ': zona ' + zonas[nueva.zona].nombre +
+           (nueva.zona === nueva.zonaOriginal ? ' (la de siempre).' : '.'));
+  if (nueva) nueva.nodo.focus({ preventScroll: true });
+}
+
+// ---------------------------------------------------------------------------
+// Tiradores en el plano.
+//
+// Se dibujan solo colocando piezas (con las herramientas de butacas el plano es
+// otra cosa). El gesto no aplica nada hasta soltar: mientras se arrastra solo se
+// ve el fantasma del tamaño nuevo, y al soltar pasa por aplicarBandas, que es
+// quien comprueba que todo siga cabiendo.
+// ---------------------------------------------------------------------------
+const capaTiradores = document.getElementById('tiradores');
+const capaFantasma = document.getElementById('fantasma');
+const LADO_TIRADOR = 4;   // en unidades del viewBox: un tercio de celda
+
+let arrastreTirador = null;
+
+function dibujarTiradores() {
+  capaTiradores.textContent = '';
+  if (modo !== 'editor' || conButacas()) return;
+  for (const t of tiradoresDeSala(salaActual)) {
+    if (t.tipo === 'borde') {
+      const agarre = nodo('rect', { class: 'tirador borde', x: t.x * PASO - 1.5, y: t.y * PASO,
+                                    width: 3, height: t.alto * PASO, rx: 1 });
+      agarre.dataset.tirador = 'borde';
+      agarre.dataset.vertical = t.vertical;
+      agarre.setAttribute('aria-hidden', 'true');
+      capaTiradores.appendChild(agarre);
+      continue;
+    }
+    const agarre = nodo('rect', { class: 'tirador esquina' + (t.vertical ? '' : ' solo-alto'),
+                                  x: t.x * PASO - LADO_TIRADOR, y: t.y * PASO - LADO_TIRADOR,
+                                  width: LADO_TIRADOR, height: LADO_TIRADOR, rx: 1 });
+    agarre.dataset.tirador = 'esquina';
+    agarre.dataset.banda = t.banda;
+    if (t.vertical) agarre.dataset.vertical = t.vertical;
+    agarre.setAttribute('aria-hidden', 'true');
+    capaTiradores.appendChild(agarre);
+  }
+}
+
+// El tamaño que tendría al soltar, en celdas, a partir de la celda bajo el puntero.
+function medidasDeTirador(e, gesto = arrastreTirador) {
+  const { banda, vertical, tipo } = gesto;
+  const celda = celdaBajo(e);
+  const medidas = {};
+  if (tipo === 'esquina') {
+    const b = bandaDe(salaActual, banda);
+    medidas.alto = Math.min(ALTO_MAXIMO, Math.max(1, celda.y - b.y + 1));
+  }
+  if (vertical) {
+    const v = bandaDe(salaActual, vertical);
+    // El tope es dejarle al menos una columna a la ultima vertical, que ocupa el resto:
+    // asi el fantasma nunca ensena un tamano que al soltar se iba a rechazar.
+    const u = ubicar(salaActual.bandas, vertical);
+    const franja = bandaDe(salaActual, u.padre.id);
+    const otras = u.lista.slice(0, -1).reduce((s, x, i) => s + (i === u.indice ? 0 : x.anchoOcupado), 0);
+    const maximo = Math.max(1, franja.anchoOcupado - otras - 1);
+    medidas.ancho = Math.min(maximo, Math.max(1, celda.x - v.x + 1));
+  }
+  return medidas;
+}
+
+function dibujarFantasma(medidas, gesto = arrastreTirador) {
+  capaFantasma.textContent = '';
+  if (!medidas || !gesto) return;
+  const { banda, vertical, tipo } = gesto;
+  const base = bandaDe(salaActual, tipo === 'esquina' ? banda : vertical);
+  const v = vertical && bandaDe(salaActual, vertical);
+  const x = tipo === 'esquina' && vertical ? v.x : base.x;
+  const ancho = medidas.ancho !== undefined ? medidas.ancho : base.anchoOcupado;
+  const alto = medidas.alto !== undefined ? medidas.alto : base.alto;
+  capaFantasma.appendChild(nodo('rect', { x: x * PASO, y: base.y * PASO,
+                                          width: ancho * PASO, height: alto * PASO, rx: 2 }));
+  const etiqueta = texto('', x * PASO + (ancho * PASO) / 2, base.y * PASO - 2,
+                         ancho + ' × ' + alto + (tipo === 'borde' ? ' columnas' : ''));
+  etiqueta.setAttribute('text-anchor', 'middle');
+  capaFantasma.appendChild(etiqueta);
+}
+
+function terminarArrastreTirador(aplicar, e) {
+  const gesto = arrastreTirador;
+  arrastreTirador = null;
+  capaFantasma.textContent = '';
+  if (!gesto) return;
+  if (!aplicar) {
+    dibujarTiradores();
+    return;
+  }
+  const medidas = e ? medidasDeTirador(e, gesto) : {};
+  const base = bandaDe(salaActual, gesto.tipo === 'esquina' ? gesto.banda : gesto.vertical);
+  const v = gesto.vertical && bandaDe(salaActual, gesto.vertical);
+  const mismoAlto = medidas.alto === undefined || !base || medidas.alto === base.alto;
+  const mismoAncho = medidas.ancho === undefined || !v || medidas.ancho === v.anchoOcupado;
+  if (mismoAlto && mismoAncho) {
+    // Sin cambio de medidas, el gesto vale como clic: selecciona su banda.
+    marcarBandaActiva(gesto.banda || gesto.vertical);
+    anunciar(base.nombre + ' seleccionada.');
+    return;
+  }
+  const nombre = base.nombre;
+  aplicarBandas(redimensionarConTirador(planoEditable(), salaActual, {
+    banda: gesto.banda, vertical: gesto.vertical,
+    ...(mismoAlto ? {} : { alto: medidas.alto }),
+    ...(mismoAncho ? {} : { ancho: medidas.ancho }),
+  }), nombre + ': ' + [mismoAncho ? '' : plural(medidas.ancho, 'columna', 'columnas'),
+                       mismoAlto ? '' : plural(medidas.alto, 'fila', 'filas') + ' de alto'].filter(Boolean).join(' y ') + '.');
+}
+
+// ---------------------------------------------------------------------------
+// Pintar y bloquear por area.
+//
+// Con una herramienta de butacas, arrastrar por el plano dibuja un rectangulo y
+// al soltar se aplica a todo lo que abarca; con Alt se deshace (vuelve a su zona
+// de siempre, o desbloquea). Con el teclado, Mayus y las flechas lo extienden
+// desde la butaca enfocada y Enter lo aplica.
+//
+// Mientras se pinta, el arrastre deja de mover el plano: para eso estan la barra
+// espaciadora, el boton central del raton y, en tactil, dos dedos.
+// ---------------------------------------------------------------------------
+let areaTeclado = null;   // { desde, hasta } en celdas, mientras se extiende con Mayus
+
+// Las butacas de un area que la operacion puede tocar (las ocupadas nunca).
+const libresEnArea = (area) => butacasEnArea(butacasVisibles(), area).filter((b) => b.estado !== 'ocupada');
+
+// 'etiqueta' cambia el conteo: con las herramientas de butacas son las butacas que
+// abarca, y con la marquesina de piezas, las piezas.
+function dibujarArea(area, quitando = false, etiqueta = null) {
+  capaArea.textContent = '';
+  capaArea.classList.toggle('quitando', Boolean(quitando));
+  if (!area) return;
+  const ancho = (area.x2 - area.x1 + 1) * PASO, alto = (area.y2 - area.y1 + 1) * PASO;
+  capaArea.appendChild(nodo('rect', { x: area.x1 * PASO, y: area.y1 * PASO, width: ancho, height: alto, rx: 2 }));
+  const cuantas = etiqueta || libresEnArea(area).length;
+  if (!cuantas) return;
+  // El conteo va debajo del rectangulo, y encima si el area llega al borde de la sala:
+  // ahi abajo se saldria del plano.
+  const y = area.y2 + 1 >= salaActual.alto ? area.y1 * PASO - 2 : area.y1 * PASO + alto + 4;
+  const rotulo = texto('', area.x1 * PASO + ancho / 2, y,
+                       etiqueta || plural(cuantas, 'butaca', 'butacas'));
+  rotulo.setAttribute('text-anchor', 'middle');
+  capaArea.appendChild(rotulo);
+}
+
+// Aplica el area con la herramienta activa. 'devolver' es lo que hace Alt: la zona
+// de siempre, o desbloquear.
+function aplicarArea(area, devolver) {
+  const plano = planoEditable();
+  const pincel = document.getElementById('zona-pincel').value;
+  const pintando = herramienta === 'zona';
+  const resultado = pintando
+    ? asignarZonaEnArea(plano, butacasVisibles(), area, devolver ? '' : pincel)
+    : bloquearEnArea(plano, butacasVisibles(), area, !devolver);
+  const { cambiadas, ocupadas } = resultado;
+  if (!cambiadas.length && !ocupadas.length) {
+    anunciar('El área no tiene butacas.');
+    return;
+  }
+  planos[tipoActual] = resultado.plano;
+  const zona = pintando && !devolver && zonas[pincel];
+  // El participio concuerda: «1 butaca bloqueada», no «1 butaca bloqueadas».
+  const una = cambiadas.length === 1;
+  regenerar(!cambiadas.length ? 'Ninguna butaca del área cambió.'
+    : plural(cambiadas.length, 'butaca', 'butacas') + (pintando
+      ? (zona ? ' a la zona ' + zona.nombre + '.' : ' de vuelta a su zona de siempre.')
+      : (devolver ? (una ? ' desbloqueada.' : ' desbloqueadas.')
+                  : (una ? ' bloqueada.' : ' bloqueadas.'))));
+  const aviso = document.getElementById('aviso');
+  aviso.textContent = [aviso.textContent,
+    ocupadas.length ? plural(ocupadas.length, 'butaca ocupada', 'butacas ocupadas') + ' del área no cambiaron.' : '',
+    resultado.mesas && resultado.mesas.length
+      ? 'Se venden completas y quedan con lugares de más de una zona: ' + resultado.mesas.join(', ') + '.' : '',
+  ].filter(Boolean).join(' ');
+}
+
+// Extiende el area con el teclado desde la butaca enfocada y mueve el foco.
+function extenderArea(elemento, flecha) {
+  const desde = porNodo(elemento);
+  if (!desde) return;
+  if (!areaTeclado) areaTeclado = { desde: { x: desde.x, y: desde.y } };
+  moverFoco(elemento, flecha.dx, flecha.dy);
+  const hasta = porNodo(document.activeElement.closest('.butaca') || elemento);
+  areaTeclado.hasta = { x: hasta.x, y: hasta.y };
+  const area = areaDeCeldas(areaTeclado.desde, areaTeclado.hasta);
+  dibujarArea(area);
+  anunciar(plural(libresEnArea(area).length, 'butaca', 'butacas') + ' en el área. Enter para aplicar, Alt+Enter para deshacer.');
+}
+
+function limpiarArea() {
+  areaTeclado = null;
+  dibujarArea(null);
+}
+
+document.getElementById('modo-vista').addEventListener('click', () => cambiarModo('vista'));
+document.getElementById('modo-editor').addEventListener('click', () => cambiarModo('editor'));
+document.getElementById('deshacer').addEventListener('click', () => restaurarEdicion('deshacer'));
+document.getElementById('rehacer').addEventListener('click', () => restaurarEdicion('rehacer'));
+document.addEventListener('keydown', (e) => {
+  if (modo !== 'editor' || !(e.ctrlKey || e.metaKey) || e.altKey ||
+      e.target.closest('input, textarea, select, [contenteditable]')) return;
+  const tecla = e.key.toLowerCase();
+  const accion = tecla === 'z' ? (e.shiftKey ? 'rehacer' : 'deshacer')
+    : tecla === 'y' && !e.shiftKey ? 'rehacer' : null;
+  if (!accion) return;
+  e.preventDefault();
+  restaurarEdicion(accion);
+});
+document.getElementById('restablecer').addEventListener('click', () => {
+  if (historiales[tipoActual].tieneCambios() &&
+      !confirm('Hay cambios sin guardar en este plano. ¿Restablecerlo? Puedes deshacer esta acción.')) return;
+  delete planos[tipoActual];
+  marcarActivas([]);
+  bandaActiva = null;
+  regenerar('Sala restablecida: bandas y mesas como en su tipo.');
+  calcularEncuadre();
+});
+// Sin escenario, las filas miran hacia arriba y se numeran desde la de mas arriba.
+document.getElementById('alternar-escenario').addEventListener('click', () => {
+  if (!escenario.ausente) {
+    planos[tipoActual] = quitarEscenario(planoEditable());
+    regenerar('Escenario quitado: las filas miran hacia arriba y la fila A es la de más arriba de cada zona.');
+    return;
+  }
+  const resultado = agregarEscenario(planoEditable(), salaActual);
+  if (resultado.motivo) {
+    anunciar('No se pudo agregar el escenario: ' + resultado.motivo + '.');
+    return;
+  }
+  planos[tipoActual] = resultado;
+  marcarActivas(['escenario']);
+  regenerar('');
+  anunciar('Escenario agregado en columna ' + escenario.x + ', fila ' + escenario.y + ', de ' +
+           escenario.ancho + ' × ' + escenario.alto + ' celdas. Arrástralo o cambia su tamaño.');
+  asegurarVisible({ x: escenario.x, y: escenario.y, w: escenario.ancho, h: escenario.alto });
+});
+document.getElementById('agregar-lados').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('lados')));
+document.getElementById('agregar-cruz').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('cruz')));
+document.getElementById('agregar-barra').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('barra')));
+document.getElementById('agregar-redonda').addEventListener('click', () => conTopeDeAforo(() => agregarMesaNueva('redonda')));
+document.getElementById('agregar-bloque').addEventListener('click', () => conTopeDeAforo(agregarBloqueNuevo));
+document.getElementById('agregar-butaca').addEventListener('click', () => conTopeDeAforo(agregarButacaNueva));
+document.getElementById('agregar-pista').addEventListener('click', () => agregarFormaNueva('pista'));
+document.getElementById('agregar-forma-barra').addEventListener('click', () => agregarFormaNueva('barra'));
+for (const boton of botonesDeMesa()) {
+  boton.addEventListener('click', () => ejecutarAccion(boton.dataset.accion));
+}
+
+const vistasDeNiveles = Object.create(null);
+function cambiarNivelVista(id) {
+  const plano = planoEditable();
+  const clave = tipoActual + ':' + salaActual.nivel;
+  vistasDeNiveles[clave] = { ...vista };
+  const nuevo = cambiarNivelPlano(plano, id);
+  if (nuevo.motivo) { anunciar(nuevo.motivo); return; }
+  if (arrastreMesa) terminarArrastreMesa(false);
+  limpiarArea(); marcarActivas([]); bandaActiva = null;
+  seleccionFisica.clear();
+  planos[tipoActual] = nuevo;
+  salaActual = generarPlano(tipoActual, nuevo);
+  dibujarTodo(); actualizarResumen(); actualizarAforo(salaActual); actualizarControles();
+  reencuadrar();
+  const anterior = vistasDeNiveles[tipoActual + ':' + id];
+  if (anterior) { Object.assign(vista, anterior); aplicarVista(); }
+  historiales[tipoActual]?.actualizarActual(fotoDelPlano()); actualizarEstadoEdicion();
+  anunciar('Nivel ' + salaActual.niveles.find((n) => n.id === id).nombre + '. Se conserva la selección de todo el recinto.');
+}
+document.getElementById('nivel-vista').addEventListener('change', (e) => cambiarNivelVista(e.target.value));
+document.getElementById('agregar-nivel').addEventListener('click', () => {
+  const nuevo = agregarNivel(planoEditable(), document.getElementById('nombre-nivel').value);
+  if (nuevo.motivo) { anunciar(nuevo.motivo); return; }
+  planos[tipoActual] = nuevo; marcarActivas([]); limpiarArea(); regenerar('Nivel agregado.'); reencuadrar();
+});
+document.getElementById('renombrar-nivel').addEventListener('click', () => {
+  const nuevo = renombrarNivel(planoEditable(), salaActual.nivel, document.getElementById('nombre-nivel').value);
+  if (nuevo.motivo) { anunciar(nuevo.motivo); return; }
+  planos[tipoActual] = nuevo; regenerar('Nivel renombrado.');
+});
+document.getElementById('eliminar-nivel').addEventListener('click', () => {
+  const afectados = butacasVisibles();
+  if (afectados.length && !confirm('Se retirarán ' + afectados.length + ' lugares de este nivel: ' + afectados.slice(0, 5).map(etiquetaDe).join('; ') + '. ¿Eliminarlo?')) return;
+  const nuevo = eliminarNivel(planoEditable(), salaActual.nivel);
+  if (nuevo.motivo) { anunciar(nuevo.motivo); return; }
+  planos[tipoActual] = nuevo; marcarActivas([]); limpiarArea(); regenerar('Nivel eliminado; sus IDs quedan retirados.'); reencuadrar();
+});
+
+function actualizarControlesGeometria() {
+  if (!salaActual) return;
+  const plano = planos[tipoActual] || TIPOS_DE_SALA[tipoActual];
+  const selectorNivel = document.getElementById('nivel-vista');
+  selectorNivel.textContent = '';
+  for (const n of salaActual.niveles) selectorNivel.appendChild(new Option(n.nombre, n.id));
+  selectorNivel.value = salaActual.nivel;
+  document.getElementById('eliminar-nivel').disabled = salaActual.niveles.length === 1;
+  const p = piezaPorId(mesaActiva);
+  const bloque = piezasActivas.size === 1 && esBloqueFilas(p) ? p : null;
+  const g = { ...geometriaInicial(), ...bloque?.geometria };
+  for (const campo of document.getElementById('formulario-geometria').elements) campo.disabled = !bloque;
+  for (const [k,v] of Object.entries(g)) document.getElementById('geometria-' + k).value = v;
+  for (const k of ['x','y','giro']) document.getElementById('geometria-' + k).value = bloque?.[k] ?? 0;
+  const regionBloque = document.getElementById('geometria-region');
+  regionBloque.textContent = ''; regionBloque.appendChild(new Option('Sin región', ''));
+  const regionActiva = document.getElementById('region-activa');
+  const activa = regionActiva.value;
+  regionActiva.textContent = '';
+  for (const r of plano.regionesLibres || []) { regionBloque.appendChild(new Option(r.nombre,r.id)); regionActiva.appendChild(new Option(r.nombre,r.id)); }
+  regionBloque.value = bloque?.region || '';
+  if ([...regionActiva.options].some((o) => o.value === activa)) regionActiva.value = activa;
+  llenarRegionActiva();
+  document.getElementById('herramienta-ajustar').disabled = !bloque?.geometria && herramienta !== 'ajustar';
+  const existe = butacasVisibles().some((b) => b.id === document.getElementById('id-lugar-ajuste').value && b.bloque);
+  for (const campo of document.getElementById('formulario-ajuste').elements) campo.disabled = !existe;
+}
+function llenarRegionActiva() {
+  const r = planos[tipoActual]?.regionesLibres?.find((r) => r.id === document.getElementById('region-activa').value);
+  for (const campo of document.getElementById('formulario-region').elements) campo.disabled = !r;
+  document.getElementById('eliminar-region').disabled = !r;
+  if (!r) return;
+  document.getElementById('nombre-region').value = r.nombre;
+  for (const k of ['x','y','ancho','alto','giro']) document.getElementById('region-' + k).value = r[k];
+}
+document.getElementById('region-activa').addEventListener('change', llenarRegionActiva);
+document.getElementById('agregar-region').addEventListener('click', () => {
+  const nuevo = agregarRegion(planoEditable(), document.getElementById('nombre-region').value || 'Región ' + (planoEditable().siguienteRegion || 1));
+  if (nuevo.motivo) { anunciar(nuevo.motivo); return; }
+  planos[tipoActual] = nuevo; regenerar('Región agregada.');
+  document.getElementById('region-activa').value = nuevo.regionesLibres.at(-1).id; llenarRegionActiva();
+});
+document.getElementById('formulario-region').addEventListener('submit', (e) => {
+  e.preventDefault(); const valores = { nombre: document.getElementById('nombre-region').value };
+  for (const k of ['x','y','ancho','alto','giro']) valores[k] = Number(document.getElementById('region-' + k).value);
+  const nuevo = cambiarRegion(planoEditable(), salaActual, document.getElementById('region-activa').value, valores);
+  if (nuevo.motivo) { anunciar('No se cambió la región: ' + nuevo.motivo); return; }
+  planos[tipoActual] = nuevo; regenerar('Región y bloques vinculados actualizados.'); calcularEncuadre();
+});
+document.getElementById('eliminar-region').addEventListener('click', () => {
+  planos[tipoActual] = eliminarRegion(planoEditable(), document.getElementById('region-activa').value);
+  regenerar('Región eliminada; sus bloques y lugares se conservan.');
+});
+document.getElementById('formulario-geometria').addEventListener('submit', (e) => {
+  e.preventDefault(); const geometria = {};
+  for (const k of Object.keys(geometriaInicial())) geometria[k] = ['tipo','orientacion'].includes(k) ? document.getElementById('geometria-' + k).value : Number(document.getElementById('geometria-' + k).value);
+  const valores = { geometria };
+  for (const k of ['x','y','giro']) valores[k] = Number(document.getElementById('geometria-' + k).value);
+  const nuevo = cambiarGeometriaBloque(planoEditable(), salaActual, mesaActiva, valores);
+  if (nuevo.motivo) { anunciar('No se cambió la geometría: ' + nuevo.motivo); return; }
+  const bloque = nuevo.bloquesFilas.find((p) => p.id === mesaActiva);
+  const region = document.getElementById('geometria-region').value;
+  if (region) bloque.region = region; else delete bloque.region;
+  planos[tipoActual] = nuevo; regenerar('Geometría aplicada; IDs y etiquetas oficiales conservados.'); calcularEncuadre();
+});
+document.getElementById('herramienta-ajustar').addEventListener('click', () => cambiarHerramienta(herramienta === 'ajustar' ? 'mesas' : 'ajustar'));
+function elegirLugarAjuste(elemento) {
+  const b = porNodo(elemento);
+  if (!b?.bloque || !piezaPorId(b.bloque)?.geometria) { anunciar('Elige una butaca de un bloque con geometría libre.'); return; }
+  const ajuste = piezaPorId(b.bloque).ajustes?.[(b.filaLocal + 1) + '-' + b.numeroLocal] || { dx:0, dy:0, giro:0 };
+  document.getElementById('id-lugar-ajuste').value = b.id;
+  actualizarControlesGeometria();
+  for (const k of ['dx','dy','giro']) document.getElementById('ajuste-' + k).value = ajuste[k];
+  document.getElementById('ajuste-dx').focus(); anunciar('Ajuste relativo de ' + etiquetaDe(b));
+}
+document.getElementById('formulario-ajuste').addEventListener('submit', (e) => {
+  e.preventDefault(); const valores = {};
+  for (const k of ['dx','dy','giro']) valores[k] = Number(document.getElementById('ajuste-' + k).value);
+  const nuevo = ajustarLugar(planoEditable(), salaActual, document.getElementById('id-lugar-ajuste').value, valores);
+  if (nuevo.motivo) { anunciar('No se aplicó el ajuste: ' + nuevo.motivo); return; }
+  planos[tipoActual] = nuevo; regenerar('Ajuste guardado. Viajará y girará con su fila.');
+});
+
+function actualizarIdentidadControles() {
+  const plano = planos[tipoActual];
+  const r = plano?.revisionFisica || TIPOS_DE_SALA[tipoActual].revisionFisica;
+  const publicada = r?.estado === 'publicada';
+  document.getElementById('revision-fisica').textContent = r ? 'Revisión ' + r.numero + ' · ' + r.estado : 'Revisión 1 · borrador';
+  document.getElementById('revision-publicada').hidden = !publicada || Boolean(eventoConectado);
+  document.getElementById('nuevo-borrador').disabled = Boolean(eventoConectado);
+  document.getElementById('modo-editor').disabled = Boolean(publicada || eventoConectado);
+  document.getElementById('modo-numeracion').value = plano?.modoNumeracion || TIPOS_DE_SALA[tipoActual].modoNumeracion || 'automatica';
+  const oficial = document.getElementById('modo-numeracion').value === 'oficial';
+  document.getElementById('herramienta-numeracion').disabled = !oficial;
+  const id = document.getElementById('id-lugar-oficial').value;
+  const existe = oficial && butacas.some((b) => b.id === id);
+  for (const campo of ['fila-oficial', 'numero-oficial', 'guardar-etiqueta']) document.getElementById(campo).disabled = !existe;
+  const lugar = butacas.find((b) => b.id === id);
+  if (lugar?.filaFisica || lugar?.grupo?.tipo === 'palco') document.getElementById('fila-oficial').disabled = true;
+}
+
+document.getElementById('modo-numeracion').addEventListener('change', (e) => {
+  const plano = planoEditable();
+  const modoNuevo = e.target.value;
+  const ejemplos = butacas.slice(0, 3).map((b) => etiquetaDe(b)).join('; ');
+  if (!confirm('Cambiar a numeración ' + (modoNuevo === 'oficial' ? 'oficial explícita' : 'automática por posición') +
+      ' afecta las etiquetas de ' + butacas.length + ' lugares. ' +
+      (modoNuevo === 'oficial' ? 'Se conservarán como oficiales las etiquetas visibles actuales.' : 'Las etiquetas volverán a calcularse por zona y posición.') +
+      '\nEtiquetas actuales afectadas (ejemplos): ' + ejemplos + '\n\n¿Aplicar el cambio?')) {
+    e.target.value = plano.modoNumeracion; return;
+  }
+  planos[tipoActual] = cambiarNumeracion(plano, modoNuevo);
+  regenerar('Numeración ' + modoNuevo + ' aplicada.');
+  if (modoNuevo !== 'oficial' && herramienta === 'numeracion') cambiarHerramienta('mesas');
+});
+document.getElementById('herramienta-numeracion').addEventListener('click', () =>
+  cambiarHerramienta(herramienta === 'numeracion' ? 'mesas' : 'numeracion'));
+
+function elegirEtiquetaOficial(elemento) {
+  const b = porNodo(elemento);
+  if (!b) return;
+  document.getElementById('id-lugar-oficial').value = b.id;
+  document.getElementById('fila-oficial').value = b.grupo?.tipo === 'palco' ? b.grupo.nombre : b.grupo ? b.numeroMesa : b.fila;
+  document.getElementById('numero-oficial').value = b.numero;
+  actualizarIdentidadControles();
+  document.getElementById(document.getElementById('fila-oficial').disabled ? 'numero-oficial' : 'fila-oficial').focus();
+  anunciar('Etiqueta de ' + etiquetaDe(b) + '. El ID ' + b.id + ' se conserva.');
+}
+document.getElementById('formulario-numeracion').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const id = document.getElementById('id-lugar-oficial').value;
+  const resultado = editarEtiquetaOficial(planoEditable(), id, { fila: document.getElementById('fila-oficial').value,
+    numero: document.getElementById('numero-oficial').value });
+  if (resultado.motivo) { anunciar('No se cambió la etiqueta: ' + resultado.motivo + '.'); return; }
+  planos[tipoActual] = resultado;
+  regenerar('Etiqueta oficial guardada para ' + id + '.');
+});
+
+// Esta seleccion edita pertenencias; nunca cambia la seleccion de compra.
+const seleccionFisica = new Set();
+function llenarOpcionesFisicas(id, opciones, inicial = '') {
+  const s = document.getElementById(id);
+  const previo = s.value;
+  s.textContent = '';
+  for (const [valor,nombre] of opciones) {
+    const o = document.createElement('option'); o.value = valor; o.textContent = nombre; s.appendChild(o);
+  }
+  s.value = opciones.some(([valor]) => valor === previo) ? previo : inicial;
+}
+function actualizarControlesFisicos() {
+  const plano = planos[tipoActual] || TIPOS_DE_SALA[tipoActual];
+  const visibles = new Set(butacasVisibles().map((b) => b.id));
+  for (const id of seleccionFisica) if (!visibles.has(id) || modo !== 'editor') seleccionFisica.delete(id);
+  const tipo = document.getElementById('tipo-fisico').value;
+  llenarOpcionesFisicas('zona-fisica-entidad', zonasDe(plano).map((z) => [z.id,z.nombre]), zonaParaFilas(zonasDe(plano)));
+  const zona = document.getElementById('zona-fisica-entidad').value;
+  const lista = (plano[TIPOS_FISICOS[tipo].lista] || []).filter((e) => e.nivel === salaActual.nivel && e.zona === zona);
+  llenarOpcionesFisicas('entidad-fisica', [['','— crear o elegir —'], ...lista.map((e) => [e.id,e.nombre])]);
+  const id = document.getElementById('entidad-fisica').value;
+  const entidad = entidadFisicaDe(plano,tipo,id);
+  document.getElementById('detalle-entidad-fisica').textContent = entidad ? entidad.id + ' · ' + miembrosFisicos(plano,tipo,id).length + ' lugares · ' + salaActual.niveles.find((n) => n.id === entidad.nivel).nombre : 'Las entidades vacías no añaden aforo.';
+  for (const boton of ['renombrar-entidad-fisica','eliminar-entidad-fisica','fisica-miembros']) document.getElementById(boton).disabled = !entidad;
+  document.getElementById('asignar-entidad-fisica').disabled = !entidad || !seleccionFisica.size;
+  document.getElementById('desvincular-entidad-fisica').disabled = !seleccionFisica.size;
+  document.getElementById('detalle-seleccion-fisica').textContent = seleccionFisica.size + ' lugares para asignar: ' + [...seleccionFisica].slice(0,5).join(', ');
+  const f = seleccionFisica.size === 1 ? Object.values(plano.identidadFisica || {}).find((p) => p.id === [...seleccionFisica][0]) : null;
+  document.getElementById('numero-lugar-palco').disabled = !f?.grupoId;
+  document.getElementById('guardar-numero-palco').disabled = !f?.grupoId;
+  document.getElementById('numero-lugar-palco').value = f?.numeroGrupo || '';
+  document.getElementById('herramienta-fisica').setAttribute('aria-pressed', String(herramienta === 'fisica'));
+}
+function elegirLugarFisico(elemento) {
+  const b = porNodo(elemento);
+  if (!b) return;
+  if (seleccionFisica.has(b.id)) seleccionFisica.delete(b.id); else seleccionFisica.add(b.id);
+  actualizarControlesFisicos(); dibujarTodo();
+  porId.get(b.id)?.nodo.focus();
+  anunciar(seleccionFisica.size + ' lugares en la selección física.');
+}
+function aplicarResultadoFisico(resultado, mensaje) {
+  if (modo !== 'editor' || planoEditable().revisionFisica?.estado === 'publicada') { anunciar('Crea un borrador editable antes de cambiar la estructura física.'); return false; }
+  if (resultado.motivo) { anunciar('No se aplicó: ' + resultado.motivo + '.'); return false; }
+  planos[tipoActual] = resultado.plano || resultado; regenerar(mensaje); return true;
+}
+for (const id of ['tipo-fisico','zona-fisica-entidad','entidad-fisica']) document.getElementById(id).addEventListener('change', () => {
+  actualizarControlesFisicos();
+  const e = entidadFisicaDe(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('entidad-fisica').value);
+  document.getElementById('nombre-entidad-fisica').value = e?.nombre || '';
+});
+document.getElementById('agregar-entidad-fisica').addEventListener('click', () => {
+  const resultado = agregarEntidadFisica(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('nombre-entidad-fisica').value,salaActual.nivel,document.getElementById('zona-fisica-entidad').value);
+  if (aplicarResultadoFisico(resultado,'Entidad física creada sin mover ni añadir lugares.')) {
+    document.getElementById('entidad-fisica').value = resultado.id; actualizarControlesFisicos();
+  }
+});
+document.getElementById('formulario-entidad-fisica').addEventListener('submit', (e) => {
+  e.preventDefault(); aplicarResultadoFisico(renombrarEntidadFisica(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('entidad-fisica').value,document.getElementById('nombre-entidad-fisica').value),'Nombre físico actualizado; IDs conservados.');
+});
+document.getElementById('eliminar-entidad-fisica').addEventListener('click', () => aplicarResultadoFisico(eliminarEntidadFisica(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('entidad-fisica').value),'Entidad vacía eliminada; su ID queda retirado.'));
+document.getElementById('herramienta-fisica').addEventListener('click', () => cambiarHerramienta(herramienta === 'fisica' ? 'mesas' : 'fisica'));
+document.getElementById('fisica-desde-piezas').addEventListener('click', () => {
+  const ids = butacasVisibles().filter((b) => piezasActivas.has(b.grupo?.tipo === 'palco' ? b.bloque || b.suelta : b.grupo?.id || b.bloque || b.suelta)).map((b) => b.id);
+  seleccionFisica.clear(); ids.forEach((id) => seleccionFisica.add(id)); cambiarHerramienta('fisica');
+});
+document.getElementById('fisica-miembros').addEventListener('click', () => {
+  seleccionFisica.clear(); miembrosFisicos(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('entidad-fisica').value).forEach((id) => seleccionFisica.add(id)); cambiarHerramienta('fisica');
+});
+document.getElementById('vaciar-seleccion-fisica').addEventListener('click', () => { seleccionFisica.clear(); actualizarControlesFisicos(); dibujarTodo(); });
+for (const [boton,asignar] of [['asignar-entidad-fisica',true],['desvincular-entidad-fisica',false]]) document.getElementById(boton).addEventListener('click', () => {
+  const tipo = document.getElementById('tipo-fisico').value;
+  const id = asignar ? document.getElementById('entidad-fisica').value : '';
+  if (asignar && !id) return;
+  aplicarResultadoFisico(asignarPertenenciaFisica(planoEditable(),[...seleccionFisica],tipo,id),'Pertenencia física ' + (asignar ? 'asignada' : 'desvinculada') + '; geometría, IDs y selección de compra conservados.');
+});
+document.getElementById('formulario-numero-palco').addEventListener('submit', (e) => {
+  e.preventDefault(); if (seleccionFisica.size !== 1) return;
+  aplicarResultadoFisico(editarNumeroPalco(planoEditable(),[...seleccionFisica][0],document.getElementById('numero-lugar-palco').value),'Número de lugar del palco actualizado.');
+});
+
+// ---------------------------------------------------------------------------
+// Resumen: agrupa por mesa cuando la butaca pertenece a una.
+// ---------------------------------------------------------------------------
+function actualizarResumen() {
+  // En orden de plano, no de clic: el detalle sale estable.
+  const lista = butacas.filter((b) => elegidas.has(b.id));
+  document.getElementById('cuenta').textContent = String(lista.length);
+  const seleccionEvento = eventoConectado && solicitudDeSeleccionEvento(elegidas, eventoConectado);
+  document.getElementById('total').textContent = seleccionEvento && !seleccionEvento.errores
+    ? dinero(seleccionEvento.totalCentavos) : 'Precio no disponible';
+  document.getElementById('vacio').hidden = lista.length > 0;
+  document.getElementById('detalle-vacio').hidden = lista.length > 0;
+
+  const cubos = new Map();
+  for (const b of lista) {
+    const clave = b.nivel + ':' + (b.grupo ? 'mesa:' + b.grupo.id : 'zona:' + b.zona);
+    if (!cubos.has(clave)) cubos.set(clave, []);
+    cubos.get(clave).push(b);
+  }
+  const detalle = document.getElementById('detalle');
+  detalle.textContent = '';
+  for (const items of cubos.values()) {
+    const li = document.createElement('li');
+    const zonasDelGrupo = new Set(items.map((b) => b.zona));
+    const nombre = items[0].grupo ? items[0].grupo.nombre + ' · ' +
+      (zonasDelGrupo.size === 1 ? zonas[items[0].zona].nombre : 'varias zonas') : items[0].seccion;
+    const cuantos = (items[0].grupo && items[0].grupo.completa ? (items[0].grupo.tipo === 'palco' ? 'palco completo, ' : 'mesa completa, ') : '') +
+                    (items.length === 1 ? '1 lugar' : items.length + ' lugares');
+    const cuales = items.map((b) => (b.grupo ? b.numero : b.fila + b.numero)).join(', ');
+    li.textContent = (salaActual.niveles.length > 1 ? items[0].nombreNivel + ' · ' : '') + nombre + ' · ' + cuantos + ' (' + cuales + ')' +
+      (eventoConectado ? ' · ' + dinero(items.reduce((s, b) => s + eventoConectado.lugares.get(b.id).categoria.precioCentavos, 0)) : '');
+    detalle.appendChild(li);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cambio de tipo de sala
+// ---------------------------------------------------------------------------
+const frase = (ids, singular, plural) => (!ids.length ? ''
+  : ids.length === 1
+    ? 'Se soltó 1 butaca que ' + singular + ': ' + ids[0] + '.'
+    : 'Se soltaron ' + ids.length + ' butacas que ' + plural + ': ' + ids.join(', ') + '.');
+
+
+function actualizarAforo(sala) {
+  if (eventoConectado) {
+    const c = conteosDeEvento(eventoConectado);
+    document.getElementById('aforo').textContent = c.inventariados + ' inventariados · ' + c.utilizables + ' utilizables · ' +
+      c.habilitados + ' habilitados · ' + c.disponibles + ' libres · ' + c.comprables + ' comprables · ' + c.conjuntosComprables + ' conjuntos completos disponibles';
+    return;
+  }
+  const bandasDeFilas = hojasDe(sala.bandas).filter((b) => b.tipo === 'filas');
+  const filas = bandasDeFilas.reduce((s, b) => s + b.filas, 0);
+  // «de 12 butacas» solo si todas las filas ocupan el ancho de la sala.
+  const todasAnchas = bandasDeFilas.every((b) => !b.profundidad);
+  document.getElementById('aforo').textContent = [
+    'Sala de ' + sala.ancho + ' columnas',
+    !filas ? 'sin filas' : todasAnchas ? plural(filas, 'fila', 'filas') + ' de ' + sala.columnas.length + ' butacas'
+      : plural(filas, 'fila', 'filas') + ' en bandas',
+    mesas.length ? plural(mesas.length, 'mesa', 'mesas') : 'sin mesas',
+    ...(bloquesFilas.length ? [plural(bloquesFilas.length, 'bloque de filas', 'bloques de filas')] : []),
+    ...(butacasSueltas.length ? [plural(butacasSueltas.length, 'butaca suelta', 'butacas sueltas')] : []),
+    ...(formas.length ? [plural(formas.length, 'forma', 'formas')] : []),
+    ...(escenario.ausente ? ['sin escenario'] : []),
+    ...(sala.niveles.length > 1 ? [butacasVisibles().length + ' lugares en ' + sala.niveles.find((n) => n.id === sala.nivel).nombre] : []),
+    butacas.length + ' lugares en total',
+  ].join(' · ');
+}
+
+function redibujar(tipo) {
+  if (eventoConectado && tipo !== tipoActual) { anunciar('El evento conserva su recinto y revisión.'); return; }
+  seleccionFisica.clear();
+  if (arrastreMesa) terminarArrastreMesa(false);
+  tipoActual = tipo;
+  if (TIPOS_DE_SALA[tipo].revisionFisica?.estado === 'publicada' && modo === 'editor') cambiarModo('vista');
+  marcarActivas([]);
+  bandaActiva = null;
+  const esMapa = TIPOS_DE_SALA[tipo].grupo === GRUPO_MAPAS;
+  document.getElementById('nombre-mapa').value = esMapa ? TIPOS_DE_SALA[tipo].nombre : '';
+  document.getElementById('eliminar-mapa').hidden = !esMapa;
+  salaActual = generarPlano(tipo, planos[tipo]);
+  if (!planos[tipo]) planos[tipo] = planoDesdeSala(tipo, salaActual);
+  if (!historiales[tipo]) historiales[tipo] = crearHistorial(fotoDelPlano());
+  // Antes de dibujar: asi el DOM nace ya con la seleccion que sobrevive.
+  const { ausentes, noLibres } = conciliarSeleccion(elegidas, butacas);
+  completarMesasElegidas(elegidas, butacas);
+  dibujarTodo();
+  anunciar('');
+
+  actualizarResumen();
+  actualizarAforo(salaActual);
+  actualizarControles();
+  actualizarEstadoEdicion();
+  reencuadrar();
+  document.getElementById('aviso').textContent = [
+    frase(ausentes, 'esta sala no tiene', 'esta sala no tiene'),
+    frase(noLibres, 'en esta sala no está libre', 'en esta sala no están libres'),
+  ].filter(Boolean).join(' ');
+}
+
+window.addEventListener('beforeunload', (e) => {
+  if (!Object.values(historiales).some((h) => h.tieneCambios())) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
+
+// ---------------------------------------------------------------------------
+// Mapas guardados: en el navegador (localStorage) y como archivos JSON.
+// ---------------------------------------------------------------------------
+const selector = document.getElementById('tipo-sala');
+const campoNombre = document.getElementById('nombre-mapa');
+const CLAVE_ALMACEN = 'selector-asientos:mapas';
+
+// { nombre: mapa }, o null si el navegador no deja leer (modo privado, bloqueo).
+function leerAlmacen() {
+  try {
+    const texto = localStorage.getItem(CLAVE_ALMACEN);
+    const datos = texto ? JSON.parse(texto) : {};
+    return datos && typeof datos === 'object' && !Array.isArray(datos)
+      ? Object.assign(Object.create(null), datos) : Object.create(null);
+  } catch {
+    return null;
+  }
+}
+
+function escribirAlmacen(mapas) {
+  try {
+    localStorage.setItem(CLAVE_ALMACEN, JSON.stringify(mapas));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Las opciones salen de TIPOS_DE_SALA, agrupadas; «Mis mapas» al final y por nombre.
+function construirSelector(valor) {
+  selector.textContent = '';
+  const entradas = Object.entries(TIPOS_DE_SALA);
+  const mapasOrdenados = entradas.filter(([, d]) => d.grupo === GRUPO_MAPAS)
+    .sort(([, a], [, b]) => a.nombre.localeCompare(b.nombre, 'es'));
+  const grupos = new Map();
+  for (const [id, { nombre, grupo }] of [...entradas.filter(([, d]) => d.grupo !== GRUPO_MAPAS), ...mapasOrdenados]) {
+    if (!grupos.has(grupo)) {
+      const optgroup = document.createElement('optgroup');
+      optgroup.label = grupo;
+      grupos.set(grupo, optgroup);
+      selector.appendChild(optgroup);
+    }
+    grupos.get(grupo).appendChild(new Option(nombre, id));
+  }
+  selector.value = valor;
+}
+
+const idsActuales = () => new Set(butacas.map((b) => b.id));
+
+function guardarMapa() {
+  const nombre = campoNombre.value.trim();
+  if (!nombre) {
+    anunciar('Escribe un nombre para el mapa.');
+    campoNombre.focus();
+    return;
+  }
+  const almacen = leerAlmacen();
+  if (!almacen) {
+    anunciar('Este navegador no permite guardar mapas aquí. Usa «Exportar JSON».');
+    return;
+  }
+  const clave = claveDeMapa(nombre);
+  if (TIPOS_DE_SALA[clave]?.revisionFisica?.estado === 'publicada') {
+    anunciar('La revisión publicada se conserva. Guarda el borrador con otro nombre.'); return;
+  }
+  if (TIPOS_DE_SALA[clave] && clave !== tipoActual &&
+      !confirm('Ya hay un mapa llamado «' + nombre + '». ¿Sobrescribirlo?')) return;
+  const nivelAntes = salaActual.nivel;
+  const mapa = mapaDesdePlano(nombre, planoEditable(), new Date().toISOString(), idsActuales());
+  almacen[nombre] = mapa;
+  if (!escribirAlmacen(almacen)) {
+    anunciar('No se pudo guardar: el almacenamiento del navegador está lleno o bloqueado. Usa «Exportar JSON».');
+    return;
+  }
+  registrarMapa(mapa);
+  historiales[tipoActual].marcarGuardado();
+  delete planos[clave];   // lo guardado pasa a ser el punto de partida del mapa
+  delete historiales[clave];
+  construirSelector(clave);
+  redibujar(clave);
+  if (salaActual.niveles.some((n) => n.id === nivelAntes) && salaActual.nivel !== nivelAntes) cambiarNivelVista(nivelAntes);
+  anunciar('Mapa «' + nombre + '» guardado en este navegador.');
+}
+
+function descargarDocumento(dato, nombre) {
+  const enlace = document.createElement('a');
+  enlace.href = URL.createObjectURL(new Blob([JSON.stringify(dato, null, 2) + '\n'], { type: 'application/json' }));
+  enlace.download = nombre;
+  document.body.appendChild(enlace); enlace.click(); enlace.remove();
+  setTimeout(() => URL.revokeObjectURL(enlace.href), 0);
+}
+
+document.getElementById('publicar-revision').addEventListener('click', () => {
+  const nombre = campoNombre.value.trim() || TIPOS_DE_SALA[tipoActual].nombre;
+  if (TIPOS_DE_SALA[claveDeMapa(nombre)]?.revisionFisica?.estado === 'publicada') {
+    anunciar('Ese nombre identifica una revisión publicada. Usa otro nombre.'); return;
+  }
+  const candidato = mapaDesdePlano(nombre, planoEditable(), new Date().toISOString(), idsActuales());
+  const resultado = publicarRevisionFisica(candidato);
+  salaActual = generarPlano(tipoActual, planos[tipoActual]); dibujarTodo();
+  if (resultado.errores) { anunciar('No se congeló la revisión: ' + resultado.errores.slice(0, 3).join('; ') + '.'); return; }
+  if (!confirm('Congelar la revisión ' + candidato.revisionFisica.numero + ' con ' + resultado.catalogo.lugares.length +
+      ' lugares. Sus IDs y ubicación quedarán cerrados; para editar crearás otra revisión. ¿Continuar?')) return;
+  const almacen = leerAlmacen();
+  if (almacen) { almacen[nombre] = resultado.mapa; if (!escribirAlmacen(almacen)) { anunciar('No se pudo guardar la revisión. Exporta el borrador y vuelve a intentar.'); return; } }
+  const clave = registrarMapa(resultado.mapa);
+  historiales[tipoActual].marcarGuardado(); delete planos[clave]; delete historiales[clave];
+  descargarDocumento(resultado.mapa, nombreDeArchivo(nombre).replace('.json', '-revision-' + candidato.revisionFisica.numero + '.json'));
+  construirSelector(clave); redibujar(clave);
+  anunciar('Revisión ' + candidato.revisionFisica.numero + ' congelada y exportada. No se ha publicado en Sin Taquilla.');
+});
+
+document.getElementById('nuevo-borrador').addEventListener('click', () => {
+  if (eventoConectado) { anunciar('El evento conserva su revisión publicada. Abre el editor fuera de la compra.'); return; }
+  const origen = planoEditable();
+  const nuevo = nuevaRevisionFisica(origen);
+  const conocidas = Object.values(TIPOS_DE_SALA).map((d) => d.revisionFisica).filter((r) => r?.recintoId === origen.revisionFisica.recintoId);
+  nuevo.revisionFisica.numero = Math.max(origen.revisionFisica.numero, ...conocidas.map((r) => r.numero)) + 1;
+  const nombre = (TIPOS_DE_SALA[tipoActual].nombre.slice(0, 50) + ' · borrador ' + nuevo.revisionFisica.numero);
+  const mapa = mapaDesdePlano(nombre, nuevo, null);
+  const clave = registrarMapa(mapa); construirSelector(clave); redibujar(clave); cambiarModo('editor');
+  anunciar('Nuevo borrador creado; la revisión anterior se conserva. Guarda este borrador cuando termines.');
+});
+
+function exportarMapa() {
+  const nombre = campoNombre.value.trim() || TIPOS_DE_SALA[tipoActual].nombre;
+  const mapa = mapaDesdePlano(nombre, planoEditable(), new Date().toISOString(), idsActuales());
+  salaActual = generarPlano(tipoActual, planos[tipoActual]); dibujarTodo();
+  const archivo = new Blob([JSON.stringify(mapa, null, 2) + '\n'], { type: 'application/json' });
+  const enlace = document.createElement('a');
+  enlace.href = URL.createObjectURL(archivo);
+  enlace.download = nombreDeArchivo(nombre);
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  setTimeout(() => URL.revokeObjectURL(enlace.href), 0);
+  historiales[tipoActual].marcarGuardado();
+  actualizarEstadoEdicion();
+  anunciar('Mapa «' + nombre + '» exportado como ' + enlace.download + '.');
+}
+
+function revisarZonasFisicas() {
+  const asignadas = Object.entries(planoEditable().zonasDeAsiento || {});
+  if (!asignadas.length) {
+    anunciar('No hay zonas físicas asignadas a lugares individuales.');
+    return;
+  }
+  for (let i = 0; i < asignadas.length; i += 20) {
+    const muestra = asignadas.slice(i, i + 20).map(([id, zona]) => id + ' → ' + (zonas[zona]?.nombre || zona));
+    const pregunta = 'Comprueba que estas asignaciones indican ubicación física, no solo tarifa ' +
+      '(' + (i + 1) + '–' + Math.min(i + 20, asignadas.length) + ' de ' + asignadas.length + '):\n\n' +
+      muestra.join('\n') + '\n\n¿Confirmas estas zonas físicas?';
+    if (!confirm(pregunta)) return;
+  }
+  planos[tipoActual] = confirmarZonasFisicas(planoEditable());
+  regenerar('Zonas físicas confirmadas para ' + asignadas.length + ' lugares.');
+}
+
+function exportarCatalogoLugares() {
+  const nombre = campoNombre.value.trim() || TIPOS_DE_SALA[tipoActual].nombre;
+  const mapa = mapaDesdePlano(nombre, planoEditable(), new Date().toISOString(), idsActuales());
+  const { catalogo, errores } = exportarLugaresDeMapa(mapa);
+  // La validacion genera el mapa candidato: vuelve a mostrar el que se edita.
+  salaActual = generarPlano(tipoActual, planos[tipoActual]);
+  dibujarTodo();
+  if (errores) {
+    anunciar('No se pudo exportar el catálogo: ' + errores.slice(0, 3).join('; ') +
+      (errores.length > 3 ? '… (' + errores.length + ' problemas)' : '') + '.');
+    return;
+  }
+  const archivo = new Blob([JSON.stringify(catalogo, null, 2) + '\n'], { type: 'application/json' });
+  const enlace = document.createElement('a');
+  enlace.href = URL.createObjectURL(archivo);
+  enlace.download = nombreDeArchivo(nombre).replace(/\.json$/, '-lugares.json');
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  setTimeout(() => URL.revokeObjectURL(enlace.href), 0);
+  anunciar('Catálogo de ' + catalogo.lugares.length + ' lugares validado y exportado.');
+}
+
+// Un mapa real ocupa pocos KB: un archivo mayor no se lee, para no bloquear la pestaña
+// leyendo y validando algo que no es un mapa razonable.
+const ARCHIVO_MAXIMO = 8 * 1024 * 1024;
+
+async function importarMapa(archivo) {
+  if (archivo.size > ARCHIVO_MAXIMO) {
+    anunciar('No se pudo importar ' + archivo.name + ': es demasiado grande para ser un mapa (pasa de 8 MB).');
+    return;
+  }
+  let dato;
+  try {
+    dato = JSON.parse(await archivo.text());
+  } catch {
+    anunciar('No se pudo importar ' + archivo.name + ': no es un JSON válido.');
+    return;
+  }
+  const { mapa, errores } = validarMapa(dato);
+  // validarMapa genero su propia sala para comprobarla: se vuelve a dibujar la actual.
+  salaActual = generarPlano(tipoActual, planos[tipoActual]);
+  dibujarTodo();
+  if (errores) {
+    anunciar('No se pudo importar ' + archivo.name + ': ' + errores.slice(0, 3).join('; ') +
+             (errores.length > 3 ? '…' : '') + '.');
+    return;
+  }
+  const clave = claveDeMapa(mapa.nombre);
+  if (TIPOS_DE_SALA[clave]?.revisionFisica?.estado === 'publicada') {
+    anunciar('No se sobrescribe una revisión publicada. Usa otro nombre para importar el borrador.'); return;
+  }
+  if (TIPOS_DE_SALA[clave] && !confirm('Ya hay un mapa llamado «' + mapa.nombre + '». ¿Sobrescribirlo?')) return;
+  const almacen = leerAlmacen();
+  const guardado = Boolean(almacen) && ((almacen[mapa.nombre] = mapa), escribirAlmacen(almacen));
+  registrarMapa(mapa);
+  delete planos[clave];
+  delete historiales[clave];
+  construirSelector(clave);
+  redibujar(clave);
+  anunciar('Mapa «' + mapa.nombre + '» importado' + (guardado
+    ? ' y guardado en este navegador.'
+    : '. No se pudo guardar en el navegador: estará disponible hasta recargar la página.'));
+}
+
+function eliminarMapa() {
+  const { nombre } = TIPOS_DE_SALA[tipoActual];
+  if (!confirm('¿Eliminar el mapa «' + nombre + '» de este navegador? No se puede deshacer.')) return;
+  const almacen = leerAlmacen();
+  if (!almacen) {
+    anunciar('No se pudo eliminar el mapa: no se puede acceder al almacenamiento del navegador.');
+    return;
+  }
+  delete almacen[nombre];
+  if (!escribirAlmacen(almacen)) {
+    anunciar('No se pudo eliminar el mapa: el almacenamiento del navegador está lleno o bloqueado.');
+    return;
+  }
+  delete TIPOS_DE_SALA[tipoActual];
+  delete planos[tipoActual];
+  delete historiales[tipoActual];
+  construirSelector('mixta-ambos');
+  redibujar('mixta-ambos');
+  anunciar('Mapa «' + nombre + '» eliminado.');
+}
+
+document.getElementById('guardar-mapa').addEventListener('click', guardarMapa);
+campoNombre.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') guardarMapa();
+});
+document.getElementById('eliminar-mapa').addEventListener('click', eliminarMapa);
+document.getElementById('exportar-mapa').addEventListener('click', exportarMapa);
+document.getElementById('exportar-lugares').addEventListener('click', exportarCatalogoLugares);
+document.getElementById('confirmar-zonas-fisicas').addEventListener('click', revisarZonasFisicas);
+document.getElementById('importar-mapa').addEventListener('click', () =>
+  document.getElementById('archivo-mapa').click());
+document.getElementById('archivo-mapa').addEventListener('change', (e) => {
+  const [archivo] = e.target.files;
+  e.target.value = '';   // para poder importar otra vez el mismo archivo
+  if (archivo) importarMapa(archivo);
+});
+
+// Al cargar: los mapas guardados que sigan siendo validos entran en el selector.
+const almacenInicial = leerAlmacen();
+// Los que no validan (dañados, o de una version futura) se quedan en el almacen
+// sin tocar, pero no se cargan, y se avisa de cuales son.
+const mapasDescartados = [];
+for (const [nombre, dato] of Object.entries(almacenInicial || {})) {
+  const { mapa } = validarMapa(dato);
+  if (mapa) registrarMapa(mapa);
+  else mapasDescartados.push(nombre);
+}
+construirSelector('mixta-ambos');
+// Un mapa en blanco solo tiene sentido en el editor: se abre directamente ahi.
+selector.addEventListener('change', () => {
+  redibujar(selector.value);
+  if (selector.value !== 'mapa-en-blanco') return;
+  cambiarModo('editor');
+  anunciar('Mapa en blanco de ' + salaActual.ancho + ' × ' + salaActual.alto + ': agrega espacios, bloques de ' +
+           'filas, mesas o el escenario, y guárdalo con un nombre en «Mis mapas».');
+});
+redibujar(selector.value);
+if (mapasDescartados.length) {
+  anunciar((mapasDescartados.length === 1 ? 'No se pudo cargar el mapa guardado «'
+    : 'No se pudieron cargar los mapas guardados «') + mapasDescartados.join('», «') +
+    (mapasDescartados.length === 1 ? '»: está dañado.' : '»: están dañados.'));
+}
+
+// El anfitrion suministra datos; no se buscan eventos ni credenciales en la URL.
+// Esta API comparte el motor con la entrega autonoma y con los archivos para CSP.
+let mapaDelEvento = null;
+let contextoAntesDelEvento = null;
+let alSeleccionarEvento = null;
+let sesionDelConector = 0;
+let reservaEnCurso = false;
+let disponibilidadPerdida = false;
+
+function aplicarEventoAButacas() {
+  for (const b of butacas) {
+    const p = eventoConectado.lugares.get(b.id);
+    b.estado = p?.comprable ? 'libre' : p?.estado === 'vendido' || p?.estado === 'reservado' ? 'ocupada' : 'bloqueada';
+    b.motivoEvento = p?.motivo || (!p ? 'disponibilidad sin confirmar' : '');
+    if (b.grupo) {
+      b.grupo = { ...b.grupo, completa: eventoConectado.grupos.get(b.grupo.id)?.modalidad === 'completa' };
+      if (p?.comprable && b.grupo.completa) b.motivoEvento = b.grupo.tipo === 'palco' ? 'selecciona el palco completo' : 'selecciona la mesa completa';
+    }
+  }
+  for (const m of mesas) m.completa = eventoConectado.grupos.get(m.id)?.modalidad === 'completa';
+}
+
+function notificarSeleccionEvento() {
+  const seleccion = seleccionDelEvento();
+  document.dispatchEvent(new CustomEvent('selector-asientos:seleccion', { detail: seleccion }));
+  if (alSeleccionarEvento) alSeleccionarEvento(copiarDatos(seleccion));
+}
+
+function seleccionDelEvento() {
+  if (!eventoConectado) throw new Error('No hay un evento conectado.');
+  const s = solicitudDeSeleccionEvento(elegidas, eventoConectado);
+  if (s.errores) throw new Error(s.errores.join('; '));
+  return copiarDatos({ ...s, conteos: conteosDeEvento(eventoConectado) });
+}
+
+function validarDatosEvento(mapa, dato) {
+  let r;
+  // La validacion fisica usa los generadores globales; siempre reponer la vista actual.
+  try { r = resolverEventoDeMapa(mapa, dato); }
+  finally { if (salaActual) { salaActual = generarPlano(tipoActual, planos[tipoActual]); if (eventoConectado) aplicarEventoAButacas(); } }
+  if (r.errores) throw new Error(r.errores.join('; '));
+  return r.evento;
+}
+
+function cargarEvento({ mapa, evento, alSeleccionar } = {}) {
+  if (alSeleccionar !== undefined && typeof alSeleccionar !== 'function') throw new Error('El callback de selección no es válido.');
+  const resuelto = validarDatosEvento(mapa, evento);
+  if (eventoConectado) cerrarEvento();
+  contextoAntesDelEvento = { tipo: tipoActual, elegidas: [...elegidas] };
+  cambiarModo('vista'); elegidas.clear();
+  mapaDelEvento = copiarDatos(mapa);
+  const clave = 'evento:' + resuelto.cabecera.id;
+  TIPOS_DE_SALA[clave] = definicionDeMapa(mapaDelEvento);
+  construirSelector(clave); redibujar(clave);
+  eventoConectado = resuelto;
+  alSeleccionarEvento = alSeleccionar || null;
+  disponibilidadPerdida = false; sesionDelConector++;
+  selector.disabled = true; document.getElementById('modo-editor').disabled = true;
+  actualizarIdentidadControles();
+  dibujarTodo(); actualizarAforo(salaActual); actualizarResumen();
+  anunciar('Evento «' + resuelto.cabecera.nombre + '». Tarifas y disponibilidad proporcionadas por Sin Taquilla.');
+  notificarSeleccionEvento();
+  return seleccionDelEvento();
+}
+
+function actualizarEvento(dato) {
+  if (!eventoConectado) throw new Error('No hay un evento conectado.');
+  const nuevo = validarDatosEvento(mapaDelEvento, dato);
+  const motivo = motivoCambioDeEvento(eventoConectado, nuevo);
+  if (motivo) throw new Error(motivo);
+  if (nuevo.cabecera.versionEstado < eventoConectado.cabecera.versionEstado) throw new Error('La respuesta de disponibilidad no es más reciente.');
+  if (nuevo.cabecera.versionEstado === eventoConectado.cabecera.versionEstado && !disponibilidadPerdida) {
+    if (firmaDeEvento(nuevo) !== firmaDeEvento(eventoConectado)) throw new Error('La misma versión contiene datos diferentes.');
+    return seleccionDelEvento();
+  }
+  eventoConectado = nuevo; disponibilidadPerdida = false;
+  const quitados = conciliarSeleccionEvento(elegidas, nuevo);
+  dibujarTodo(); actualizarResumen(); actualizarAforo(salaActual);
+  anunciar(quitados.length ? 'Se soltaron ' + quitados.length + ' lugares por cambios del evento: ' + quitados.map((id) => nuevo.lugares.get(id)?.label || id).join('; ') + '.' : 'Disponibilidad actualizada.');
+  notificarSeleccionEvento();
+  return seleccionDelEvento();
+}
+
+function cerrarEvento() {
+  if (!eventoConectado) return;
+  const clave = tipoActual;
+  eventoConectado = null; mapaDelEvento = null; alSeleccionarEvento = null;
+  disponibilidadPerdida = false; sesionDelConector++;
+  delete TIPOS_DE_SALA[clave]; delete planos[clave]; delete historiales[clave];
+  elegidas.clear();
+  for (const id of contextoAntesDelEvento.elegidas) elegidas.add(id);
+  selector.disabled = false; document.getElementById('modo-editor').disabled = false;
+  construirSelector(contextoAntesDelEvento.tipo); redibujar(contextoAntesDelEvento.tipo);
+  contextoAntesDelEvento = null;
+}
+
+function perderDisponibilidadEvento(mensaje) {
+  if (!eventoConectado) return;
+  disponibilidadPerdida = true;
+  for (const p of eventoConectado.lugares.values()) {
+    p.estado = 'desconocido'; p.disponible = false; p.comprable = false;
+    if (p.habilitado) p.motivo = 'disponibilidad sin confirmar';
+  }
+  for (const g of eventoConectado.grupos.values()) g.comprable = false;
+  const quitados = conciliarSeleccionEvento(elegidas, eventoConectado);
+  dibujarTodo(); actualizarResumen(); actualizarAforo(salaActual);
+  anunciar(mensaje + (quitados.length ? ' Se soltaron ' + quitados.length + ' lugares; vuelve a confirmar su disponibilidad.' : ''));
+  notificarSeleccionEvento();
+}
+
+function urlDelConector(url) {
+  if (typeof url !== 'string' || !url.trim()) throw new Error('Falta la URL del conector.');
+  const u = new URL(url, location.href);
+  if (!['http:', 'https:'].includes(u.protocol) || u.origin !== location.origin || u.username || u.password || u.hash) throw new Error('El conector requiere una URL del mismo origen, sin credenciales ni fragmento.');
+  return u.href;
+}
+
+async function intercambiarEvento({ url, csrf, signal, requestKey } = {}, reservar = false) {
+  if (!eventoConectado) throw new Error('No hay un evento conectado.');
+  const destino = urlDelConector(url);
+  if (reservar && (typeof csrf !== 'string' || !csrf.trim())) throw new Error('Falta el token CSRF proporcionado por Sin Taquilla.');
+  if (reservar && reservaEnCurso) throw new Error('Ya hay una reserva en curso.');
+  const seleccion = seleccionDelEvento();
+  if (reservar && !seleccion.cantidad) throw new Error('Selecciona lugares antes de reservar.');
+  if (reservar && requestKey !== undefined && (typeof requestKey !== 'string' || !/^[A-Za-z0-9_-]{16,100}$/.test(requestKey))) throw new Error('La clave de solicitud no es válida.');
+  const sesion = sesionDelConector;
+  const version = eventoConectado.cabecera.versionEstado;
+  const headers = { Accept: 'application/json' };
+  let body;
+  if (reservar) {
+    headers['Content-Type'] = 'application/json'; headers['X-CSRF-Token'] = csrf;
+    body = JSON.stringify({ ...seleccion.solicitud, request_key: requestKey || crypto.randomUUID() });
+    reservaEnCurso = true;
+  }
+  try {
+    const respuesta = await fetch(destino, { method: reservar ? 'POST' : 'GET', credentials: 'same-origin',
+      cache: 'no-store', redirect: 'error', headers, ...(body ? { body } : {}), signal });
+    if (sesion !== sesionDelConector) throw new Error('La respuesta llegó después de cerrar o cambiar el evento.');
+    if (!respuesta.ok) throw new Error(respuesta.status === 409 ? 'La selección cambió; confirma la disponibilidad de nuevo.' : 'Sin Taquilla no pudo confirmar la disponibilidad.');
+    const datos = await respuesta.json();
+    if (sesion !== sesionDelConector) throw new Error('La respuesta pertenece a una sesión anterior.');
+    const actualizada = actualizarEvento(datos.evento);
+    return { seleccion: actualizada, ...(reservar ? { resultado: copiarDatos(datos.resultado ?? null) } : {}) };
+  } catch (error) {
+    if (sesion === sesionDelConector && eventoConectado.cabecera.versionEstado === version) perderDisponibilidadEvento('Disponibilidad sin confirmar.');
+    throw error;
+  } finally { if (reservar) reservaEnCurso = false; }
+}
+
+// Proyeccion para el formulario del anfitrion; no guarda precios en el recinto.
+function evaluarConfiguracionEvento(mapa, dato) {
+  const e = validarDatosEvento(mapa, dato);
+  return copiarDatos({ evento: e.cabecera, conteos: conteosDeEvento(e),
+    lugares: [...e.lugares.values()].map((p) => ({ local_place_id: p.local_place_id, event_place_id: p.event_place_id,
+      habilitado: p.habilitado, disponible: p.disponible, comprable: p.comprable, categoriaId: p.categoria?.id ?? null,
+      precioCentavos: p.categoria?.precioCentavos ?? null, motivo: p.motivo })),
+    zonas: mapa.zonas.map((z) => { const ps = [...e.lugares.values()].filter((p) => p.physical_zone.id === z.id);
+      return { id: z.id, nombre: z.nombre, inventariados: ps.length, utilizables: ps.filter((p) => !p.blocked).length,
+        habilitados: ps.filter((p) => p.habilitado).length, comprables: ps.filter((p) => p.comprable).length }; }) });
+}
+
+window.SelectorAsientos = Object.freeze({ version: 1, cargarEvento, actualizarEvento, cerrarEvento,
+  seleccion: seleccionDelEvento, evaluarConfiguracion: evaluarConfiguracionEvento,
+  refrescar: (opciones) => intercambiarEvento(opciones), reservar: (opciones) => intercambiarEvento(opciones, true) });

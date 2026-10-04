@@ -1,0 +1,527 @@
+{
+  "nota": "Datos ficticios; no describen el Teatro Clavijero ni configuran una venta real.",
+  "mapa": {
+    "formato": "selector-asientos/mapa",
+    "version": 8,
+    "nombre": "Recinto de ejemplo del conector",
+    "guardado": null,
+    "lienzo": true,
+    "distribucion": {
+      "bloques": [
+        40
+      ],
+      "pasillos": []
+    },
+    "bandas": [
+      {
+        "id": "libre",
+        "tipo": "espacio",
+        "alto": 30
+      }
+    ],
+    "mesas": [
+      {
+        "id": "M1",
+        "x": 4,
+        "y": 18,
+        "largo": 2,
+        "cabeceras": false,
+        "unLado": false,
+        "giro": 0,
+        "zona": "mesas"
+      }
+    ],
+    "bloquesFilas": [
+      {
+        "id": "F1",
+        "tipo": "filas",
+        "x": 4,
+        "y": 6,
+        "ancho": 2,
+        "filas": 1,
+        "giro": 0,
+        "zona": "luneta",
+        "geometria": {
+          "tipo": "recta",
+          "separacion": 1.5,
+          "separacionFilas": 1.5,
+          "radio": 8,
+          "apertura": 90,
+          "orientacion": "fila",
+          "anguloButacas": 0
+        },
+        "ajustes": {}
+      },
+      {
+        "id": "F2",
+        "tipo": "filas",
+        "x": 12,
+        "y": 6,
+        "ancho": 2,
+        "filas": 1,
+        "giro": 0,
+        "zona": "luneta",
+        "geometria": {
+          "tipo": "recta",
+          "separacion": 1.5,
+          "separacionFilas": 1.5,
+          "radio": 8,
+          "apertura": 90,
+          "orientacion": "fila",
+          "anguloButacas": 0
+        },
+        "ajustes": {}
+      },
+      {
+        "id": "F3",
+        "tipo": "filas",
+        "x": 22,
+        "y": 6,
+        "ancho": 3,
+        "filas": 1,
+        "giro": 45,
+        "zona": "luneta",
+        "geometria": {
+          "tipo": "recta",
+          "separacion": 1.5,
+          "separacionFilas": 1.5,
+          "radio": 8,
+          "apertura": 90,
+          "orientacion": "fila",
+          "anguloButacas": 0
+        },
+        "ajustes": {}
+      }
+    ],
+    "formas": [],
+    "butacasSueltas": [],
+    "escenario": null,
+    "bloqueadas": [
+      "F3-1-3",
+      "F5-1-2"
+    ],
+    "zonasDeAsiento": {},
+    "zonasFisicasConfirmadas": {},
+    "siguiente": 2,
+    "siguienteBanda": 3,
+    "siguienteBloque": 6,
+    "siguienteForma": 1,
+    "zonas": [
+      {
+        "id": "luneta",
+        "nombre": "Luneta"
+      },
+      {
+        "id": "mesas",
+        "nombre": "Mesas"
+      },
+      {
+        "id": "general",
+        "nombre": "General"
+      }
+    ],
+    "antecedentesComerciales": {
+      "preciosPorZona": [],
+      "mesasCompletas": []
+    },
+    "siguienteZona": 1,
+    "siguienteButaca": 1,
+    "identidadFisica": {
+      "M1-N1": {
+        "id": "M1-N1",
+        "zona": "mesas",
+        "nivel": "n1"
+      },
+      "M1-N2": {
+        "id": "M1-N2",
+        "zona": "mesas",
+        "nivel": "n1"
+      },
+      "M1-S2": {
+        "id": "M1-S2",
+        "zona": "mesas",
+        "nivel": "n1"
+      },
+      "M1-S1": {
+        "id": "M1-S1",
+        "zona": "mesas",
+        "nivel": "n1"
+      },
+      "F1-1-1": {
+        "id": "F1-1-1",
+        "zona": "luneta",
+        "nivel": "n1",
+        "sectorId": "sector1",
+        "filaId": "fila1"
+      },
+      "F1-1-2": {
+        "id": "F1-1-2",
+        "zona": "luneta",
+        "nivel": "n1",
+        "sectorId": "sector1",
+        "filaId": "fila1"
+      },
+      "F2-1-1": {
+        "id": "F2-1-1",
+        "zona": "luneta",
+        "nivel": "n1",
+        "sectorId": "sector2",
+        "filaId": "fila1"
+      },
+      "F2-1-2": {
+        "id": "F2-1-2",
+        "zona": "luneta",
+        "nivel": "n1",
+        "sectorId": "sector2",
+        "filaId": "fila1"
+      },
+      "F3-1-1": {
+        "id": "F3-1-1",
+        "zona": "luneta",
+        "nivel": "n1",
+        "grupoId": "palco1",
+        "numeroGrupo": "1"
+      },
+      "F3-1-2": {
+        "id": "F3-1-2",
+        "zona": "luneta",
+        "nivel": "n1",
+        "grupoId": "palco1",
+        "numeroGrupo": "2"
+      },
+      "F3-1-3": {
+        "id": "F3-1-3",
+        "zona": "luneta",
+        "nivel": "n1",
+        "grupoId": "palco1",
+        "numeroGrupo": "3"
+      },
+      "F4-1-1": {
+        "id": "F4-1-1",
+        "zona": "general",
+        "nivel": "n2"
+      },
+      "F4-1-2": {
+        "id": "F4-1-2",
+        "zona": "general",
+        "nivel": "n2"
+      },
+      "F5-1-1": {
+        "id": "F5-1-1",
+        "zona": "general",
+        "nivel": "n3"
+      },
+      "F5-1-2": {
+        "id": "F5-1-2",
+        "zona": "general",
+        "nivel": "n3"
+      }
+    },
+    "idsRetirados": [],
+    "siguienteLugar": 1,
+    "modoNumeracion": "automatica",
+    "revisionFisica": {
+      "recintoId": "r-muu8nr4z-22hxu0a3a9",
+      "numero": 1,
+      "estado": "publicada",
+      "huella": "c73db5f4c2d44022"
+    },
+    "regionesLibres": [],
+    "niveles": [
+      {
+        "id": "n1",
+        "nombre": "Planta baja"
+      },
+      {
+        "id": "n2",
+        "nombre": "Primer piso",
+        "plano": {
+          "distribucion": {
+            "bloques": [
+              30
+            ],
+            "pasillos": []
+          },
+          "bandas": [
+            {
+              "id": "piso2",
+              "tipo": "espacio",
+              "alto": 20
+            }
+          ],
+          "mesas": [],
+          "bloquesFilas": [
+            {
+              "id": "F4",
+              "tipo": "filas",
+              "x": 4,
+              "y": 6,
+              "ancho": 2,
+              "filas": 1,
+              "giro": 0,
+              "zona": "general",
+              "geometria": {
+                "tipo": "recta",
+                "separacion": 1.5,
+                "separacionFilas": 1.5,
+                "radio": 8,
+                "apertura": 90,
+                "orientacion": "fila",
+                "anguloButacas": 0
+              },
+              "ajustes": {}
+            }
+          ],
+          "formas": [],
+          "butacasSueltas": [],
+          "escenario": null,
+          "lienzo": true,
+          "regionesLibres": []
+        }
+      },
+      {
+        "id": "n3",
+        "nombre": "Segundo piso",
+        "plano": {
+          "distribucion": {
+            "bloques": [
+              30
+            ],
+            "pasillos": []
+          },
+          "bandas": [
+            {
+              "id": "piso3",
+              "tipo": "espacio",
+              "alto": 20
+            }
+          ],
+          "mesas": [],
+          "bloquesFilas": [
+            {
+              "id": "F5",
+              "tipo": "filas",
+              "x": 4,
+              "y": 6,
+              "ancho": 2,
+              "filas": 1,
+              "giro": 0,
+              "zona": "general",
+              "geometria": {
+                "tipo": "recta",
+                "separacion": 1.5,
+                "separacionFilas": 1.5,
+                "radio": 8,
+                "apertura": 90,
+                "orientacion": "fila",
+                "anguloButacas": 0
+              },
+              "ajustes": {}
+            }
+          ],
+          "formas": [],
+          "butacasSueltas": [],
+          "escenario": null,
+          "lienzo": true,
+          "regionesLibres": []
+        }
+      }
+    ],
+    "siguienteNivel": 4,
+    "siguienteRegion": 1,
+    "entidadesRetiradas": [],
+    "sectores": [
+      {
+        "id": "sector1",
+        "nombre": "Izquierdo",
+        "nivel": "n1",
+        "zona": "luneta"
+      },
+      {
+        "id": "sector2",
+        "nombre": "Derecho",
+        "nivel": "n1",
+        "zona": "luneta"
+      }
+    ],
+    "siguienteSector": 3,
+    "filasFisicas": [
+      {
+        "id": "fila1",
+        "nombre": "A",
+        "nivel": "n1",
+        "zona": "luneta"
+      }
+    ],
+    "siguienteFilaFisica": 2,
+    "palcos": [
+      {
+        "id": "palco1",
+        "nombre": "B",
+        "nivel": "n1",
+        "zona": "luneta"
+      }
+    ],
+    "siguientePalco": 2
+  },
+  "evento": {
+    "formato": "sintaquilla/evento-asientos",
+    "version": 1,
+    "evento": {
+      "id": "evt_ejemplo",
+      "nombre": "Función de ejemplo",
+      "moneda": "MXN",
+      "versionEstado": 1,
+      "revision": {
+        "recintoId": "r-muu8nr4z-22hxu0a3a9",
+        "numero": 1,
+        "estado": "publicada",
+        "huella": "c73db5f4c2d44022"
+      }
+    },
+    "categorias": [
+      {
+        "id": "ett_luneta",
+        "nombre": "Luneta",
+        "precioCentavos": 35000,
+        "activa": true
+      },
+      {
+        "id": "ett_mesas",
+        "nombre": "Mesas",
+        "precioCentavos": 50000,
+        "activa": true
+      },
+      {
+        "id": "ett_general",
+        "nombre": "General",
+        "precioCentavos": 20000,
+        "activa": true
+      }
+    ],
+    "asignaciones": [
+      {
+        "tipo": "zona",
+        "id": "luneta",
+        "categoriaId": "ett_luneta"
+      },
+      {
+        "tipo": "zona",
+        "id": "mesas",
+        "categoriaId": "ett_mesas"
+      },
+      {
+        "tipo": "zona",
+        "id": "general",
+        "categoriaId": "ett_general"
+      }
+    ],
+    "exclusiones": {
+      "nivel": [],
+      "zona": [],
+      "sector": [
+        "sector2"
+      ],
+      "fila": [],
+      "grupo": [],
+      "lugar": []
+    },
+    "grupos": [
+      {
+        "id": "palco1",
+        "event_group_id": "eg_ejemplo_0",
+        "modalidad": "completa"
+      },
+      {
+        "id": "M1",
+        "event_group_id": "eg_ejemplo_1",
+        "modalidad": "completa"
+      }
+    ],
+    "lugares": [
+      {
+        "local_place_id": "F4-1-1",
+        "event_place_id": "ep_ejemplo_0",
+        "estado": "libre"
+      },
+      {
+        "local_place_id": "F4-1-2",
+        "event_place_id": "ep_ejemplo_1",
+        "estado": "libre"
+      },
+      {
+        "local_place_id": "F5-1-1",
+        "event_place_id": "ep_ejemplo_2",
+        "estado": "libre"
+      },
+      {
+        "local_place_id": "F5-1-2",
+        "event_place_id": "ep_ejemplo_3",
+        "estado": "libre"
+      },
+      {
+        "local_place_id": "M1-N1",
+        "event_place_id": "ep_ejemplo_4",
+        "estado": "libre"
+      },
+      {
+        "local_place_id": "M1-N2",
+        "event_place_id": "ep_ejemplo_5",
+        "estado": "libre"
+      },
+      {
+        "local_place_id": "M1-S2",
+        "event_place_id": "ep_ejemplo_6",
+        "estado": "libre"
+      },
+      {
+        "local_place_id": "M1-S1",
+        "event_place_id": "ep_ejemplo_7",
+        "estado": "libre"
+      },
+      {
+        "local_place_id": "F1-1-1",
+        "event_place_id": "ep_ejemplo_8",
+        "estado": "libre"
+      },
+      {
+        "local_place_id": "F1-1-2",
+        "event_place_id": "ep_ejemplo_9",
+        "estado": "libre"
+      },
+      {
+        "local_place_id": "F2-1-1",
+        "event_place_id": "ep_ejemplo_10",
+        "estado": "libre"
+      },
+      {
+        "local_place_id": "F2-1-2",
+        "event_place_id": "ep_ejemplo_11",
+        "estado": "libre"
+      },
+      {
+        "local_place_id": "F3-1-1",
+        "event_place_id": "ep_ejemplo_12",
+        "estado": "libre"
+      },
+      {
+        "local_place_id": "F3-1-2",
+        "event_place_id": "ep_ejemplo_13",
+        "estado": "libre"
+      },
+      {
+        "local_place_id": "F3-1-3",
+        "event_place_id": "ep_ejemplo_14",
+        "estado": "libre"
+      }
+    ]
+  },
+  "esperado": {
+    "inventariados": 15,
+    "utilizables": 13,
+    "habilitados": 11,
+    "disponibles": 11,
+    "comprables": 11,
+    "conjuntosComprables": 2
+  }
+}

@@ -4,7 +4,27 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Sectores, filas físicas y palcos (fase 5)
+## Sin publicar — Conector de eventos y entrega CSP (fase 6)
+
+Rama `claude/conector-eventos`, desde `main` tras fusionar el PR #51.
+
+- Snapshot comercial independiente: revisión fija, tarifas externas, exclusiones por pertenencias,
+  IDs opacos y disponibilidad confirmada, sin guardar datos del evento en el mapa.
+- Selección común de mesas y palcos, completa o individual; conteos y avisos de cambios de disponibilidad.
+- API pública, consulta y petición de reserva del mismo origen con CSRF, rechazo de respuestas
+  antiguas e identidades cambiantes; fallos suspenden compra hasta confirmar disponibilidad.
+- Entrega generada con HTML/CSS/JS externos para CSP, además del HTML autónomo.
+- Guía para la otra IA y ejemplo ficticio con tres niveles, fila compartida, mesa y palco.
+  Sin modificaciones a Sin Taquilla ni construcción del mapa del Clavijero.
+- Verificado: 193 pruebas de lógica y 24 de navegador; 33 mutaciones detectadas, 16 pruebas
+  anteriores ejecutadas sobre fase 5 y esta versión, entrega externa bajo CSP, revisión visual
+  en móvil/escritorio y sin errores JavaScript. Las reservas HTTP usan respuestas de ejemplo;
+  la atomicidad del servidor aún requiere pruebas en Sin Taquilla.
+
+## 2026-10-04 — PR #51: Sectores, filas físicas y palcos (fase 5)
+
+[PR #51](https://github.com/jonathancr29/selector-asientos/pull/51), fusionado en `main` con el
+commit `4d1cc96`.
 
 Rama `claude/estructura-fisica`, desde `main` tras fusionar el PR #50.
 
