@@ -209,6 +209,13 @@ comentarios `// ----`.
 
 ## Reglas que no se deben romper
 
+- **Explorar zonas no compra ni edita:** `zonaExplorada` es estado transitorio del visor, separado
+  de `elegidas` y del mapa. El realce no intercepta clics; se calcula por filas, tramos y grupos,
+  sin un rectángulo que rellene el centro de una herradura. Una zona en varios pisos conserva
+  selección y permite elegir el nivel. El resumen comercial usa comprables del evento y suma
+  todos los requeridos al mostrar precio de conjunto; sin evento no supone precio ni disponibilidad.
+  Actualizar o perder disponibilidad refresca el resumen, y cambiar de recinto limpia la exploración.
+
 - **Laterales conservan el centro:** `agregarLateral` amplía solo el nivel visible, conserva
   los IDs de bandas y lugares y materializa el escenario con sus medidas anteriores. Añadir
   por la izquierda traslada también piezas y regiones existentes; nunca cambia su pertenencia

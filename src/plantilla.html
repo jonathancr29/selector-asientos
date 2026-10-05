@@ -209,6 +209,15 @@
       </div>
       <p class="aforo" id="aforo"></p>
       <div id="nivel-vista" class="pestanas-niveles" role="tablist" aria-label="Niveles del recinto"></div>
+      <section id="explorador-zonas" class="explorador-zonas" aria-label="Explorar zonas">
+        <div class="zonas-controles">
+          <span>Explorar zonas</span>
+          <div id="zonas-vista" role="group" aria-label="Zonas del recinto"></div>
+          <button type="button" id="quitar-realce-zona" hidden>Ver todo</button>
+        </div>
+        <label id="etiqueta-nivel-zona" hidden>Nivel de la zona <select id="nivel-zona"></select></label>
+        <p id="resumen-zona" class="resumen-zona" role="status" aria-live="polite">Elige una zona para ver su ubicación e información.</p>
+      </section>
       <!-- Hojas de informacion, de una en una. En escritorio el panel baja sobre el plano.
            Se abren solo al pulsar el boton de informacion. -->
       <section class="panel hojas" id="hojas-info" aria-roledescription="carrusel" aria-label="Información" hidden>
@@ -267,6 +276,7 @@
           </pattern>
         </defs>
         <g id="muebles"></g>
+        <g id="realce-zona" aria-hidden="true"></g>
         <g id="butacas"></g>
         <g id="subtitulos"></g>        <!-- nombres en el borde de verticales y bandas interiores, sobre las butacas -->
         <g id="seleccion-banda"></g>   <!-- solo en modo editor: el contorno de la banda seleccionada -->

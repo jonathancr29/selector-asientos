@@ -25,6 +25,13 @@ configuraciones ni credenciales del evento en el mapa o en `localStorage`.
 
 ## API pública del navegador
 
+El visor incluye exploración de zonas físicas: navega al nivel, encuadra y resalta sin elegir
+lugares. Su resumen por zona y piso deriva habilitación, comprables y tarifas del snapshot vigente;
+para venta agrupada muestra el importe y disponibilidad del conjunto completo. Actualizar el
+evento o suspender disponibilidad refresca esa información. No requiere campos adicionales del
+conector ni altera la solicitud de compra. Sin evento conectado no presenta disponibilidad de
+venta ni precios supuestos.
+
 `window.SelectorAsientos.version === 1`. Los métodos arrojan `Error` al rechazar datos:
 
 | Método | Función |

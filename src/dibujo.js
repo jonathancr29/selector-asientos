@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 const svg = document.getElementById('plano');
 const capaMuebles = document.getElementById('muebles');
+const capaRealceZona = document.getElementById('realce-zona');
 const capaButacas = document.getElementById('butacas');
 const capaPiezas = document.getElementById('piezas');
 const capaSeleccion = document.getElementById('seleccion-banda');
@@ -349,4 +350,5 @@ function dibujarTodo() {
   dibujarZonas();
   dibujarSeleccionBanda();
   dibujarTiradores();
+  actualizarExploradorZonas();
 }

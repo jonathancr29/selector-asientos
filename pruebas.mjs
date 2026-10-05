@@ -53,6 +53,52 @@ const cargar = () => new Function(fuente + '\nreturn { ' + declarados.join(', ')
 
 const ejemploConector = () => JSON.parse(readFileSync(new URL('./docs/ejemplo-conector-evento.json', import.meta.url), 'utf8'));
 
+test('explorar zonas: sin evento no infiere precios ni disponibilidad del ejemplo', () => {
+  const a = cargar();
+  const lista = [{ id: 'uno', estado: 'ocupada' }, { id: 'dos', estado: 'bloqueada' }];
+  const r = a.resumenDeZona(lista);
+  assert.equal(r.inventariados, 2); assert.equal(r.utilizables, 1);
+  assert.equal(r.comprables, null); assert.equal(r.habilitados, null);
+  assert.deepEqual(r.preciosIndividuales, []);
+});
+
+test('explorar zonas: separa lugar libre de conjunto comprable y suma precio completo', () => {
+  const a = cargar(), fixture = ejemploConector();
+  const e = a.resolverEventoDeMapa(fixture.mapa, fixture.evento).evento;
+  const lista = [...e.lugares.values()].filter((p) => p.physical_group?.type === 'box').map((p) => ({ id: p.local_place_id }));
+  const antes = JSON.stringify([...e.lugares]);
+  let r = a.resumenDeZona(lista, e);
+  assert.equal(r.conjuntos.length, 1); assert.equal(r.conjuntos[0].precioCentavos, 70000);
+  assert.equal(r.conjuntos[0].comprable, true); assert.deepEqual(r.preciosIndividuales, []);
+  assert.equal(JSON.stringify([...e.lugares]), antes);
+  fixture.evento.lugares.find((p) => p.local_place_id === lista[0].id).estado = 'reservado';
+  r = a.resumenDeZona(lista, a.resolverEventoDeMapa(fixture.mapa, fixture.evento).evento);
+  assert.equal(r.comprables, 0); assert.equal(r.conjuntos[0].comprable, false);
+});
+
+test('explorar zonas: conserva gratis, varias tarifas, exclusiones y estado desconocido', () => {
+  const a = cargar(), f = ejemploConector(); f.evento.categorias[0].precioCentavos = 0;
+  delete f.evento.lugares.find((p) => p.local_place_id === 'F1-1-1').estado;
+  const e = a.resolverEventoDeMapa(f.mapa, f.evento).evento;
+  const r = a.resumenDeZona([...e.lugares.values()].map((p) => ({ id: p.local_place_id })), e);
+  assert.ok(r.preciosIndividuales.includes(0)); assert.ok(r.preciosIndividuales.length > 1);
+  assert.equal(r.desconocidos, 1); assert.equal(r.inventariados, 15); assert.equal(r.habilitados, 11);
+});
+
+test('explorar zonas: contornos separan huecos, niveles y filas curvas sin cubrir el centro', () => {
+  const a = cargar(); const fila = (id, x, y, nivel = 'n1') => ({ id, x, y, nivel, fila: 'A' });
+  const lista = [fila('a', 0, 0), fila('b', 1.5, 0), fila('c', 10, 0), fila('d', 11.5, 0), fila('e', 0, 0, 'n2')];
+  const antes = JSON.stringify(lista), c = a.contornosDeZona(lista);
+  assert.equal(c.length, 3); assert.equal(JSON.stringify(lista), antes);
+  assert.ok(c[0].every((p) => p.x < 4)); assert.ok(c[1].every((p) => p.x > 9));
+  const curva = Array.from({ length: 10 }, (_, i) => fila(String(i), 10 * Math.cos(i / 10), 10 * Math.sin(i / 10)));
+  const tira = a.contornosDeZona(curva)[0];
+  assert.ok(tira.every((p) => Math.hypot(p.x - .5, p.y - .5) > 8));
+  const palco = [fila('p1', 0, 0), fila('p2', 2, 0), fila('p3', 0, 2)].map((b) => ({ ...b, fila: null, grupo: { id: 'palco1' } }));
+  const compartimento = a.contornosDeZona(palco);
+  assert.equal(compartimento.length, 1); assert.equal(compartimento[0].length, 4);
+});
+
 test('laterales: cada plantilla conserva lugares, etiquetas, pertenencias y escenario al ampliar', () => {
   for (const tipo of Object.keys(cargar().TIPOS_DE_SALA)) for (const lado of ['izquierdo', 'derecho']) {
     const a = cargar(); const sala = a.generarPlano(tipo); const p = a.planoDesdeSala(tipo, sala);

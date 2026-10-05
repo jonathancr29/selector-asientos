@@ -389,3 +389,13 @@
 .palco-fisico rect { fill: none; stroke: #a4bdd9; stroke-width: .6; stroke-dasharray: 2 2; }
 .palco-fisico text { text-anchor: start; font-size: 4px; }
 .butaca.fisica-seleccionada .toque { stroke: #facc15; stroke-width: 1.4; }
+.explorador-zonas { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--borde); border-radius: 10px; }
+.zonas-controles, #zonas-vista { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.zonas-controles > span { font-size: 12px; color: var(--texto-tenue); margin-right: 4px; }
+#zonas-vista button, #quitar-realce-zona { border: 1px solid var(--borde); border-radius: 6px; padding: 7px 10px; background: #26262f; color: var(--texto-claro); font: inherit; font-size: 12px; cursor: pointer; }
+#zonas-vista button:focus-visible, #quitar-realce-zona:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+#zonas-vista button[aria-pressed="true"] { background: var(--acento); color: white; }
+.resumen-zona { font-size: 12px; line-height: 1.6; color: var(--texto-tenue); margin: 8px 0 0; }
+#etiqueta-nivel-zona { font-size: 12px; margin-top: 8px; }
+#realce-zona { pointer-events: none; }
+#realce-zona path { fill: rgba(59, 130, 246, .16); stroke: #93c5fd; stroke-width: .7; stroke-linejoin: round; }

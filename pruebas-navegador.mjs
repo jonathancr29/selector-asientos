@@ -629,6 +629,22 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       assert.equal(await protocolo.evaluar('elegidas.has(window.__elegidaFisica)'),true);
     });
 
+    await t.test('visor de zonas: teclado resalta sin seleccionar y no inventa datos comerciales', async () => {
+      await protocolo.evaluar(`cambiarModo('vista');redibujar('mixta-ambos');
+        document.querySelector('#zonas-vista button').focus();window.__seleccionAntesZona=[...elegidas];`);
+      await protocolo.tecla('Enter', 'Enter', 13);
+      assert.deepEqual(await protocolo.evaluar('[...elegidas]'), await protocolo.evaluar('__seleccionAntesZona'));
+      assert.equal(await protocolo.evaluar('document.activeElement.getAttribute("aria-pressed")'), 'true');
+      assert.match(await protocolo.evaluar('document.querySelector("#resumen-zona").textContent'), /Precio no disponible.*Disponibilidad sin confirmar/);
+      assert.ok(await protocolo.evaluar('document.querySelectorAll("#realce-zona path").length') > 0);
+      assert.equal(await protocolo.evaluar('getComputedStyle(capaRealceZona).pointerEvents'), 'none');
+      await protocolo.evaluar('document.querySelector("#quitar-realce-zona").click()');
+      assert.equal(await protocolo.evaluar('document.querySelectorAll("#realce-zona path").length'), 0);
+      await protocolo.evaluar(`cambiarModo('editor')`);
+      assert.equal(await protocolo.evaluar('document.querySelector("#explorador-zonas").hidden'), true);
+      await protocolo.evaluar(`cambiarModo('vista')`);
+    });
+
     await t.test('conector: carga revision publicada con tarifas externas y cierra el editor', async () => {
       await protocolo.evaluar(`window.__fixtureEvento=${JSON.stringify(ejemploEvento)}; window.__cambiosEvento=[];
         SelectorAsientos.cargarEvento({...__fixtureEvento,alSeleccionar:s=>__cambiosEvento.push(s)});`);
@@ -643,6 +659,43 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       assert.match(await protocolo.evaluar('document.querySelector("#estado").textContent'),/revisión fija/);
       assert.equal(await protocolo.evaluar('document.querySelector(".butaca[data-id=F2-1-1]").getAttribute("aria-disabled")'),'true');
       assert.match(await protocolo.evaluar('document.querySelector(".butaca[data-id=F2-1-1]").getAttribute("aria-label")'),/no habilitado/);
+    });
+
+    await t.test('visor de zonas: navega entre pisos, muestra tarifas y conserva compra y revisión', async () => {
+      await protocolo.evaluar(`window.__mapaAntesExplorar=JSON.stringify(mapaDesdePlano(TIPOS_DE_SALA[tipoActual].nombre,planoEditable(),null));
+        document.querySelector('#zonas-vista button[data-zona="general"]').click();`);
+      assert.equal(await protocolo.evaluar('butacasVisibles().some(b=>b.zona==="general")'), true);
+      assert.match(await protocolo.evaluar('document.querySelector("#resumen-zona").textContent'), /200.*por lugar/);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'), 0);
+      assert.equal(await protocolo.evaluar('document.querySelector("#etiqueta-nivel-zona").hidden'), false);
+      await protocolo.evaluar(`document.querySelector('#nivel-zona').value='n3';document.querySelector('#nivel-zona').dispatchEvent(new Event('change'));`);
+      assert.equal(await protocolo.evaluar('salaActual.nivel'), 'n3');
+      await protocolo.evaluar('document.querySelector("#zonas-vista button[data-zona=luneta]").click()');
+      assert.equal(await protocolo.evaluar('salaActual.nivel'), 'n1');
+      assert.match(await protocolo.evaluar('document.querySelector("#resumen-zona").textContent'), /700.*por palco completo/);
+      await protocolo.evaluar(`document.querySelector('.butaca[data-id="F3-1-1"]').focus()`);
+      await protocolo.tecla('Enter', 'Enter', 13);
+      await protocolo.evaluar(`document.querySelector('#zonas-vista button[data-zona=general]').click()`);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'), 2);
+      await protocolo.evaluar(`document.querySelector('#quitar-realce-zona').click();cambiarNivelVista('n1');
+        document.querySelector('.butaca[data-id="F3-1-1"]').focus()`);
+      await protocolo.tecla('Enter', 'Enter', 13);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'), 0);
+      assert.equal(await protocolo.evaluar('JSON.stringify(mapaDesdePlano(TIPOS_DE_SALA[tipoActual].nombre,planoEditable(),null))'),
+        await protocolo.evaluar('__mapaAntesExplorar'));
+    });
+
+    await t.test('visor de zonas: actualiza gratuito, disponibilidad desconocida y zona excluida', async () => {
+      await protocolo.evaluar(`explorarZona('general');window.__zonaEvento=structuredClone(__fixtureEvento.evento);
+        __zonaEvento.evento.versionEstado=2;__zonaEvento.categorias.find(c=>c.id==='ett_general').precioCentavos=0;
+        for(const p of __zonaEvento.lugares)if(eventoConectado.lugares.get(p.local_place_id).physical_zone.id==='general')p.estado='desconocido';
+        SelectorAsientos.actualizarEvento(__zonaEvento);`);
+      assert.match(await protocolo.evaluar('document.querySelector("#resumen-zona").textContent'), /Gratis por lugar/);
+      assert.match(await protocolo.evaluar('document.querySelector("#resumen-zona").textContent'), /0 lugares comprables.*disponibilidad sin confirmar/);
+      await protocolo.evaluar(`__zonaEvento.evento.versionEstado=3;__zonaEvento.exclusiones.zona.push('general');SelectorAsientos.actualizarEvento(__zonaEvento)`);
+      assert.match(await protocolo.evaluar('document.querySelector("#resumen-zona").textContent'), /No habilitada para esta función/);
+      assert.ok(await protocolo.evaluar('capaRealceZona.children.length') > 0);
+      await protocolo.evaluar('SelectorAsientos.cerrarEvento();SelectorAsientos.cargarEvento({...__fixtureEvento,alSeleccionar:s=>__cambiosEvento.push(s)})');
     });
 
     await t.test('conector: teclado selecciona palco completo y conserva compra entre niveles', async () => {

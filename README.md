@@ -877,6 +877,30 @@ inventar sectores, filas físicas o palcos a partir de su geometría o etiquetas
 
 ## Niveles, regiones y filas libres (fase 4)
 
+### Explorar zonas en el visor
+
+En Previsualizar y en compra conectada, **Explorar zonas** muestra únicamente las zonas físicas
+con lugares en el recinto. Pulsar una navega a un nivel que la contiene y la encuadra, conservando
+la selección de compra. Si abarca varios pisos, **Nivel de la zona** permite recorrerlos; la
+información mostrada corresponde al piso visible. **Ver todo** quita el resaltado y vuelve al
+encuadre del nivel. Cambiar de recinto descarta la zona explorada. El editor oculta este panel.
+
+El fondo semitransparente y el borde siguen filas y tramos, separados en huecos amplios, y los
+compartimentos de mesas o palcos. Son referencias calculadas a partir de lugares, no contornos
+arquitectónicos. No cubren el centro vacío con un rectángulo de toda la zona ni interceptan clics
+en butacas. Explorar no selecciona ni reserva lugares, no cambia pertenencias ni revisiones y
+no se guarda en el JSON o en localStorage.
+
+El resumen muestra aforo físico y, con evento conectado, habilitados y **comprables**. Distingue
+lugares individuales de conjuntos completos, cuyo precio suma todos los integrantes requeridos
+del grupo, aunque un conjunto abarque más de una zona. Varias tarifas se presentan como rango;
+un precio cero explícito se muestra como Gratis. Precios y disponibilidad se actualizan desde
+el snapshot del evento. Sin evento no se infiere disponibilidad de la ocupación de ejemplo:
+se muestra «Precio no disponible» y «Disponibilidad sin confirmar». Un integrante libre de un
+palco completo puede no ser comprable si el conjunto no lo está.
+
+### Administración y geometría
+
 El mapa **versión 7** conserva hasta 12 niveles con IDs estables, nombres y geometría propia.
 Los mapas v1–v6 se abren como *Planta baja*, sin alterar sus lugares. Las pestañas de niveles están
 disponibles encima del plano al editar y previsualizar; conservan la selección de todo el recinto y la vista de

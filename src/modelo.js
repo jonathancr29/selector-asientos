@@ -3958,4 +3958,79 @@ function solicitudDeSeleccionEvento(ids, evento) {
     cantidad: ids.size, totalCentavos };
 }
 
+// Exploración visual: nunca modifica pertenencias, selección ni datos del evento.
+function resumenDeZona(lista, evento = null) {
+  const resumen = { inventariados: lista.length, utilizables: lista.filter((b) => b.estado !== 'bloqueada').length,
+    habilitados: null, comprables: null, desconocidos: null, preciosIndividuales: [], conjuntos: [] };
+  if (!evento) return resumen;
+  const lugares = lista.map((b) => evento.lugares.get(b.id)).filter(Boolean);
+  resumen.utilizables = lugares.filter((p) => !p.blocked).length;
+  resumen.habilitados = lugares.filter((p) => p.habilitado).length;
+  resumen.comprables = lugares.filter((p) => p.comprable).length;
+  resumen.desconocidos = lugares.filter((p) => p.habilitado && p.estado === 'desconocido').length;
+  const precios = new Set();
+  const grupos = new Set();
+  for (const p of lugares) {
+    const grupo = evento.grupos.get(p.physical_group?.id);
+    if (grupo?.modalidad === 'completa') grupos.add(grupo.id);
+    else if (p.habilitado && p.categoria) precios.add(p.categoria.precioCentavos);
+  }
+  resumen.preciosIndividuales = [...precios].sort((a, b) => a - b);
+  for (const id of grupos) {
+    const g = evento.grupos.get(id);
+    const miembros = g.requeridos.map((k) => evento.lugares.get(k));
+    resumen.conjuntos.push({ id, nombre: miembros[0]?.physical_group?.name || 'Conjunto',
+      tipo: miembros[0]?.physical_group?.type || 'table', comprable: g.comprable,
+      precioCentavos: miembros.length && miembros.every((p) => p.habilitado && p.categoria)
+        ? miembros.reduce((s, p) => s + p.categoria.precioCentavos, 0) : null });
+  }
+  return resumen;
+}
+
+// Tiras por fila y tramos separados por huecos: evitan rellenar la herradura
+// o el pasillo entre bloques de una misma fila física. Coordenadas de celdas.
+function contornosDeZona(lista) {
+  const filas = new Map();
+  for (const b of lista) {
+    const clave = JSON.stringify([b.nivel, b.sectorFisico?.id, b.grupo?.id,
+      b.grupo ? '' : b.filaFisica?.id || b.fila || b.id]);
+    if (!filas.has(clave)) filas.set(clave, []);
+    filas.get(clave).push({ x: b.x + .5, y: b.y + .5, grupo: Boolean(b.grupo) });
+  }
+  const contornos = [];
+  const trazar = (puntos) => {
+    if (puntos.length === 1) {
+      const { x, y } = puntos[0];
+      contornos.push([{ x: x - .7, y: y - .7 }, { x: x + .7, y: y - .7 },
+        { x: x + .7, y: y + .7 }, { x: x - .7, y: y + .7 }]); return;
+    }
+    const lados = [[], []];
+    puntos.forEach((p, i) => {
+      const antes = puntos[Math.max(0, i - 1)], despues = puntos[Math.min(puntos.length - 1, i + 1)];
+      const largo = Math.hypot(despues.x - antes.x, despues.y - antes.y) || 1;
+      const dx = (despues.x - antes.x) / largo, dy = (despues.y - antes.y) / largo;
+      const extremo = i === 0 ? -.7 : i === puntos.length - 1 ? .7 : 0;
+      lados[0].push({ x: p.x + dx * extremo - dy * .7, y: p.y + dy * extremo + dx * .7 });
+      lados[1].push({ x: p.x + dx * extremo + dy * .7, y: p.y + dy * extremo - dx * .7 });
+    });
+    contornos.push([...lados[0], ...lados[1].reverse()]);
+  };
+  for (const puntos of filas.values()) {
+    if (puntos[0].grupo) {
+      const xs = puntos.map((p) => p.x), ys = puntos.map((p) => p.y);
+      const x = Math.min(...xs) - .7, y = Math.min(...ys) - .7;
+      const w = Math.max(...xs) + .7, h = Math.max(...ys) + .7;
+      contornos.push([{ x, y }, { x: w, y }, { x: w, y: h }, { x, y: h }]); continue;
+    }
+    let tramo = [];
+    for (const p of puntos) {
+      const anterior = tramo.at(-1);
+      if (anterior && Math.hypot(p.x - anterior.x, p.y - anterior.y) > 2.5) { trazar(tramo); tramo = []; }
+      tramo.push(p);
+    }
+    if (tramo.length) trazar(tramo);
+  }
+  return contornos;
+}
+
 // === Fin de la parte sin DOM. pruebas.mjs evalua todo lo anterior en Node. ===
