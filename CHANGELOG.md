@@ -4,7 +4,24 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Conector de eventos y entrega CSP (fase 6)
+## Sin publicar — Pestañas de niveles y espacios laterales
+
+Rama `claude/pestanas-laterales`, desde `main` tras fusionar el PR #52.
+
+- Pestañas encima del plano en edición y compra, con foco conservado y activación por teclado.
+- Accesos para agregar un lateral vacío a cada lado del nivel actual, conservando ancho central,
+  escenario, identidades, etiquetas y pertenencias físicas. Sin zonas ni tarifas nuevas.
+- Guardado, reapertura y deshacer/rehacer; rechazo de límites sin cambios parciales.
+- Revisión del PR: rótulos y guías conservan su lado al quedar el centro entre laterales,
+  también al guardar y abrir, sin alterar las etiquetas oficiales ni las pertenencias.
+- Verificado: 199 pruebas de lógica y 26 de navegador, 20 mutaciones detectadas,
+  los 24 recorridos anteriores sobre ambas versiones, revisión visual móvil/escritorio
+  y sin errores JavaScript. Las cuatro salidas generadas están sincronizadas.
+
+## 2026-10-04 — PR #52: Conector de eventos y entrega CSP (fase 6)
+
+[PR #52](https://github.com/jonathancr29/selector-asientos/pull/52), fusionado en `main` con el
+commit `d21b355`.
 
 Rama `claude/conector-eventos`, desde `main` tras fusionar el PR #51.
 

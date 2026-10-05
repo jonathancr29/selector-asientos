@@ -53,6 +53,124 @@ const cargar = () => new Function(fuente + '\nreturn { ' + declarados.join(', ')
 
 const ejemploConector = () => JSON.parse(readFileSync(new URL('./docs/ejemplo-conector-evento.json', import.meta.url), 'utf8'));
 
+test('laterales: cada plantilla conserva lugares, etiquetas, pertenencias y escenario al ampliar', () => {
+  for (const tipo of Object.keys(cargar().TIPOS_DE_SALA)) for (const lado of ['izquierdo', 'derecho']) {
+    const a = cargar(); const sala = a.generarPlano(tipo); const p = a.planoDesdeSala(tipo, sala);
+    const original = JSON.stringify(p);
+    const lugares = a.butacas.map((b) => ({ id: b.id, x: b.x, y: b.y, zona: b.zona, fila: b.fila, numero: b.numero, estado: b.estado }));
+    const escenario = p.escenario && { ...p.escenario };
+    const n = a.agregarLateral(p, sala, lado);
+    assert.equal(n.motivo, undefined, tipo);
+    assert.equal(JSON.stringify(p), original);
+    const nuevaSala = a.generarPlano(tipo, n);
+    assert.equal(nuevaSala.ancho, sala.ancho + 7);
+    assert.equal(nuevaSala.alto, sala.alto);
+    for (const b of a.hojasDe(sala.bandas).filter((b) => b.tipo !== 'escenario')) {
+      const despues = a.ubicar(nuevaSala.bandas, b.id).item;
+      assert.equal(despues.anchoOcupado, b.anchoOcupado);
+      assert.equal(despues.x, b.x + (lado === 'izquierdo' ? 7 : 0));
+    }
+    assert.equal(a.primeraPiezaQueNoCabe(nuevaSala), null);
+    assert.deepEqual(a.butacas.map((b) => ({ id: b.id, x: b.x, y: b.y, zona: b.zona, fila: b.fila, numero: b.numero, estado: b.estado })),
+      lugares.map((b) => ({ ...b, x: b.x + (lado === 'izquierdo' ? 7 : 0) })));
+    assert.deepEqual(n.identidadFisica, p.identidadFisica);
+    assert.deepEqual(n.escenario, escenario ? { ...escenario, x: escenario.x + (lado === 'izquierdo' ? 7 : 0) } : null);
+    const region = n.regionesLibres.at(-1);
+    assert.equal(region.x, lado === 'izquierdo' ? 1 : sala.ancho + 2);
+    assert.equal(region.ancho, 6);
+    const mapa = a.mapaDesdePlano(tipo, n);
+    assert.equal(a.validarMapa(mapa).errores, undefined, tipo);
+  }
+});
+
+test('laterales: dos lados conservan regiones, geometria libre y estructura de otros pisos', () => {
+  const a = cargar(); let p = recintoFisico(a);
+  p = a.nuevaRevisionFisica(p);
+  p = a.agregarNivel(p, 'Galería');
+  p = a.cambiarNivelPlano(p, 'n1');
+  let sala = a.generarPlano('mapa-en-blanco', p);
+  p = a.agregarRegion(p, 'Referencia');
+  p.regionesLibres[0].x = 5;
+  const antes = JSON.parse(JSON.stringify(p));
+  p = a.agregarLateral(p, sala, 'izquierdo');
+  sala = a.generarPlano('mapa-en-blanco', p);
+  p = a.agregarLateral(p, sala, 'derecho');
+  a.generarPlano('mapa-en-blanco', p);
+  assert.deepEqual(p.identidadFisica, antes.identidadFisica);
+  assert.deepEqual(p.niveles, antes.niveles);
+  assert.deepEqual(p.sectores, antes.sectores);
+  assert.deepEqual(p.filasFisicas, antes.filasFisicas);
+  assert.deepEqual(p.palcos, antes.palcos);
+  assert.deepEqual(p.bloquesFilas, antes.bloquesFilas.map((b) => ({ ...b, x: b.x + 7 })));
+  assert.equal(p.regionesLibres[0].x, 12);
+  assert.equal(p.regionesLibres[1].x, 1);
+  assert.equal(p.regionesLibres[2].x, sala.ancho + 2);
+  assert.equal(a.validarMapa(a.mapaDesdePlano('mapa-en-blanco', p)).errores, undefined);
+});
+
+test('laterales: franjas divididas conservan anchos y lugares de todas sus verticales', () => {
+  for (const lado of ['izquierdo', 'derecho']) {
+    const a = cargar(); let p = a.planoDesdeSala('mapa-en-blanco', a.generarPlano('mapa-en-blanco'));
+    p.escenario = null;
+    p.bandas = [{ id: 'franja', tipo: 'division', verticales: [
+      { id: 'v1', ancho: 8, bandas: [{ id: 'filaizq', tipo: 'filas', zona: 'luneta', filas: 2 }] },
+      { id: 'v2', bandas: [{ id: 'filader', tipo: 'filas', zona: 'luneta', filas: 2 }] },
+    ] }];
+    const sala = a.generarPlano('mapa-en-blanco', p); p = a.sincronizarIdentidad(p);
+    const antes = a.butacas.map((b) => ({ id: b.id, x: b.x, y: b.y, numero: b.numero, fila: b.fila }));
+    const rotulos = a.muebles.filter((m) => m.tipo === 'rotulo').map((m) => ({ ...m }));
+    const n = a.agregarLateral(p, sala, lado); const despues = a.generarPlano('mapa-en-blanco', n);
+    assert.deepEqual(a.butacas.map((b) => ({ id: b.id, x: b.x, y: b.y, numero: b.numero, fila: b.fila })),
+      antes.map((b) => ({ ...b, x: b.x + (lado === 'izquierdo' ? 7 : 0) })));
+    for (const v of sala.bandas[0].verticales) assert.equal(a.ubicar(despues.bandas, v.id).item.anchoOcupado, v.anchoOcupado);
+    assert.deepEqual(a.muebles.filter((m) => m.tipo === 'rotulo'), rotulos.map((m) => ({ ...m, x: m.x + (lado === 'izquierdo' ? 7 : 0) })));
+    assert.equal(a.validarMapa(a.mapaDesdePlano('mapa-en-blanco', n)).errores, undefined);
+  }
+});
+
+test('laterales: limites y revision publicada rechazan todo sin consumir IDs', () => {
+  const a = cargar(); const sala = a.generarPlano('mapa-en-blanco');
+  const p = a.planoDesdeSala('mapa-en-blanco', sala);
+  for (const [plano, s, lado] of [
+    [p, sala, 'otro'],
+    [{ ...p, revisionFisica: { ...p.revisionFisica, estado: 'publicada' } }, sala, 'derecho'],
+    [p, { ...sala, ancho: 60 }, 'derecho'],
+    [p, { ...sala, alto: 1000 }, 'izquierdo'],
+    [{ ...p, regionesLibres: Array.from({ length: 100 }, (_, i) => ({ id: 'region' + (i + 1) })) }, sala, 'izquierdo'],
+    [{ ...p, bandas: [{ id: 'division', tipo: 'division', verticales: Array.from({ length: 6 }, (_, i) => ({ id: 'v' + i, bandas: [] })) }] }, sala, 'derecho'],
+  ]) {
+    const antes = JSON.stringify(plano);
+    assert.ok(a.agregarLateral(plano, s, lado).motivo);
+    assert.equal(JSON.stringify(plano), antes);
+  }
+});
+
+test('laterales: rotulos y guias conservan su lado y posicion relativa al guardar y abrir', () => {
+  for (const tipo of Object.keys(cargar().TIPOS_DE_SALA)) {
+    const a = cargar(); let sala = a.generarPlano(tipo); let p = a.planoDesdeSala(tipo, sala);
+    if (tipo === 'mapa-en-blanco') { p = a.alternarGuias(p, p.bandas[0].id); sala = a.generarPlano(tipo, p); }
+    const antes = a.muebles.filter((m) => ['rotulo', 'guia'].includes(m.tipo)).map((m) => ({ ...m }));
+    for (const lado of ['izquierdo', 'derecho']) { p = a.agregarLateral(p, sala, lado); sala = a.generarPlano(tipo, p); }
+    const esperados = antes.map((m) => ({ ...m, x: m.x + 7 }));
+    assert.deepEqual(a.muebles.filter((m) => ['rotulo', 'guia'].includes(m.tipo)), esperados, tipo);
+    const r = a.validarMapa(a.mapaDesdePlano(tipo, p)); assert.equal(r.errores, undefined);
+    a.generarPlano(a.definicionDeMapa(r.mapa));
+    assert.deepEqual(a.muebles.filter((m) => ['rotulo', 'guia'].includes(m.tipo)), esperados, tipo);
+  }
+});
+
+test('rotulos: importacion rechaza lados desconocidos y tipos de banda incompatibles', () => {
+  const a = cargar(); const p = a.planoDesdeSala('mapa-en-blanco', a.generarPlano('mapa-en-blanco'));
+  const mapa = a.mapaDesdePlano('mapa-en-blanco', p);
+  for (const lado of ['arriba', null, 1]) {
+    const m = structuredClone(mapa); m.bandas[0].ladoRotulo = lado;
+    assert.match(a.validarMapa(m).errores.join(';'), /lado de rótulo inválido/);
+  }
+  const m = structuredClone(mapa);
+  m.bandas = [{ id: 'escenario', tipo: 'escenario', ladoRotulo: 'izquierdo' }];
+  assert.match(a.validarMapa(m).errores.join(';'), /lado de rótulo inválido/);
+});
+
 test('fase 6: revision fija, tres niveles, fila compartida y conteos separados', () => {
   const a=cargar(), {mapa,evento,esperado}=ejemploConector(); const antes=JSON.stringify(mapa);
   const r=a.resolverEventoDeMapa(mapa,evento); assert.equal(r.errores,undefined);

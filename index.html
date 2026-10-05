@@ -85,6 +85,13 @@
   .info-grupo[aria-expanded="true"] { background: var(--acento-fuerte); border-color: var(--acento); color: var(--texto); }
   .lateral .bandas { margin: 0; padding: 0; background: none; border: 0; }
   .encabezado { margin: 0 0 10px; }
+  .pestanas-niveles { display: flex; gap: 6px; overflow-x: auto; max-width: 100%; padding: 3px 2px 6px; }
+  .pestanas-niveles button { flex: 0 0 auto; max-width: 100%; min-height: 36px; padding: 6px 12px;
+    font: inherit; font-size: 13px; overflow-wrap: anywhere; color: var(--texto-tenue);
+    background: var(--fondo-control); border: 1px solid var(--borde); border-radius: 6px; cursor: pointer; }
+  .pestanas-niveles button[aria-selected="true"] { color: var(--texto); background: var(--acento-fuerte);
+    border-color: var(--realce); box-shadow: inset 0 -3px var(--realce); }
+  .pestanas-niveles button:focus-visible, #panel-nivel:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
   .encabezado .pista { margin: 0 0 6px; }
   /* Titulo con el boton de informacion. */
   .titulo { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; }
@@ -393,6 +400,8 @@
   .nota code { color: var(--texto-tenue); }
   .nota + .nota { border-left-color: #fbbf24; }
 .palco-fisico { pointer-events: none; }
+.region-libre { pointer-events: none; }
+.region-libre rect { fill: none; stroke: var(--realce); stroke-width: .6; stroke-dasharray: 2 2; }
 .palco-fisico rect { fill: none; stroke: #a4bdd9; stroke-width: .6; stroke-dasharray: 2 2; }
 .palco-fisico text { text-anchor: start; font-size: 4px; }
 .butaca.fisica-seleccionada .toque { stroke: #facc15; stroke-width: 1.4; }
@@ -478,10 +487,6 @@
     <div class="herramientas campo-ancho tipo-de-sala">
       <label class="campo" for="tipo-sala" data-tooltip="Tipo de sala"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-sala"></use></svg><span class="solo-lector">Tipo de sala</span></label>
       <select id="tipo-sala"></select>
-    </div>
-    <div class="herramientas campo-ancho">
-      <label class="campo" for="nivel-vista">Nivel</label>
-      <select id="nivel-vista" aria-label="Nivel del recinto"></select>
     </div>
     <details class="grupo" open id="grupo-mapa" hidden>
       <summary>Mapa</summary>
@@ -594,6 +599,7 @@
                 aria-label="Información: qué es, cómo se usa y notas" data-tooltip="Información"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button>
       </div>
       <p class="aforo" id="aforo"></p>
+      <div id="nivel-vista" class="pestanas-niveles" role="tablist" aria-label="Niveles del recinto"></div>
       <!-- Hojas de informacion, de una en una. En escritorio el panel baja sobre el plano.
            Se abren solo al pulsar el boton de informacion. -->
       <section class="panel hojas" id="hojas-info" aria-roledescription="carrusel" aria-label="Información" hidden>
@@ -631,7 +637,7 @@
       </section>
     </header>
 
-    <div class="lienzo">
+    <div class="lienzo" id="panel-nivel" role="tabpanel" tabindex="0">
       <svg id="plano" role="group" aria-label="Plano de butacas" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <!-- El trazo se declara UNA vez y se instancia con <use>: el path no se
@@ -747,6 +753,11 @@
           <button id="guardar-region" type="submit">Aplicar región</button>
         </form>
         <button id="agregar-region" type="button">Agregar región</button>
+        <div class="herramientas" role="group" aria-label="Agregar espacios laterales">
+          <button id="agregar-lateral-izquierdo" type="button">Agregar lateral izquierdo</button>
+          <button id="agregar-lateral-derecho" type="button">Agregar lateral derecho</button>
+        </div>
+        <p class="pista">Cada lateral agrega 6 columnas y una de separación al nivel actual. El escenario conserva su tamaño; los lugares conservan sus pertenencias. Después vincula sus bloques desde Geometría de filas.</p>
         <button id="eliminar-region" type="button">Eliminar región</button>
         <p class="pista">Las regiones organizan el dibujo. Moverlas transforma sus bloques vinculados y conserva sus zonas físicas.</p>
       </details>
@@ -1307,7 +1318,8 @@ function agregarFilas(banda, columnas, anchoSala = Infinity) {
     if (!columnas.length) continue;
     const bordeIzquierdo = (banda.x || 1) === 1;
     const bordeDerecho = (banda.x || 1) + (banda.anchoOcupado || anchoSala) - 1 >= anchoSala;
-    const xRotulo = bordeIzquierdo ? columnas[0] - 1 : bordeDerecho ? columnas.at(-1) + 1 : null;
+    const xRotulo = banda.ladoRotulo === 'izquierdo' || (!banda.ladoRotulo && bordeIzquierdo) ? columnas[0] - 1 :
+      banda.ladoRotulo === 'derecho' || (!banda.ladoRotulo && bordeDerecho) ? columnas.at(-1) + 1 : null;
     if (xRotulo !== null) muebles.push({ tipo: 'rotulo', texto: fila, banda: id, filaLocal: i, x: xRotulo, y: y + i });
   }
 }
@@ -1316,7 +1328,8 @@ function agregarFilas(banda, columnas, anchoSala = Infinity) {
 // mismo sitio que los rotulos de fila. Solo ayudan a ubicarse; no son butacas.
 function agregarGuias(banda, anchoSala) {
   const desde = banda.x || 1, ancho = banda.anchoOcupado || anchoSala;
-  const x = desde === 1 ? 0 : desde + ancho - 1 >= anchoSala ? anchoSala + 1 : null;
+  const x = banda.ladoRotulo === 'izquierdo' ? desde - 1 : banda.ladoRotulo === 'derecho' ? desde + ancho :
+    desde === 1 ? 0 : desde + ancho - 1 >= anchoSala ? anchoSala + 1 : null;
   if (x === null) return;
   for (let i = 0; i < banda.alto; i++) {
     muebles.push({ tipo: 'guia', texto: letraDeFila(i), banda: banda.id, x, y: banda.y + i });
@@ -3301,6 +3314,10 @@ function bandasDeMapa(dato, { errores, zonaDeFilas, zonaHeredable }) {
     }
     ids.add(b.id);
     const limpia = { id: b.id, tipo: b.tipo };
+    if (b.ladoRotulo !== undefined) {
+      if (!['filas', 'espacio'].includes(b.tipo) || !['izquierdo', 'derecho'].includes(b.ladoRotulo)) errores.push(donde + ': lado de rótulo inválido');
+      else limpia.ladoRotulo = b.ladoRotulo;
+    }
     if (typeof b.nombre === 'string' && b.nombre.trim()) limpia.nombre = b.nombre.trim().slice(0, 40);
     if (b.tipo === 'escenario') {
       if (enVertical || indice > 0) errores.push(donde + ': el escenario solo puede ir primero');
@@ -3661,6 +3678,56 @@ function agregarRegion(plano, nombre) {
   const id = 'region' + (nuevo.siguienteRegion || 1);
   nuevo.siguienteRegion = (nuevo.siguienteRegion || 1) + 1;
   nuevo.regionesLibres.push({ id, nombre: nombre.trim(), x: 1, y: 0, ancho: 6, alto: 8, giro: 0 });
+  return nuevo;
+}
+
+// Amplia solo el piso visible. Cada banda central conserva su ancho y sus IDs;
+// las nuevas verticales vacias reservan el espacio lateral sin generar lugares.
+function agregarLateral(plano, sala, lado) {
+  if (!['izquierdo', 'derecho'].includes(lado)) return { motivo: 'lado desconocido' };
+  if (plano.revisionFisica?.estado === 'publicada') return { motivo: 'crea un borrador para modificar una revisión publicada' };
+  if (sala.alto > 999) return { motivo: 'la región lateral supera el alto máximo de 999 celdas' };
+  if (plano.bandas.some((b) => esDivision(b) && b.verticales.length >= VERTICALES_MAXIMAS)) return { motivo: 'una franja ya tiene el máximo de bandas verticales (' + VERTICALES_MAXIMAS + ')' };
+  const izquierda = lado === 'izquierdo';
+  const ancho = 6;
+  const margen = ancho + 1;
+  const distribucion = distribucionDeSala(sala);
+  const nuevaDistribucion = sala.lienzo ? { bloques: [sala.ancho + margen], pasillos: [] } : {
+    bloques: izquierda ? [ancho, ...distribucion.bloques] : [...distribucion.bloques, ancho],
+    pasillos: izquierda ? [1, ...distribucion.pasillos] : [...distribucion.pasillos, 1],
+  };
+  const motivo = motivoDistribucion(nuevaDistribucion);
+  if (motivo) return { motivo };
+  const nuevo = agregarRegion(plano, 'Lateral ' + lado);
+  if (nuevo.motivo) return nuevo;
+  nuevo.distribucion = nuevaDistribucion;
+  const idBanda = () => 'banda' + nuevo.siguienteBanda++;
+  for (const b of hojasDe(nuevo.bandas)) {
+    if (b.ladoRotulo || !(b.tipo === 'filas' || (b.tipo === 'espacio' && b.guias))) continue;
+    const colocada = bandaDe(sala, b.id);
+    if (colocada.x === 1) b.ladoRotulo = 'izquierdo';
+    else if (colocada.x + colocada.anchoOcupado - 1 >= sala.ancho) b.ladoRotulo = 'derecho';
+  }
+  nuevo.bandas = nuevo.bandas.map((b) => {
+    if (b.tipo === 'escenario') return b;
+    const lateral = { id: idBanda(), nombre: 'Lateral ' + lado, ancho: margen, bandas: [] };
+    if (esDivision(b)) {
+      const colocada = sala.bandas.find((p) => p.id === b.id);
+      const centrales = b.verticales.map((v, i) => ({ ...v, ancho: colocada.verticales[i].anchoOcupado }));
+      return { ...b, verticales: izquierda ? [lateral, ...centrales] : [...centrales, lateral] };
+    }
+    const central = { id: idBanda(), ancho: sala.ancho, bandas: [b] };
+    return { id: idBanda(), tipo: 'division', verticales: izquierda ? [lateral, central] : [central, lateral] };
+  });
+  const dx = izquierda ? margen : 0;
+  for (const { lista } of LISTAS_DE_PIEZAS) nuevo[lista] = nuevo[lista].map((p) => ({ ...p, x: p.x + dx }));
+  const franja = sala.bandas.find((b) => b.tipo === 'escenario');
+  const escenarioAnterior = plano.escenario === undefined ? { x: 1, y: franja?.y || 0, ancho: sala.ancho, alto: franja?.alto || 2 } : plano.escenario;
+  nuevo.escenario = escenarioAnterior ? { ...escenarioAnterior, x: escenarioAnterior.x + dx } : null;
+  const region = nuevo.regionesLibres.at(-1);
+  nuevo.regionesLibres = nuevo.regionesLibres.map((r) => r.id === region.id ? {
+    ...r, x: izquierda ? 1 : sala.ancho + 2, y: 0, ancho, alto: sala.alto,
+  } : { ...r, x: r.x + dx });
   return nuevo;
 }
 
@@ -7397,6 +7464,7 @@ for (const boton of botonesDeMesa()) {
 
 const vistasDeNiveles = Object.create(null);
 function cambiarNivelVista(id) {
+  if (id === salaActual.nivel) return;
   const plano = planoEditable();
   const clave = tipoActual + ':' + salaActual.nivel;
   vistasDeNiveles[clave] = { ...vista };
@@ -7414,7 +7482,42 @@ function cambiarNivelVista(id) {
   historiales[tipoActual]?.actualizarActual(fotoDelPlano()); actualizarEstadoEdicion();
   anunciar('Nivel ' + salaActual.niveles.find((n) => n.id === id).nombre + '. Se conserva la selección de todo el recinto.');
 }
-document.getElementById('nivel-vista').addEventListener('change', (e) => cambiarNivelVista(e.target.value));
+const pestanasNiveles = document.getElementById('nivel-vista');
+pestanasNiveles.addEventListener('click', (e) => {
+  const tab = e.target.closest('[role="tab"]');
+  if (tab) cambiarNivelVista(tab.dataset.nivel);
+});
+pestanasNiveles.addEventListener('keydown', (e) => {
+  const tabs = [...pestanasNiveles.querySelectorAll('[role="tab"]')];
+  const i = tabs.indexOf(e.target);
+  if (i >= 0 && ['Enter', ' '].includes(e.key)) { e.preventDefault(); tabs[i].click(); return; }
+  if (i < 0 || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+  e.preventDefault();
+  const destino = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 :
+    (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+  for (const tab of tabs) tab.tabIndex = -1;
+  tabs[destino].tabIndex = 0;
+  tabs[destino].focus();
+  tabs[destino].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+});
+
+function actualizarPestanasNiveles() {
+  const ids = new Set(salaActual.niveles.map((n) => n.id));
+  for (const tab of [...pestanasNiveles.children]) if (!ids.has(tab.dataset.nivel)) tab.remove();
+  for (const [i, n] of salaActual.niveles.entries()) {
+    let tab = [...pestanasNiveles.children].find((t) => t.dataset.nivel === n.id);
+    if (!tab) {
+      tab = document.createElement('button'); tab.type = 'button'; tab.setAttribute('role', 'tab');
+      tab.dataset.nivel = n.id; tab.id = 'pestana-' + n.id; tab.setAttribute('aria-controls', 'panel-nivel');
+      pestanasNiveles.appendChild(tab);
+    }
+    if (pestanasNiveles.children[i] !== tab) pestanasNiveles.insertBefore(tab, pestanasNiveles.children[i]);
+    tab.textContent = n.nombre;
+    tab.setAttribute('aria-selected', String(n.id === salaActual.nivel));
+    tab.tabIndex = n.id === salaActual.nivel ? 0 : -1;
+  }
+  document.getElementById('panel-nivel').setAttribute('aria-labelledby', 'pestana-' + salaActual.nivel);
+}
 document.getElementById('agregar-nivel').addEventListener('click', () => {
   const nuevo = agregarNivel(planoEditable(), document.getElementById('nombre-nivel').value);
   if (nuevo.motivo) { anunciar(nuevo.motivo); return; }
@@ -7436,10 +7539,7 @@ document.getElementById('eliminar-nivel').addEventListener('click', () => {
 function actualizarControlesGeometria() {
   if (!salaActual) return;
   const plano = planos[tipoActual] || TIPOS_DE_SALA[tipoActual];
-  const selectorNivel = document.getElementById('nivel-vista');
-  selectorNivel.textContent = '';
-  for (const n of salaActual.niveles) selectorNivel.appendChild(new Option(n.nombre, n.id));
-  selectorNivel.value = salaActual.nivel;
+  actualizarPestanasNiveles();
   document.getElementById('eliminar-nivel').disabled = salaActual.niveles.length === 1;
   const p = piezaPorId(mesaActiva);
   const bloque = piezasActivas.size === 1 && esBloqueFilas(p) ? p : null;
@@ -7475,6 +7575,17 @@ document.getElementById('agregar-region').addEventListener('click', () => {
   planos[tipoActual] = nuevo; regenerar('Región agregada.');
   document.getElementById('region-activa').value = nuevo.regionesLibres.at(-1).id; llenarRegionActiva();
 });
+
+for (const lado of ['izquierdo', 'derecho']) {
+  document.getElementById('agregar-lateral-' + lado).addEventListener('click', () => {
+    const nuevo = agregarLateral(planoEditable(), salaActual, lado);
+    if (nuevo.motivo) { anunciar('No se agregó el lateral: ' + nuevo.motivo); return; }
+    planos[tipoActual] = nuevo;
+    regenerar('Lateral ' + lado + ' agregado. Se conservan el escenario y las pertenencias físicas.');
+    document.getElementById('region-activa').value = nuevo.regionesLibres.at(-1).id;
+    llenarRegionActiva(); reencuadrar();
+  });
+}
 document.getElementById('formulario-region').addEventListener('submit', (e) => {
   e.preventDefault(); const valores = { nombre: document.getElementById('nombre-region').value };
   for (const k of ['x','y','ancho','alto','giro']) valores[k] = Number(document.getElementById('region-' + k).value);

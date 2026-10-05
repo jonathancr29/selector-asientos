@@ -97,10 +97,6 @@
       <label class="campo" for="tipo-sala" data-tooltip="Tipo de sala"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-sala"></use></svg><span class="solo-lector">Tipo de sala</span></label>
       <select id="tipo-sala"></select>
     </div>
-    <div class="herramientas campo-ancho">
-      <label class="campo" for="nivel-vista">Nivel</label>
-      <select id="nivel-vista" aria-label="Nivel del recinto"></select>
-    </div>
     <details class="grupo" open id="grupo-mapa" hidden>
       <summary>Mapa</summary>
       <div class="herramientas" role="group" aria-label="Historial del plano">
@@ -212,6 +208,7 @@
                 aria-label="Información: qué es, cómo se usa y notas" data-tooltip="Información"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button>
       </div>
       <p class="aforo" id="aforo"></p>
+      <div id="nivel-vista" class="pestanas-niveles" role="tablist" aria-label="Niveles del recinto"></div>
       <!-- Hojas de informacion, de una en una. En escritorio el panel baja sobre el plano.
            Se abren solo al pulsar el boton de informacion. -->
       <section class="panel hojas" id="hojas-info" aria-roledescription="carrusel" aria-label="Información" hidden>
@@ -249,7 +246,7 @@
       </section>
     </header>
 
-    <div class="lienzo">
+    <div class="lienzo" id="panel-nivel" role="tabpanel" tabindex="0">
       <svg id="plano" role="group" aria-label="Plano de butacas" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <!-- El trazo se declara UNA vez y se instancia con <use>: el path no se
@@ -365,6 +362,11 @@
           <button id="guardar-region" type="submit">Aplicar región</button>
         </form>
         <button id="agregar-region" type="button">Agregar región</button>
+        <div class="herramientas" role="group" aria-label="Agregar espacios laterales">
+          <button id="agregar-lateral-izquierdo" type="button">Agregar lateral izquierdo</button>
+          <button id="agregar-lateral-derecho" type="button">Agregar lateral derecho</button>
+        </div>
+        <p class="pista">Cada lateral agrega 6 columnas y una de separación al nivel actual. El escenario conserva su tamaño; los lugares conservan sus pertenencias. Después vincula sus bloques desde Geometría de filas.</p>
         <button id="eliminar-region" type="button">Eliminar región</button>
         <p class="pista">Las regiones organizan el dibujo. Moverlas transforma sus bloques vinculados y conserva sus zonas físicas.</p>
       </details>

@@ -472,7 +472,8 @@ function agregarFilas(banda, columnas, anchoSala = Infinity) {
     if (!columnas.length) continue;
     const bordeIzquierdo = (banda.x || 1) === 1;
     const bordeDerecho = (banda.x || 1) + (banda.anchoOcupado || anchoSala) - 1 >= anchoSala;
-    const xRotulo = bordeIzquierdo ? columnas[0] - 1 : bordeDerecho ? columnas.at(-1) + 1 : null;
+    const xRotulo = banda.ladoRotulo === 'izquierdo' || (!banda.ladoRotulo && bordeIzquierdo) ? columnas[0] - 1 :
+      banda.ladoRotulo === 'derecho' || (!banda.ladoRotulo && bordeDerecho) ? columnas.at(-1) + 1 : null;
     if (xRotulo !== null) muebles.push({ tipo: 'rotulo', texto: fila, banda: id, filaLocal: i, x: xRotulo, y: y + i });
   }
 }
@@ -481,7 +482,8 @@ function agregarFilas(banda, columnas, anchoSala = Infinity) {
 // mismo sitio que los rotulos de fila. Solo ayudan a ubicarse; no son butacas.
 function agregarGuias(banda, anchoSala) {
   const desde = banda.x || 1, ancho = banda.anchoOcupado || anchoSala;
-  const x = desde === 1 ? 0 : desde + ancho - 1 >= anchoSala ? anchoSala + 1 : null;
+  const x = banda.ladoRotulo === 'izquierdo' ? desde - 1 : banda.ladoRotulo === 'derecho' ? desde + ancho :
+    desde === 1 ? 0 : desde + ancho - 1 >= anchoSala ? anchoSala + 1 : null;
   if (x === null) return;
   for (let i = 0; i < banda.alto; i++) {
     muebles.push({ tipo: 'guia', texto: letraDeFila(i), banda: banda.id, x, y: banda.y + i });
@@ -2466,6 +2468,10 @@ function bandasDeMapa(dato, { errores, zonaDeFilas, zonaHeredable }) {
     }
     ids.add(b.id);
     const limpia = { id: b.id, tipo: b.tipo };
+    if (b.ladoRotulo !== undefined) {
+      if (!['filas', 'espacio'].includes(b.tipo) || !['izquierdo', 'derecho'].includes(b.ladoRotulo)) errores.push(donde + ': lado de rótulo inválido');
+      else limpia.ladoRotulo = b.ladoRotulo;
+    }
     if (typeof b.nombre === 'string' && b.nombre.trim()) limpia.nombre = b.nombre.trim().slice(0, 40);
     if (b.tipo === 'escenario') {
       if (enVertical || indice > 0) errores.push(donde + ': el escenario solo puede ir primero');
@@ -2826,6 +2832,56 @@ function agregarRegion(plano, nombre) {
   const id = 'region' + (nuevo.siguienteRegion || 1);
   nuevo.siguienteRegion = (nuevo.siguienteRegion || 1) + 1;
   nuevo.regionesLibres.push({ id, nombre: nombre.trim(), x: 1, y: 0, ancho: 6, alto: 8, giro: 0 });
+  return nuevo;
+}
+
+// Amplia solo el piso visible. Cada banda central conserva su ancho y sus IDs;
+// las nuevas verticales vacias reservan el espacio lateral sin generar lugares.
+function agregarLateral(plano, sala, lado) {
+  if (!['izquierdo', 'derecho'].includes(lado)) return { motivo: 'lado desconocido' };
+  if (plano.revisionFisica?.estado === 'publicada') return { motivo: 'crea un borrador para modificar una revisión publicada' };
+  if (sala.alto > 999) return { motivo: 'la región lateral supera el alto máximo de 999 celdas' };
+  if (plano.bandas.some((b) => esDivision(b) && b.verticales.length >= VERTICALES_MAXIMAS)) return { motivo: 'una franja ya tiene el máximo de bandas verticales (' + VERTICALES_MAXIMAS + ')' };
+  const izquierda = lado === 'izquierdo';
+  const ancho = 6;
+  const margen = ancho + 1;
+  const distribucion = distribucionDeSala(sala);
+  const nuevaDistribucion = sala.lienzo ? { bloques: [sala.ancho + margen], pasillos: [] } : {
+    bloques: izquierda ? [ancho, ...distribucion.bloques] : [...distribucion.bloques, ancho],
+    pasillos: izquierda ? [1, ...distribucion.pasillos] : [...distribucion.pasillos, 1],
+  };
+  const motivo = motivoDistribucion(nuevaDistribucion);
+  if (motivo) return { motivo };
+  const nuevo = agregarRegion(plano, 'Lateral ' + lado);
+  if (nuevo.motivo) return nuevo;
+  nuevo.distribucion = nuevaDistribucion;
+  const idBanda = () => 'banda' + nuevo.siguienteBanda++;
+  for (const b of hojasDe(nuevo.bandas)) {
+    if (b.ladoRotulo || !(b.tipo === 'filas' || (b.tipo === 'espacio' && b.guias))) continue;
+    const colocada = bandaDe(sala, b.id);
+    if (colocada.x === 1) b.ladoRotulo = 'izquierdo';
+    else if (colocada.x + colocada.anchoOcupado - 1 >= sala.ancho) b.ladoRotulo = 'derecho';
+  }
+  nuevo.bandas = nuevo.bandas.map((b) => {
+    if (b.tipo === 'escenario') return b;
+    const lateral = { id: idBanda(), nombre: 'Lateral ' + lado, ancho: margen, bandas: [] };
+    if (esDivision(b)) {
+      const colocada = sala.bandas.find((p) => p.id === b.id);
+      const centrales = b.verticales.map((v, i) => ({ ...v, ancho: colocada.verticales[i].anchoOcupado }));
+      return { ...b, verticales: izquierda ? [lateral, ...centrales] : [...centrales, lateral] };
+    }
+    const central = { id: idBanda(), ancho: sala.ancho, bandas: [b] };
+    return { id: idBanda(), tipo: 'division', verticales: izquierda ? [lateral, central] : [central, lateral] };
+  });
+  const dx = izquierda ? margen : 0;
+  for (const { lista } of LISTAS_DE_PIEZAS) nuevo[lista] = nuevo[lista].map((p) => ({ ...p, x: p.x + dx }));
+  const franja = sala.bandas.find((b) => b.tipo === 'escenario');
+  const escenarioAnterior = plano.escenario === undefined ? { x: 1, y: franja?.y || 0, ancho: sala.ancho, alto: franja?.alto || 2 } : plano.escenario;
+  nuevo.escenario = escenarioAnterior ? { ...escenarioAnterior, x: escenarioAnterior.x + dx } : null;
+  const region = nuevo.regionesLibres.at(-1);
+  nuevo.regionesLibres = nuevo.regionesLibres.map((r) => r.id === region.id ? {
+    ...r, x: izquierda ? 1 : sala.ancho + 2, y: 0, ancho, alto: sala.alto,
+  } : { ...r, x: r.x + dx });
   return nuevo;
 }
 

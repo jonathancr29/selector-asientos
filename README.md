@@ -878,12 +878,15 @@ inventar sectores, filas físicas o palcos a partir de su geometría o etiquetas
 ## Niveles, regiones y filas libres (fase 4)
 
 El mapa **versión 7** conserva hasta 12 niveles con IDs estables, nombres y geometría propia.
-Los mapas v1–v6 se abren como *Planta baja*, sin alterar sus lugares. El selector *Nivel* está
-disponible al editar y previsualizar; conserva la selección de todo el recinto y la vista de
+Los mapas v1–v6 se abren como *Planta baja*, sin alterar sus lugares. Las pestañas de niveles están
+disponibles encima del plano al editar y previsualizar; conservan la selección de todo el recinto y la vista de
 cada piso durante la sesión. El resumen y las etiquetas accesibles incluyen el nivel cuando
 hay varios. Las coordenadas iguales en pisos diferentes no chocan. El aforo de 20.000 lugares
 se aplica al recinto completo. Guardar usa siempre el primer nivel como raíz del documento;
 cambiar de vista no crea una revisión ni cambios pendientes.
+Las flechas izquierda/derecha recorren las pestañas, Inicio/Fin van a la primera/última y
+Enter o Espacio activa el nivel enfocado. El foco y la pestaña seleccionada se distinguen;
+la navegación entre pestañas no cambia el nivel hasta activarlo.
 
 En *Niveles y regiones* se agrega, renombra o elimina un nivel. Eliminar muestra los lugares
 afectados y retira sus IDs; los contadores no retroceden, incluso al deshacer. El último nivel
@@ -896,6 +899,17 @@ bloques desde *Geometría de filas*. Mover o girar una región transforma sus bl
 como grupo, y se rechaza todo el cambio si uno no cabe. Eliminar el contorno conserva los bloques.
 Una región no es una zona física, no genera lugares y no determina precios. Las mesas y otras
 piezas conservan sus controles actuales; el vínculo gráfico de región se ofrece para bloques.
+
+**Agregar lateral izquierdo/derecho**, en *Niveles y regiones*, amplía únicamente el piso visible:
+agrega una región vacía de 6 columnas y una columna de separación respecto al plano anterior.
+Las bandas centrales conservan su ancho; al agregar por la izquierda se desplaza su dibujo
+7 columnas junto con las piezas, regiones anteriores y escenario. El escenario conserva sus
+medidas y su posición respecto al público original. IDs, etiquetas, zonas y pertenencias
+físicas se conservan; los rótulos de filas y las guías mantienen su lado respecto al centro,
+también después de guardar y abrir. Los botones no crean zonas ni asientos ni asignan tarifas; los bloques
+se agregan y vinculan después desde *Geometría de filas*. Cada operación se puede deshacer.
+Se respetan los límites actuales de columnas, regiones y verticales; si no cabe, se anuncia
+el motivo sin modificar el plano. Una revisión publicada requiere un nuevo borrador.
 
 Selecciona un bloque y abre **Geometría de filas**. Admite filas rectas o arcos circulares,
 ángulos arbitrarios, posiciones fraccionarias, separación entre butacas y filas, radio y apertura.
