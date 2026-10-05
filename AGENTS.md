@@ -209,6 +209,12 @@ comentarios `// ----`.
 
 ## Reglas que no se deben romper
 
+- **Realce de palcos:** zona y palco explorados son estado transitorio, independiente de compra.
+  El contorno público sigue las butacas con esquinas suaves; los recuadros físicos solo aparecen
+  en el editor. Una franja radial requiere varios grupos alrededor de un escenario finito;
+  otras disposiciones conservan envolventes separadas, sin llenar el centro del recinto.
+  Destacar un palco filtra encuadre y resumen, nunca habilitación, tarifas ni selección.
+
 - **Explorar zonas no compra ni edita:** `zonaExplorada` es estado transitorio del visor, separado
   de `elegidas` y del mapa. El realce no intercepta clics; se calcula por filas, tramos y grupos,
   sin un rectángulo que rellene el centro de una herradura. Una zona en varios pisos conserva

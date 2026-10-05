@@ -4,7 +4,21 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Exploración de zonas en el visor
+## Sin publicar — Contornos suaves de palcos
+
+Rama `claude/contornos-palcos`.
+
+- Realce continuo de palcos alrededor del escenario, con fondo semitransparente y bordes suaves.
+  Las distribuciones aisladas o rectas conservan contornos individuales ajustados a las butacas.
+- Selector para destacar un palco y mostrar su resumen, conservando compra y datos del mapa.
+- Recuadros físicos visibles únicamente en el editor.
+- Verificado: 206 pruebas de lógica y 30 de navegador, compra agrupada conservada,
+  revisión visual del Clavijero en escritorio y móvil y entrega CSP sin errores.
+
+## 2026-10-05 — PR #54: Exploración de zonas en el visor
+
+[PR #54](https://github.com/jonathancr29/selector-asientos/pull/54), fusionado en `main` con el
+commit `6846aeb`.
 
 Rama `claude/visor-zonas`, desde `main` tras fusionar el PR #53.
 

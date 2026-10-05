@@ -891,6 +891,13 @@ arquitectónicos. No cubren el centro vacío con un rectángulo de toda la zona 
 en butacas. Explorar no selecciona ni reserva lugares, no cambia pertenencias ni revisiones y
 no se guarda en el JSON o en localStorage.
 
+Los palcos dispuestos alrededor del escenario se destacan con una franja continua y bordes
+suaves, manteniendo el centro vacío. En otras distribuciones se usan contornos separados.
+**Destacar palco** permite encuadrar y resaltar únicamente un compartimento; su resumen muestra
+los lugares, precios y disponibilidad de ese palco. Volver a **Todos los palcos** recupera el
+resaltado de la zona. Los recuadros de referencia permanecen en el editor y se ocultan al público.
+Estos controles conservan las butacas seleccionadas y la modalidad de venta del evento.
+
 El resumen muestra aforo físico y, con evento conectado, habilitados y **comprables**. Distingue
 lugares individuales de conjuntos completos, cuyo precio suma todos los integrantes requeridos
 del grupo, aunque un conjunto abarque más de una zona. Varias tarifas se presentan como rango;

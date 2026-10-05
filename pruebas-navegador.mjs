@@ -685,6 +685,26 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
         await protocolo.evaluar('__mapaAntesExplorar'));
     });
 
+    await t.test('visor de palcos: destaca solo un grupo, muestra su precio y conserva compra y mapa', async () => {
+      await protocolo.evaluar(`explorarZona('luneta');window.__mapaAntesPalco=JSON.stringify(planoEditable());
+        selectorPalcoVista.value='palco1';selectorPalcoVista.dispatchEvent(new Event('change'));`);
+      assert.equal(await protocolo.evaluar('document.querySelector("#etiqueta-palco-vista").hidden'), false);
+      assert.equal(await protocolo.evaluar('lugaresDeZonaVisible().every(b=>b.grupo?.id==="palco1")'), true);
+      assert.equal(await protocolo.evaluar('capaRealceZona.children.length'), 1);
+      assert.ok(await protocolo.evaluar('capaRealceZona.firstChild.getAttribute("d").includes("Q")'));
+      assert.equal(await protocolo.evaluar('document.querySelectorAll(".palco-fisico rect").length'), 0);
+      assert.match(await protocolo.evaluar('document.querySelector("#resumen-zona").textContent'), /700.*por palco completo/);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'), 0);
+      await protocolo.evaluar(`document.querySelector('.butaca[data-id="F3-1-1"]').focus()`);
+      await protocolo.tecla('Enter', 'Enter', 13);
+      await protocolo.evaluar(`selectorPalcoVista.value='';selectorPalcoVista.dispatchEvent(new Event('change'));`);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'), 2);
+      assert.equal(await protocolo.evaluar('JSON.stringify(planoEditable())'), await protocolo.evaluar('__mapaAntesPalco'));
+      await protocolo.evaluar(`document.querySelector('.butaca[data-id="F3-1-1"]').focus()`);
+      await protocolo.tecla('Enter', 'Enter', 13);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'), 0);
+    });
+
     await t.test('visor de zonas: actualiza gratuito, disponibilidad desconocida y zona excluida', async () => {
       await protocolo.evaluar(`explorarZona('general');window.__zonaEvento=structuredClone(__fixtureEvento.evento);
         __zonaEvento.evento.versionEstado=2;__zonaEvento.categorias.find(c=>c.id==='ett_general').precioCentavos=0;

@@ -6,14 +6,29 @@ const listaBandas = document.getElementById('lista-bandas');
 
 // Estado transitorio del visor; no pertenece al plano ni a la selección de compra.
 let zonaExplorada = null;
+let palcoExplorado = null;
 const botonesZonasVista = document.getElementById('zonas-vista');
 const selectorNivelZona = document.getElementById('nivel-zona');
-const lugaresDeZonaVisible = () => butacasVisibles().filter((b) => b.zona === zonaExplorada);
+const selectorPalcoVista = document.getElementById('palco-vista');
+const lugaresDeZonaVisible = () => butacasVisibles().filter((b) => b.zona === zonaExplorada && (!palcoExplorado || b.grupo?.id === palcoExplorado));
+
+function trazoSuaveDeContorno(puntos) {
+  if (!puntos.length) return '';
+  const esquinas = puntos.map((p, i) => {
+    const anterior = puntos[(i + puntos.length - 1) % puntos.length], siguiente = puntos[(i + 1) % puntos.length];
+    const a = Math.hypot(p.x - anterior.x, p.y - anterior.y), b = Math.hypot(p.x - siguiente.x, p.y - siguiente.y);
+    const r = Math.min(.4, a / 3, b / 3);
+    return { p, antes: { x: p.x + (anterior.x - p.x) * r / (a || 1), y: p.y + (anterior.y - p.y) * r / (a || 1) },
+      despues: { x: p.x + (siguiente.x - p.x) * r / (b || 1), y: p.y + (siguiente.y - p.y) * r / (b || 1) } };
+  });
+  const xy = (p) => p.x * PASO + ',' + p.y * PASO;
+  return 'M' + xy(esquinas[0].antes) + esquinas.map((e, i) => (i ? 'L' + xy(e.antes) : '') + 'Q' + xy(e.p) + ' ' + xy(e.despues)).join(' ') + 'Z';
+}
 
 function textoDeZona(lista) {
   const r = resumenDeZona(lista, eventoConectado);
   const nombreNivel = salaActual.niveles.find((n) => n.id === salaActual.nivel)?.nombre || '';
-  const partes = [zonas[zonaExplorada].nombre + ' · ' + nombreNivel,
+  const partes = [zonas[zonaExplorada].nombre + ' · ' + nombreNivel + (palcoExplorado ? ' · ' + lista[0].grupo.nombre : ''),
     r.inventariados + ' lugares físicos'];
   if (!eventoConectado) return partes.join(' · ') + ' · Precio no disponible · Disponibilidad sin confirmar';
   const formato = new Intl.NumberFormat('es-MX', { style: 'currency', currency: eventoConectado.cabecera.moneda });
@@ -63,10 +78,26 @@ function actualizarExploradorZonas() {
   }
   selectorNivelZona.value = salaActual.nivel;
   const resumen = document.getElementById('resumen-zona');
+  const listaZona = butacasVisibles().filter((b) => b.zona === zonaExplorada);
+  const palcos = new Map(listaZona.filter((b) => b.grupo?.tipo === 'palco').map((b) => [b.grupo.id, b.grupo.nombre]));
+  if (palcoExplorado && !palcos.has(palcoExplorado)) palcoExplorado = null;
+  document.getElementById('etiqueta-palco-vista').hidden = !palcos.size;
+  const opcionesPalco = JSON.stringify([...palcos]);
+  if (selectorPalcoVista.dataset.opciones !== opcionesPalco) {
+    selectorPalcoVista.textContent = ''; selectorPalcoVista.appendChild(new Option('Todos los palcos', ''));
+    for (const [id, nombre] of palcos) selectorPalcoVista.appendChild(new Option(nombre, id));
+    selectorPalcoVista.dataset.opciones = opcionesPalco;
+  }
+  selectorPalcoVista.value = palcoExplorado || '';
   if (!zonaExplorada) { resumen.textContent = 'Elige una zona para ver su ubicación e información.'; return; }
   const lista = lugaresDeZonaVisible();
   resumen.textContent = lista.length ? textoDeZona(lista) : zonas[zonaExplorada].nombre + ' · Esta zona está en otro nivel.';
-  for (const puntos of contornosDeZona(lista)) {
+  const lugaresPalco = lista.filter((b) => b.grupo?.tipo === 'palco');
+  const contornos = [...contornosDeZona(lista.filter((b) => b.grupo?.tipo !== 'palco')),
+    ...(palcoExplorado ? [envolventeDePalco(lugaresPalco)] : contornosDePalcos(lugaresPalco, centroDelEscenario(escenario)))];
+  for (const puntos of contornos) {
+    if (!puntos.length) continue;
+    if (lugaresPalco.length) { capaRealceZona.appendChild(nodo('path', { d: trazoSuaveDeContorno(puntos) })); continue; }
     capaRealceZona.appendChild(nodo('path', { d: puntos.map((p, i) => (i ? 'L' : 'M') + p.x * PASO + ',' + p.y * PASO).join(' ') + 'Z' }));
   }
 }
@@ -91,6 +122,7 @@ function explorarZona(id, nivel = null) {
   const lista = butacas.filter((b) => b.zona === id);
   if (!lista.length) return;
   zonaExplorada = id;
+  palcoExplorado = null;
   const destino = nivel || (lista.some((b) => b.nivel === salaActual.nivel) ? salaActual.nivel : lista[0].nivel);
   cambiarNivelVista(destino);
   actualizarExploradorZonas();
@@ -107,8 +139,12 @@ botonesZonasVista.addEventListener('keydown', (e) => {
   if (boton && ['Enter', ' '].includes(e.key)) { e.preventDefault(); boton.click(); }
 });
 selectorNivelZona.addEventListener('change', () => explorarZona(zonaExplorada, selectorNivelZona.value));
+selectorPalcoVista.addEventListener('change', () => {
+  palcoExplorado = selectorPalcoVista.value || null;
+  actualizarExploradorZonas(); reencuadrar(); encuadrarZona();
+});
 document.getElementById('quitar-realce-zona').addEventListener('click', () => {
-  zonaExplorada = null; actualizarExploradorZonas(); reencuadrar();
+  zonaExplorada = null; palcoExplorado = null; actualizarExploradorZonas(); reencuadrar();
 });
 
 // Las zonas fisicas que pueden llevar filas (todas menos la de mesas).
