@@ -12,7 +12,9 @@ Rama `claude/pestanas-laterales`, desde `main` tras fusionar el PR #52.
 - Accesos para agregar un lateral vacío a cada lado del nivel actual, conservando ancho central,
   escenario, identidades, etiquetas y pertenencias físicas. Sin zonas ni tarifas nuevas.
 - Guardado, reapertura y deshacer/rehacer; rechazo de límites sin cambios parciales.
-- Verificado: 197 pruebas de lógica y 26 de navegador, 14 mutaciones detectadas,
+- Revisión del PR: rótulos y guías conservan su lado al quedar el centro entre laterales,
+  también al guardar y abrir, sin alterar las etiquetas oficiales ni las pertenencias.
+- Verificado: 199 pruebas de lógica y 26 de navegador, 20 mutaciones detectadas,
   los 24 recorridos anteriores sobre ambas versiones, revisión visual móvil/escritorio
   y sin errores JavaScript. Las cuatro salidas generadas están sincronizadas.
 

@@ -905,7 +905,8 @@ agrega una región vacía de 6 columnas y una columna de separación respecto al
 Las bandas centrales conservan su ancho; al agregar por la izquierda se desplaza su dibujo
 7 columnas junto con las piezas, regiones anteriores y escenario. El escenario conserva sus
 medidas y su posición respecto al público original. IDs, etiquetas, zonas y pertenencias
-físicas se conservan. Los botones no crean zonas ni asientos ni asignan tarifas; los bloques
+físicas se conservan; los rótulos de filas y las guías mantienen su lado respecto al centro,
+también después de guardar y abrir. Los botones no crean zonas ni asientos ni asignan tarifas; los bloques
 se agregan y vinculan después desde *Geometría de filas*. Cada operación se puede deshacer.
 Se respetan los límites actuales de columnas, regiones y verticales; si no cabe, se anuncia
 el motivo sin modificar el plano. Una revisión publicada requiere un nuevo borrador.

@@ -217,6 +217,9 @@ comentarios `// ----`.
   deliberada al reanclaje por región de las operaciones habituales sobre bandas.
   No anidar divisiones dentro de verticales: el formato no lo admite. Los límites se rechazan
   antes de consumir IDs y las revisiones publicadas requieren borrador.
+  `ladoRotulo` conserva el lado de las letras y guías al convertir una banda de borde
+  en interior. Solo se guarda en bandas de filas o espacios y se valida al importar;
+  sin esa referencia desaparecían al añadir ambos laterales (pasó en la revisión del PR #53).
 - **Pestañas de niveles:** los botones se conservan por ID al actualizar los controles para
   mantener el foco. Flechas e Inicio/Fin solo mueven el foco; Enter/Espacio activan. Cambiar de
   piso conserva selección de compra, vista e historial, y no modifica la revisión física.

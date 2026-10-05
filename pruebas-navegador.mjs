@@ -508,7 +508,9 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       await protocolo.evaluar(`(() => {
         delete planos['mapa-en-blanco']; delete historiales['mapa-en-blanco']; redibujar('mapa-en-blanco'); cambiarModo('editor');
         document.querySelector('#agregar-bloque').click();
+        planos[tipoActual]=alternarGuias(planoEditable(),planos[tipoActual].bandas[0].id);
         planos[tipoActual].escenario={x:8,y:0,ancho:8,alto:2}; regenerar('');
+        window.__guiasLateral=muebles.filter(m=>m.tipo==='guia').map(m=>({texto:m.texto,x:m.x,y:m.y,banda:m.banda}));
         window.__anchoLateral=salaActual.ancho;
         window.__lugaresLateral=butacas.map(b=>({id:b.id,x:b.x,y:b.y,zona:b.zona,fila:b.fila,numero:b.numero}));
         window.__escenarioLateral={...configDeEscenario(escenario)};
@@ -522,6 +524,8 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       assert.deepEqual(await protocolo.evaluar('configDeEscenario(escenario)'),{...(await protocolo.evaluar('__escenarioLateral')),x:15});
       assert.equal(await protocolo.evaluar('document.querySelector("#region-activa").value'),'region2');
       assert.equal(await protocolo.evaluar('document.querySelectorAll(".region-libre").length'),2);
+      assert.deepEqual(await protocolo.evaluar('muebles.filter(m=>m.tipo==="guia").map(m=>({texto:m.texto,x:m.x,y:m.y,banda:m.banda}))'),
+        (await protocolo.evaluar('__guiasLateral')).map(m=>({...m,x:m.x+7})));
       await protocolo.evaluar(`document.querySelector('#deshacer').click()`);
       assert.equal(await protocolo.evaluar('salaActual.ancho'),(await protocolo.evaluar('__anchoLateral'))+7);
       assert.equal(await protocolo.evaluar('planoEditable().regionesLibres.length'),1);
@@ -533,6 +537,8 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
         const r=validarMapa(guardado); if(r.errores)throw Error(r.errores.join(';')); const clave=registrarMapa(r.mapa); delete planos[clave]; redibujar(clave); cambiarModo('editor'); })()`);
       assert.equal(await protocolo.evaluar('salaActual.ancho'),(await protocolo.evaluar('__anchoLateral'))+14);
       assert.equal(await protocolo.evaluar('planoEditable().regionesLibres.length'),2);
+      assert.deepEqual(await protocolo.evaluar('muebles.filter(m=>m.tipo==="guia").map(m=>({texto:m.texto,x:m.x,y:m.y,banda:m.banda}))'),
+        (await protocolo.evaluar('__guiasLateral')).map(m=>({...m,x:m.x+7})));
       await protocolo.enviar('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
       await protocolo.evaluar(`reencuadrar();window.scrollTo(0,0);document.querySelector('#grupo-niveles').open=true;`);
       if (process.env.SELECTOR_CAPTURA_NIVELES) {

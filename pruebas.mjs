@@ -118,10 +118,12 @@ test('laterales: franjas divididas conservan anchos y lugares de todas sus verti
     ] }];
     const sala = a.generarPlano('mapa-en-blanco', p); p = a.sincronizarIdentidad(p);
     const antes = a.butacas.map((b) => ({ id: b.id, x: b.x, y: b.y, numero: b.numero, fila: b.fila }));
+    const rotulos = a.muebles.filter((m) => m.tipo === 'rotulo').map((m) => ({ ...m }));
     const n = a.agregarLateral(p, sala, lado); const despues = a.generarPlano('mapa-en-blanco', n);
     assert.deepEqual(a.butacas.map((b) => ({ id: b.id, x: b.x, y: b.y, numero: b.numero, fila: b.fila })),
       antes.map((b) => ({ ...b, x: b.x + (lado === 'izquierdo' ? 7 : 0) })));
     for (const v of sala.bandas[0].verticales) assert.equal(a.ubicar(despues.bandas, v.id).item.anchoOcupado, v.anchoOcupado);
+    assert.deepEqual(a.muebles.filter((m) => m.tipo === 'rotulo'), rotulos.map((m) => ({ ...m, x: m.x + (lado === 'izquierdo' ? 7 : 0) })));
     assert.equal(a.validarMapa(a.mapaDesdePlano('mapa-en-blanco', n)).errores, undefined);
   }
 });
@@ -141,6 +143,32 @@ test('laterales: limites y revision publicada rechazan todo sin consumir IDs', (
     assert.ok(a.agregarLateral(plano, s, lado).motivo);
     assert.equal(JSON.stringify(plano), antes);
   }
+});
+
+test('laterales: rotulos y guias conservan su lado y posicion relativa al guardar y abrir', () => {
+  for (const tipo of Object.keys(cargar().TIPOS_DE_SALA)) {
+    const a = cargar(); let sala = a.generarPlano(tipo); let p = a.planoDesdeSala(tipo, sala);
+    if (tipo === 'mapa-en-blanco') { p = a.alternarGuias(p, p.bandas[0].id); sala = a.generarPlano(tipo, p); }
+    const antes = a.muebles.filter((m) => ['rotulo', 'guia'].includes(m.tipo)).map((m) => ({ ...m }));
+    for (const lado of ['izquierdo', 'derecho']) { p = a.agregarLateral(p, sala, lado); sala = a.generarPlano(tipo, p); }
+    const esperados = antes.map((m) => ({ ...m, x: m.x + 7 }));
+    assert.deepEqual(a.muebles.filter((m) => ['rotulo', 'guia'].includes(m.tipo)), esperados, tipo);
+    const r = a.validarMapa(a.mapaDesdePlano(tipo, p)); assert.equal(r.errores, undefined);
+    a.generarPlano(a.definicionDeMapa(r.mapa));
+    assert.deepEqual(a.muebles.filter((m) => ['rotulo', 'guia'].includes(m.tipo)), esperados, tipo);
+  }
+});
+
+test('rotulos: importacion rechaza lados desconocidos y tipos de banda incompatibles', () => {
+  const a = cargar(); const p = a.planoDesdeSala('mapa-en-blanco', a.generarPlano('mapa-en-blanco'));
+  const mapa = a.mapaDesdePlano('mapa-en-blanco', p);
+  for (const lado of ['arriba', null, 1]) {
+    const m = structuredClone(mapa); m.bandas[0].ladoRotulo = lado;
+    assert.match(a.validarMapa(m).errores.join(';'), /lado de rótulo inválido/);
+  }
+  const m = structuredClone(mapa);
+  m.bandas = [{ id: 'escenario', tipo: 'escenario', ladoRotulo: 'izquierdo' }];
+  assert.match(a.validarMapa(m).errores.join(';'), /lado de rótulo inválido/);
 });
 
 test('fase 6: revision fija, tres niveles, fila compartida y conteos separados', () => {

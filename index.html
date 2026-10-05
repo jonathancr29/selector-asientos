@@ -1318,7 +1318,8 @@ function agregarFilas(banda, columnas, anchoSala = Infinity) {
     if (!columnas.length) continue;
     const bordeIzquierdo = (banda.x || 1) === 1;
     const bordeDerecho = (banda.x || 1) + (banda.anchoOcupado || anchoSala) - 1 >= anchoSala;
-    const xRotulo = bordeIzquierdo ? columnas[0] - 1 : bordeDerecho ? columnas.at(-1) + 1 : null;
+    const xRotulo = banda.ladoRotulo === 'izquierdo' || (!banda.ladoRotulo && bordeIzquierdo) ? columnas[0] - 1 :
+      banda.ladoRotulo === 'derecho' || (!banda.ladoRotulo && bordeDerecho) ? columnas.at(-1) + 1 : null;
     if (xRotulo !== null) muebles.push({ tipo: 'rotulo', texto: fila, banda: id, filaLocal: i, x: xRotulo, y: y + i });
   }
 }
@@ -1327,7 +1328,8 @@ function agregarFilas(banda, columnas, anchoSala = Infinity) {
 // mismo sitio que los rotulos de fila. Solo ayudan a ubicarse; no son butacas.
 function agregarGuias(banda, anchoSala) {
   const desde = banda.x || 1, ancho = banda.anchoOcupado || anchoSala;
-  const x = desde === 1 ? 0 : desde + ancho - 1 >= anchoSala ? anchoSala + 1 : null;
+  const x = banda.ladoRotulo === 'izquierdo' ? desde - 1 : banda.ladoRotulo === 'derecho' ? desde + ancho :
+    desde === 1 ? 0 : desde + ancho - 1 >= anchoSala ? anchoSala + 1 : null;
   if (x === null) return;
   for (let i = 0; i < banda.alto; i++) {
     muebles.push({ tipo: 'guia', texto: letraDeFila(i), banda: banda.id, x, y: banda.y + i });
@@ -3312,6 +3314,10 @@ function bandasDeMapa(dato, { errores, zonaDeFilas, zonaHeredable }) {
     }
     ids.add(b.id);
     const limpia = { id: b.id, tipo: b.tipo };
+    if (b.ladoRotulo !== undefined) {
+      if (!['filas', 'espacio'].includes(b.tipo) || !['izquierdo', 'derecho'].includes(b.ladoRotulo)) errores.push(donde + ': lado de rótulo inválido');
+      else limpia.ladoRotulo = b.ladoRotulo;
+    }
     if (typeof b.nombre === 'string' && b.nombre.trim()) limpia.nombre = b.nombre.trim().slice(0, 40);
     if (b.tipo === 'escenario') {
       if (enVertical || indice > 0) errores.push(donde + ': el escenario solo puede ir primero');
@@ -3696,6 +3702,12 @@ function agregarLateral(plano, sala, lado) {
   if (nuevo.motivo) return nuevo;
   nuevo.distribucion = nuevaDistribucion;
   const idBanda = () => 'banda' + nuevo.siguienteBanda++;
+  for (const b of hojasDe(nuevo.bandas)) {
+    if (b.ladoRotulo || !(b.tipo === 'filas' || (b.tipo === 'espacio' && b.guias))) continue;
+    const colocada = bandaDe(sala, b.id);
+    if (colocada.x === 1) b.ladoRotulo = 'izquierdo';
+    else if (colocada.x + colocada.anchoOcupado - 1 >= sala.ancho) b.ladoRotulo = 'derecho';
+  }
   nuevo.bandas = nuevo.bandas.map((b) => {
     if (b.tipo === 'escenario') return b;
     const lateral = { id: idBanda(), nombre: 'Lateral ' + lado, ancho: margen, bandas: [] };
