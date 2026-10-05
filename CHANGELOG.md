@@ -4,7 +4,23 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Pestañas de niveles y espacios laterales
+## Sin publicar — Exploración de zonas en el visor
+
+Rama `claude/visor-zonas`, desde `main` tras fusionar el PR #53.
+
+- Botones de zonas físicas en Previsualizar y compra: navegación, encuadre y resaltado por tramos,
+  sin modificar la selección, el mapa ni su revisión. Selector de nivel para zonas en varios pisos.
+- Resumen por zona y piso con aforo, habilitación, lugares comprables, precios individuales y
+  conjuntos completos; gratuitos, rangos, exclusión y disponibilidad desconocida desde el evento.
+- Resaltado semitransparente sin interceptar clics, controles de teclado nativos y lectura de estado.
+- Verificado: 203 pruebas de lógica y 29 de navegador; navegación de las cuatro zonas del
+  Clavijero con 619 lugares, revisión visual desktop/móvil, entrega CSP sin violaciones ni
+  errores JavaScript y las cuatro salidas generadas sincronizadas.
+
+## 2026-10-04 — PR #53: Pestañas de niveles y espacios laterales
+
+[PR #53](https://github.com/jonathancr29/selector-asientos/pull/53), fusionado en `main` con el
+commit `2df8661`.
 
 Rama `claude/pestanas-laterales`, desde `main` tras fusionar el PR #52.
 

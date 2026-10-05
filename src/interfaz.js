@@ -4,6 +4,113 @@
 // ---------------------------------------------------------------------------
 const listaBandas = document.getElementById('lista-bandas');
 
+// Estado transitorio del visor; no pertenece al plano ni a la selección de compra.
+let zonaExplorada = null;
+const botonesZonasVista = document.getElementById('zonas-vista');
+const selectorNivelZona = document.getElementById('nivel-zona');
+const lugaresDeZonaVisible = () => butacasVisibles().filter((b) => b.zona === zonaExplorada);
+
+function textoDeZona(lista) {
+  const r = resumenDeZona(lista, eventoConectado);
+  const nombreNivel = salaActual.niveles.find((n) => n.id === salaActual.nivel)?.nombre || '';
+  const partes = [zonas[zonaExplorada].nombre + ' · ' + nombreNivel,
+    r.inventariados + ' lugares físicos'];
+  if (!eventoConectado) return partes.join(' · ') + ' · Precio no disponible · Disponibilidad sin confirmar';
+  const formato = new Intl.NumberFormat('es-MX', { style: 'currency', currency: eventoConectado.cabecera.moneda });
+  const precio = (v) => v === 0 ? 'Gratis' : formato.format(v / 100);
+  const rango = (ps) => ps.length === 1 ? precio(ps[0]) : 'De ' + precio(ps[0]) + ' a ' + precio(ps.at(-1));
+  partes.push(r.habilitados ? r.habilitados + ' habilitados' : 'No habilitada para esta función');
+  partes.push(r.comprables + ' lugares comprables');
+  if (r.desconocidos) partes.push(r.desconocidos + ' con disponibilidad sin confirmar');
+  if (r.preciosIndividuales.length) partes.push(rango(r.preciosIndividuales) + ' por lugar');
+  if (r.conjuntos.length) {
+    const ps = [...new Set(r.conjuntos.map((g) => g.precioCentavos).filter((v) => v !== null))].sort((a, b) => a - b);
+    const palcos = r.conjuntos.every((g) => g.tipo === 'box');
+    partes.push(r.conjuntos.filter((g) => g.comprable).length + (palcos ? ' palcos completos comprables' : ' conjuntos completos comprables'));
+    if (ps.length) partes.push(rango(ps) + (palcos ? ' por palco completo' : ' por conjunto completo'));
+  }
+  if (!r.preciosIndividuales.length && !r.conjuntos.some((g) => g.precioCentavos !== null)) partes.push('Precio no disponible');
+  return partes.join(' · ');
+}
+
+function actualizarExploradorZonas() {
+  const panel = document.getElementById('explorador-zonas');
+  panel.hidden = modo !== 'vista';
+  capaRealceZona.textContent = '';
+  if (panel.hidden) return;
+  const presentes = new Set(butacas.map((b) => b.zona));
+  if (zonaExplorada && !presentes.has(zonaExplorada)) zonaExplorada = null;
+  for (const boton of [...botonesZonasVista.children]) if (!presentes.has(boton.dataset.zona)) boton.remove();
+  for (const [id, z] of Object.entries(zonas)) {
+    if (!presentes.has(id)) continue;
+    let boton = [...botonesZonasVista.children].find((b) => b.dataset.zona === id);
+    if (!boton) {
+      boton = document.createElement('button'); boton.type = 'button'; boton.dataset.zona = id;
+      botonesZonasVista.appendChild(boton);
+    }
+    boton.textContent = z.nombre;
+    boton.setAttribute('aria-pressed', String(zonaExplorada === id));
+    boton.setAttribute('aria-controls', 'panel-nivel resumen-zona');
+  }
+  document.getElementById('quitar-realce-zona').hidden = !zonaExplorada;
+  const niveles = salaActual.niveles.filter((n) => butacas.some((b) => b.zona === zonaExplorada && b.nivel === n.id));
+  document.getElementById('etiqueta-nivel-zona').hidden = niveles.length < 2;
+  const opciones = JSON.stringify(niveles.map((n) => [n.id, n.nombre]));
+  if (selectorNivelZona.dataset.opciones !== opciones) {
+    selectorNivelZona.textContent = '';
+    for (const n of niveles) selectorNivelZona.appendChild(new Option(n.nombre, n.id));
+    selectorNivelZona.dataset.opciones = opciones;
+  }
+  selectorNivelZona.value = salaActual.nivel;
+  const resumen = document.getElementById('resumen-zona');
+  if (!zonaExplorada) { resumen.textContent = 'Elige una zona para ver su ubicación e información.'; return; }
+  const lista = lugaresDeZonaVisible();
+  resumen.textContent = lista.length ? textoDeZona(lista) : zonas[zonaExplorada].nombre + ' · Esta zona está en otro nivel.';
+  for (const puntos of contornosDeZona(lista)) {
+    capaRealceZona.appendChild(nodo('path', { d: puntos.map((p, i) => (i ? 'L' : 'M') + p.x * PASO + ',' + p.y * PASO).join(' ') + 'Z' }));
+  }
+}
+
+function encuadrarZona() {
+  const lista = lugaresDeZonaVisible();
+  if (!lista.length) return;
+  const caja = svg.getBoundingClientRect();
+  if (!caja.width || !caja.height) return;
+  const xs = lista.map((b) => b.x), ys = lista.map((b) => b.y);
+  const x = (Math.min(...xs) - 1.5) * PASO, y = (Math.min(...ys) - 1.5) * PASO;
+  const w = (Math.max(...xs) - Math.min(...xs) + 4) * PASO;
+  const h = (Math.max(...ys) - Math.min(...ys) + 4) * PASO;
+  const ancho = Math.min(vistaInicial.w, Math.max(VISTA_MINIMA, w, h * caja.width / caja.height));
+  vista = { x: x + w / 2 - ancho / 2, y: y + h / 2 - ancho * caja.height / caja.width / 2,
+    w: ancho, h: ancho * caja.height / caja.width };
+  aplicarVista();
+}
+
+function explorarZona(id, nivel = null) {
+  if (modo !== 'vista' || !zonas[id]) return;
+  const lista = butacas.filter((b) => b.zona === id);
+  if (!lista.length) return;
+  zonaExplorada = id;
+  const destino = nivel || (lista.some((b) => b.nivel === salaActual.nivel) ? salaActual.nivel : lista[0].nivel);
+  cambiarNivelVista(destino);
+  actualizarExploradorZonas();
+  reencuadrar();
+  encuadrarZona();
+}
+
+botonesZonasVista.addEventListener('click', (e) => {
+  const boton = e.target.closest('button[data-zona]');
+  if (boton) explorarZona(boton.dataset.zona);
+});
+botonesZonasVista.addEventListener('keydown', (e) => {
+  const boton = e.target.closest('button[data-zona]');
+  if (boton && ['Enter', ' '].includes(e.key)) { e.preventDefault(); boton.click(); }
+});
+selectorNivelZona.addEventListener('change', () => explorarZona(zonaExplorada, selectorNivelZona.value));
+document.getElementById('quitar-realce-zona').addEventListener('click', () => {
+  zonaExplorada = null; actualizarExploradorZonas(); reencuadrar();
+});
+
 // Las zonas fisicas que pueden llevar filas (todas menos la de mesas).
 // 'heredada' es la zona que la pieza tomaria de su banda: con ella, la primera opcion
 // es heredarla, que es como nacen las piezas. Sin ella (una pieza fuera de toda banda

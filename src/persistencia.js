@@ -69,6 +69,7 @@ function actualizarAforo(sala) {
 
 function redibujar(tipo) {
   if (eventoConectado && tipo !== tipoActual) { anunciar('El evento conserva su recinto y revisión.'); return; }
+  zonaExplorada = null;
   seleccionFisica.clear();
   if (arrastreMesa) terminarArrastreMesa(false);
   tipoActual = tipo;
