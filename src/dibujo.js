@@ -14,7 +14,7 @@ const formatoDinero = new Intl.NumberFormat('es-MX', { style: 'currency', curren
 const dinero = (centavos) => formatoDinero.format(centavos / 100);
 const porId = new Map();   // id -> butaca, para no recorrer la lista en cada interaccion
 // La zona abre la etiqueta, como saldra en el boleto; el id queda aparte.
-const etiquetaDe = (b) => ((salaActual?.niveles?.length > 1 ? b.nombreNivel + ', ' : '') + (b.sectorFisico ? b.sectorFisico.nombre + ', ' : '') + (b.grupo?.tipo === 'palco' ? zonas[b.zona].nombre + ', ' + b.grupo.nombre + ', lugar ' + b.numero : b.grupo ? zonas[b.zona].nombre + ', mesa ' + b.numeroMesa +
+const etiquetaDe = (b) => b.accesoGeneral ? zonas[b.zona].nombre + ', acceso general, sin asiento asignado' : ((salaActual?.niveles?.length > 1 ? b.nombreNivel + ', ' : '') + (b.sectorFisico ? b.sectorFisico.nombre + ', ' : '') + (b.grupo?.tipo === 'palco' ? zonas[b.zona].nombre + ', ' + b.grupo.nombre + ', lugar ' + b.numero : b.grupo ? zonas[b.zona].nombre + ', mesa ' + b.numeroMesa +
   (b.grupo.completa ? ' completa' : '') + ', lugar ' + b.numero
   : b.seccion + ', fila ' + b.fila + ', butaca ' + b.numero));
 
@@ -80,7 +80,7 @@ function dibujarMuebles() {
         x2: d.hasta.x * PASO, y2: d.hasta.y * PASO }));
     }
     capaMuebles.appendChild(divisiones);
-    const referencias = referenciasDeFilasLaterales(butacasVisibles(), centroDelEscenario(escenario));
+    const referencias = referenciasDeFilasLaterales(butacasVisibles().filter(b => !b.accesoGeneral), centroDelEscenario(escenario));
     const filas = nodo('g', { class: 'referencias-filas', 'aria-hidden': 'true' });
     for (const d of referencias.divisiones) filas.appendChild(nodo('line', { x1: d.desde.x * PASO, y1: d.desde.y * PASO, x2: d.hasta.x * PASO, y2: d.hasta.y * PASO }));
     for (const r of referencias.rotulos) filas.appendChild(texto('rotulo-fila-lateral', r.x * PASO, r.y * PASO, r.lineas.join(' ')));
@@ -128,8 +128,10 @@ function dibujarMuebles() {
       rect.dataset.pieza = rotulo.dataset.pieza = m.pieza;
       capaMuebles.append(rect, rotulo);
     } else if (m.tipo === 'rotulo') {
+      if (eventoConectado && butacasVisibles().some(b => b.banda === m.banda && b.accesoGeneral)) continue;
       capaMuebles.appendChild(texto('rotulo', (m.x + 0.5) * PASO, (m.y + 0.5) * PASO, m.texto));
     } else if (m.tipo === 'guia') {
+      if (eventoConectado && butacasVisibles().some(b => b.banda === m.banda && b.accesoGeneral)) continue;
       capaMuebles.appendChild(texto('rotulo guia', (m.x + 0.5) * PASO, (m.y + 0.5) * PASO, m.texto));
     } else if (m.tipo === 'subtitulo') {
       (m.lugar === 'margen' ? capaMuebles : capaSubtitulos).appendChild(dibujarSubtitulo(m));
@@ -231,7 +233,7 @@ function ponerMarca(b) {
   const marca = nodo('use', { class: 'marca marca-' + cual, href: '#marca-' + cual,
     x: b.x * PASO + (PASO - GLIFO) / 2, y: b.y * PASO + (PASO - GLIFO) / 2,
     width: GLIFO, height: GLIFO });
-  if (b.butacaNumerada) {
+  if (b.siluetaAmplia || b.butacaNumerada) {
     marca.setAttribute('x', b.x * PASO + PASO - 3);
     marca.setAttribute('y', b.y * PASO);
     marca.setAttribute('width', 3); marca.setAttribute('height', 3);
@@ -265,6 +267,8 @@ function dibujarButacas() {
   const trozo = anteriores.size ? null : document.createDocumentFragment();
   let siguiente = capaButacas.firstElementChild;
   butacasVisibles().forEach((b, indice) => {
+    const amplia = b.siluetaAmplia || b.butacaNumerada || b.accesoGeneral;
+    const numerada = b.butacaNumerada && !b.accesoGeneral;
     const seleccionable = b.estado === 'libre';
     const elegida = modo === 'editor' && herramienta === 'fisica' ? seleccionFisica.has(b.id) : elegidas.has(b.id);
     // Al bloquear, cada butaca es un checkbox de «bloqueada»; las ocupadas no se tocan.
@@ -272,25 +276,25 @@ function dibujarButacas() {
     // palomita si ya es de esa zona. Las ocupadas no cambian de zona.
     const dePincel = pintando && b.zona === pincel;
     const marcada = bloqueando ? b.estado === 'bloqueada' : pintando ? dePincel : elegida;
-    const inactiva = numerando ? false : bloqueando || pintando ? b.estado === 'ocupada' : !seleccionable;
+    const inactiva = b.accesoGeneral ? false : numerando ? false : bloqueando || pintando ? b.estado === 'ocupada' : !seleccionable;
     const g = anteriores.get(b.id) || nodo('g', { role: 'checkbox' });
     if (!anteriores.has(b.id)) {
       g.dataset.id = b.id;
       // El area sensible ocupa exactamente la celda. El glifo queda encima.
       g.appendChild(nodo('rect', { class: 'toque', x: b.x * PASO, y: b.y * PASO,
         width: PASO, height: PASO, rx: 2 }));
-      g.appendChild(glifoButaca(b.x, b.y, b.mira, b.butacaNumerada));
+      g.appendChild(glifoButaca(b.x, b.y, b.mira, amplia));
     }
-    const geometria = b.x + ',' + b.y + ',' + b.mira + ',' + b.butacaNumerada;
+    const geometria = b.x + ',' + b.y + ',' + b.mira + ',' + amplia;
     const cambioGeometria = g._geometria !== undefined && g._geometria !== geometria;
     if (cambioGeometria) {
       g.firstElementChild.setAttribute('x', b.x * PASO);
       g.firstElementChild.setAttribute('y', b.y * PASO);
-      g.replaceChild(glifoButaca(b.x, b.y, b.mira, b.butacaNumerada), g.children[1]);
+      g.replaceChild(glifoButaca(b.x, b.y, b.mira, amplia), g.children[1]);
     }
     g._geometria = geometria;
     let numero = g.querySelector('.numero-butaca');
-    if (b.butacaNumerada) {
+    if (numerada) {
       if (!numero) { numero = nodo('text', { class: 'numero-butaca', 'aria-hidden': 'true' }); g.appendChild(numero); }
       const angulo = (b.mira || 0) * Math.PI / 180;
       numero.setAttribute('x', (b.x + .5) * PASO - Math.sin(angulo) * GLIFO / 24);
@@ -300,20 +304,22 @@ function dibujarButacas() {
       else { numero.removeAttribute('textLength'); numero.removeAttribute('lengthAdjust'); }
     } else numero?.remove();
     const pieza = b.grupo && b.grupo.tipo !== 'palco' ? b.grupo.id : b.bloque || b.suelta || '';
-    const clase = 'butaca' + (b.butacaNumerada ? ' numerada' : '') + (seleccionable ? '' : ' ' + b.estado) +
+    const clase = 'butaca' + (amplia ? ' numerada' : '') + (b.accesoGeneral ? ' acceso-general' : '') + (seleccionable ? '' : ' ' + b.estado) +
       (modo === 'editor' && herramienta === 'fisica' && seleccionFisica.has(b.id) ? ' fisica-seleccionada' : '') +
       (elegida || dePincel ? ' elegida' : '') +
       (piezasActivas.has(pieza) && modo === 'editor' && !conButacas() ? ' de-pieza-activa' : '');
     const etiqueta = etiquetaDe(b) + (bloqueando
       ? (b.estado === 'ocupada' ? ', ocupada' : ', bloquear')
       : pintando ? ', zona ' + zonas[b.zona].nombre + (b.estado === 'ocupada' ? ', ocupada' : '')
-      : (b.motivoEvento ? ', ' + b.motivoEvento : seleccionable ? '' : ', ' + b.estado));
+      : (b.accesoGeneral ? '' : b.motivoEvento ? ', ' + b.motivoEvento : seleccionable ? '' : ', ' + b.estado));
     // tabindex movil: un solo punto de tabulacion. Colocando mesas, ninguno.
     const tabindex = (modo === 'vista' || conButacas()) && indice === 0 ? '0' : '-1';
     const apariencia = [clase, marcada, inactiva, etiqueta, tabindex, pieza].join('\u0000');
     if (g._apariencia !== apariencia) {
       g.setAttribute('class', clase);
-      g.setAttribute('aria-checked', String(marcada));
+      g.setAttribute('role', b.accesoGeneral ? 'button' : 'checkbox');
+      if (b.accesoGeneral) g.removeAttribute('aria-checked');
+      else g.setAttribute('aria-checked', String(marcada));
       g.setAttribute('aria-label', etiqueta);
       g.setAttribute('tabindex', tabindex);
       if (inactiva) g.setAttribute('aria-disabled', 'true');
@@ -327,7 +333,7 @@ function dibujarButacas() {
     // La marca solo se crea si se va a ver. La de una butaca libre sin elegir estaba ahi
     // igualmente, oculta por CSS: en un recinto grande son 18.000 nodos que nadie mira, la
     // cuarta parte del plano. Al elegirla la pone 'alternar'.
-    const marca = !seleccionable ? b.estado : elegida || dePincel ? 'elegida' : null;
+    const marca = b.accesoGeneral ? null : !seleccionable ? b.estado : elegida || dePincel ? 'elegida' : null;
     const anterior = g.querySelector('.marca');
     if (!marca) anterior?.remove();
     else if (cambioGeometria || anterior?.getAttribute('href') !== '#marca-' + marca) {

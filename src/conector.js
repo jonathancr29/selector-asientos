@@ -10,7 +10,8 @@ let disponibilidadPerdida = false;
 function aplicarEventoAButacas() {
   for (const b of butacas) {
     const p = eventoConectado.lugares.get(b.id);
-    b.estado = p?.comprable ? 'libre' : p?.estado === 'vendido' || p?.estado === 'reservado' ? 'ocupada' : 'bloqueada';
+    b.accesoGeneral = p?.accesoGeneral === true;
+    b.estado = b.accesoGeneral ? (p.blocked ? 'bloqueada' : 'libre') : p?.comprable ? 'libre' : p?.estado === 'vendido' || p?.estado === 'reservado' ? 'ocupada' : 'bloqueada';
     b.motivoEvento = p?.motivo || (!p ? 'disponibilidad sin confirmar' : '');
     if (b.grupo) {
       b.grupo = { ...b.grupo, completa: eventoConectado.grupos.get(b.grupo.id)?.modalidad === 'completa' };
@@ -28,7 +29,7 @@ function notificarSeleccionEvento() {
 
 function seleccionDelEvento() {
   if (!eventoConectado) throw new Error('No hay un evento conectado.');
-  const s = solicitudDeSeleccionEvento(elegidas, eventoConectado);
+  const s = solicitudDeSeleccionEvento(elegidas, eventoConectado, cantidadesGenerales);
   if (s.errores) throw new Error(s.errores.join('; '));
   return copiarDatos({ ...s, conteos: conteosDeEvento(eventoConectado) });
 }
@@ -47,7 +48,7 @@ function cargarEvento({ mapa, evento, alSeleccionar } = {}) {
   const resuelto = validarDatosEvento(mapa, evento);
   if (eventoConectado) cerrarEvento();
   contextoAntesDelEvento = { tipo: tipoActual, elegidas: [...elegidas] };
-  cambiarModo('vista'); elegidas.clear();
+  cambiarModo('vista'); elegidas.clear(); cantidadesGenerales.clear();
   mapaDelEvento = copiarDatos(mapa);
   const clave = 'evento:' + resuelto.cabecera.id;
   TIPOS_DE_SALA[clave] = definicionDeMapa(mapaDelEvento);
@@ -75,8 +76,10 @@ function actualizarEvento(dato) {
   }
   eventoConectado = nuevo; disponibilidadPerdida = false;
   const quitados = conciliarSeleccionEvento(elegidas, nuevo);
+  const generalesQuitadas = conciliarCantidadesGenerales(cantidadesGenerales, nuevo);
   dibujarTodo(); actualizarResumen(); actualizarAforo(salaActual);
   anunciar(quitados.length ? 'Se soltaron ' + quitados.length + ' lugares por cambios del evento: ' + quitados.map((id) => nuevo.lugares.get(id)?.label || id).join('; ') + '.' : 'Disponibilidad actualizada.');
+  if (generalesQuitadas.length) anunciar('La cantidad de acceso general ya no está disponible; elige de nuevo.');
   notificarSeleccionEvento();
   return seleccionDelEvento();
 }
@@ -87,7 +90,7 @@ function cerrarEvento() {
   eventoConectado = null; mapaDelEvento = null; alSeleccionarEvento = null;
   disponibilidadPerdida = false; sesionDelConector++;
   delete TIPOS_DE_SALA[clave]; delete planos[clave]; delete historiales[clave];
-  elegidas.clear();
+  elegidas.clear(); cantidadesGenerales.clear();
   for (const id of contextoAntesDelEvento.elegidas) elegidas.add(id);
   selector.disabled = false; document.getElementById('modo-editor').disabled = false;
   construirSelector(contextoAntesDelEvento.tipo); redibujar(contextoAntesDelEvento.tipo);
@@ -102,6 +105,8 @@ function perderDisponibilidadEvento(mensaje) {
     if (p.habilitado) p.motivo = 'disponibilidad sin confirmar';
   }
   for (const g of eventoConectado.grupos.values()) g.comprable = false;
+  for (const z of eventoConectado.generales.values()) { z.disponibles = null; z.comprable = false; }
+  cantidadesGenerales.clear();
   const quitados = conciliarSeleccionEvento(elegidas, eventoConectado);
   dibujarTodo(); actualizarResumen(); actualizarAforo(salaActual);
   anunciar(mensaje + (quitados.length ? ' Se soltaron ' + quitados.length + ' lugares; vuelve a confirmar su disponibilidad.' : ''));
@@ -139,8 +144,17 @@ async function intercambiarEvento({ url, csrf, signal, requestKey } = {}, reserv
     if (!respuesta.ok) throw new Error(respuesta.status === 409 ? 'La selección cambió; confirma la disponibilidad de nuevo.' : 'Sin Taquilla no pudo confirmar la disponibilidad.');
     const datos = await respuesta.json();
     if (sesion !== sesionDelConector) throw new Error('La respuesta pertenece a una sesión anterior.');
-    const actualizada = actualizarEvento(datos.evento);
-    return { seleccion: actualizada, ...(reservar ? { resultado: copiarDatos(datos.resultado ?? null) } : {}) };
+    actualizarEvento(datos.evento);
+    // Una reserva general no cambia IDs de butacas: soltar las cantidades enviadas
+    // incluso si queda cupo, sin borrar una selección posterior diferente.
+    if (reservar) {
+      for (const acceso of seleccion.solicitud.accesos_generales || []) {
+        const z = [...eventoConectado.generales.values()].find(z => z.event_zone_id === acceso.event_zone_id);
+        if (z && cantidadesGenerales.get(z.id) === acceso.cantidad) cantidadesGenerales.delete(z.id);
+      }
+      actualizarExploradorZonas(); actualizarResumen(); notificarSeleccionEvento();
+    }
+    return { seleccion: seleccionDelEvento(), ...(reservar ? { resultado: copiarDatos(datos.resultado ?? null) } : {}) };
   } catch (error) {
     if (sesion === sesionDelConector && eventoConectado.cabecera.versionEstado === version) perderDisponibilidadEvento('Disponibilidad sin confirmar.');
     throw error;
@@ -155,10 +169,24 @@ function evaluarConfiguracionEvento(mapa, dato) {
       habilitado: p.habilitado, disponible: p.disponible, comprable: p.comprable, categoriaId: p.categoria?.id ?? null,
       precioCentavos: p.categoria?.precioCentavos ?? null, motivo: p.motivo })),
     zonas: mapa.zonas.map((z) => { const ps = [...e.lugares.values()].filter((p) => p.physical_zone.id === z.id);
+      const general = e.generales.get(z.id);
       return { id: z.id, nombre: z.nombre, inventariados: ps.length, utilizables: ps.filter((p) => !p.blocked).length,
-        habilitados: ps.filter((p) => p.habilitado).length, comprables: ps.filter((p) => p.comprable).length }; }) });
+        habilitados: general ? general.cupo : ps.filter((p) => p.habilitado).length,
+        comprables: general ? (general.comprable ? general.disponibles : 0) : ps.filter((p) => p.comprable).length,
+        ...(e.version === 2 ? { modalidad: general ? 'general' : 'asignada',
+          ...(general ? { event_zone_id: general.event_zone_id, cupo: general.cupo, disponibles: general.disponibles,
+            categoriaId: general.categoria.id, precioCentavos: general.categoria.precioCentavos } : {}) } : {}) }; }) });
 }
 
-window.SelectorAsientos = Object.freeze({ version: 1, cargarEvento, actualizarEvento, cerrarEvento,
+function cantidadGeneralDelEvento(zonaId, cantidad) {
+  if (!eventoConectado) throw new Error('No hay un evento conectado.');
+  const resultado = cambiarCantidadGeneral(cantidadesGenerales, zonaId, cantidad, eventoConectado);
+  if (resultado.motivo) throw new Error(resultado.motivo);
+  actualizarExploradorZonas(); actualizarResumen(); notificarSeleccionEvento();
+  return seleccionDelEvento();
+}
+
+window.SelectorAsientos = Object.freeze({ version: 2, cargarEvento, actualizarEvento, cerrarEvento,
+  cantidadGeneral: cantidadGeneralDelEvento,
   seleccion: seleccionDelEvento, evaluarConfiguracion: evaluarConfiguracionEvento,
   refrescar: (opciones) => intercambiarEvento(opciones), reservar: (opciones) => intercambiarEvento(opciones, true) });

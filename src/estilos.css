@@ -402,6 +402,14 @@
 #zonas-vista button:focus-visible, #quitar-realce-zona:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
 #zonas-vista button[aria-pressed="true"] { background: var(--acento); color: white; }
 .resumen-zona { font-size: 12px; line-height: 1.6; color: var(--texto-tenue); margin: 8px 0 0; }
+.compra-general { margin-top: 10px; font-size: 13px; }
+.compra-general p { margin: 0 0 8px; }
+.compra-general input { width: 90px; margin-left: 8px; min-height: 38px; padding: 6px 10px;
+  box-sizing: border-box; border: 1px solid var(--borde); border-radius: 5px;
+  background: var(--fondo); color: var(--texto); font: inherit; color-scheme: dark; }
+.compra-general input:focus-visible { outline: 2px solid var(--realce); outline-offset: 2px; }
+.compra-general input:disabled { opacity: .5; }
+.butaca.acceso-general { cursor: pointer; }
 #etiqueta-nivel-zona { font-size: 12px; margin-top: 8px; }
 #etiqueta-palco-vista { font-size: 12px; margin-top: 8px; }
 #palco-vista { margin-left: 6px; max-width: 100%; padding: 5px 8px; border: 1px solid var(--borde); border-radius: 6px; background: #26262f; color: var(--texto-claro); font: inherit; }

@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 const carpeta = fileURLToPath(new URL('.', import.meta.url));
 const html = await readFile(join(carpeta, 'index.html'));
 const ejemploEvento = JSON.parse(await readFile(join(carpeta, 'docs/ejemplo-conector-evento.json'), 'utf8'));
+const ejemploGeneral = JSON.parse(await readFile(join(carpeta, 'docs/ejemplo-conector-general.json'), 'utf8'));
 const pausa = (ms) => new Promise((resolver) => setTimeout(resolver, ms));
 
 function chromeDisponible() {
@@ -116,6 +117,7 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
         eventoServidor.evento.versionEstado++;
         for(const p of eventoServidor.lugares) if(solicitud.event_place_ids.includes(p.event_place_id)||
           eventoServidor.grupos.some(g=>solicitud.event_group_ids.includes(g.event_group_id)&&ejemploEvento.mapa.identidadFisica[p.local_place_id]?.grupoId===g.id)) p.estado='reservado';
+        for (const acceso of solicitud.accesos_generales || []) eventoServidor.zonas.find(z => z.event_zone_id === acceso.event_zone_id).disponibles -= acceso.cantidad;
       }
       respuesta.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({evento:eventoServidor,resultado:{reserva:'res_ejemplo'}}));return;
     }
@@ -685,6 +687,13 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       assert.equal(await protocolo.evaluar('document.querySelectorAll(".numero-butaca").length'), await protocolo.evaluar('butacasVisibles().length'));
       await protocolo.evaluar(`cambiarModo('editor');document.querySelector('#butacas-numeradas').click();`);
       assert.equal(await protocolo.evaluar('document.querySelectorAll(".numero-butaca").length'), 0);
+      assert.equal(await protocolo.evaluar('document.getElementById("silueta-amplia").checked'), true);
+      assert.equal(await protocolo.evaluar('[...document.querySelectorAll(".butaca > use:not(.marca)")].every(n=>n.getAttribute("href")==="#butaca-numerada")'), true);
+      await protocolo.evaluar(`restaurarEdicion('deshacer');`);
+      assert.ok(await protocolo.evaluar('document.querySelectorAll(".numero-butaca").length') > 0);
+      await protocolo.evaluar(`document.querySelector('#silueta-amplia').click();`);
+      assert.equal(await protocolo.evaluar('document.querySelectorAll(".numero-butaca").length'), 0);
+      assert.equal(await protocolo.evaluar('[...document.querySelectorAll(".butaca > use:not(.marca)")].every(n=>n.getAttribute("href")==="#butaca")'), true);
       await protocolo.evaluar(`restaurarEdicion('deshacer');`);
       assert.ok(await protocolo.evaluar('document.querySelectorAll(".numero-butaca").length') > 0);
       await protocolo.evaluar(`Object.values(historiales).forEach(h=>h.marcarGuardado());actualizarEstadoEdicion();cambiarModo('vista');`);
@@ -856,6 +865,65 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       await protocolo.evaluar('window.fetch=__fetchOriginal;SelectorAsientos.cerrarEvento()');
     });
 
+    await t.test('acceso general: visor por cantidad, compra mixta, niveles y etiquetas sin butaca', async () => {
+      await protocolo.evaluar(`window.__general=${JSON.stringify(ejemploGeneral)};
+        __general.mapa.revisionFisica.estado='borrador';delete __general.mapa.revisionFisica.huella;
+        __general.mapa.niveles[1].butacasNumeradas=true;__general.mapa=publicarRevisionFisica(__general.mapa).mapa;
+        __general.evento.evento.revision={...__general.mapa.revisionFisica};SelectorAsientos.cargarEvento(__general);explorarZona('general');`);
+      assert.equal(await protocolo.evaluar('salaActual.nivel'), 'n2');
+      assert.equal(await protocolo.evaluar('document.getElementById("compra-general").hidden'), false);
+      assert.match(await protocolo.evaluar('document.getElementById("resumen-zona").textContent'), /2 disponibles en toda la zona/);
+      const info = await protocolo.evaluar(`(()=>{const n=document.querySelector('.butaca[data-id="F4-1-1"]');return [n.getAttribute('role'),n.getAttribute('aria-label'),n.querySelector('use').getAttribute('href'),n.querySelector('.numero-butaca')===null];})()`);
+      assert.equal(info[0], 'button'); assert.match(info[1], /acceso general, sin asiento asignado/);
+      assert.doesNotMatch(info[1], /fila|butaca|lugar [0-9]/); assert.equal(info[2], '#butaca-numerada'); assert.equal(info[3], true);
+      await protocolo.evaluar(`document.querySelector('.butaca[data-id="F4-1-1"]').focus()`); await protocolo.tecla('Enter', 'Enter', 13);
+      assert.equal(await protocolo.evaluar('document.activeElement.id'), 'cantidad-general');
+      assert.equal(await protocolo.evaluar('elegidas.size'), 0);
+      await protocolo.evaluar(`document.getElementById('cantidad-general').value='2';document.getElementById('cantidad-general').dispatchEvent(new Event('change'));`);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'), 2);
+      assert.match(await protocolo.evaluar('document.getElementById("detalle").textContent'), /Acceso general · 2 entradas/);
+      await protocolo.evaluar(`cambiarNivelVista('n3');`);
+      assert.equal(await protocolo.evaluar('document.getElementById("cantidad-general").value'), '2');
+      await protocolo.evaluar(`explorarZona('luneta');alternar(document.querySelector('.butaca[data-id="F1-1-1"]'));`);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'), 3);
+      assert.equal(await protocolo.evaluar('document.getElementById("cuenta").textContent'), '3');
+      assert.deepEqual(await protocolo.evaluar('SelectorAsientos.seleccion().solicitud.accesos_generales'), [{event_zone_id:'ez_general',cantidad:2}]);
+      await protocolo.evaluar('SelectorAsientos.cerrarEvento()');
+    });
+
+    await t.test('acceso general: cambios, cantidades inválidas, agotado y consulta fallida', async () => {
+      await protocolo.evaluar(`SelectorAsientos.cargarEvento(__general);explorarZona('general');SelectorAsientos.cantidadGeneral('general',2);
+        window.__reducido=structuredClone(__general.evento);__reducido.evento.versionEstado++;__reducido.zonas[2].disponibles=1;SelectorAsientos.actualizarEvento(__reducido);`);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'), 0);
+      assert.equal(await protocolo.evaluar('document.getElementById("cantidad-general").value'), '0');
+      await protocolo.evaluar(`document.getElementById('cantidad-general').value='1.5';document.getElementById('cantidad-general').dispatchEvent(new Event('change'));`);
+      assert.equal(await protocolo.evaluar('document.getElementById("cantidad-general").value'), '0');
+      await protocolo.evaluar(`SelectorAsientos.cantidadGeneral('general',1);`);
+      assert.equal(await protocolo.evaluar(`SelectorAsientos.refrescar({url:'/sin-disponibilidad'}).then(()=>false,()=>true)`), true);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'), 0);
+      assert.equal(await protocolo.evaluar('document.getElementById("cantidad-general").disabled'), true);
+      assert.match(await protocolo.evaluar('document.getElementById("resumen-zona").textContent'), /sin confirmar/);
+      await protocolo.evaluar(`SelectorAsientos.actualizarEvento(__reducido);__reducido.evento.versionEstado++;__reducido.zonas[2].disponibles=0;SelectorAsientos.actualizarEvento(__reducido);`);
+      assert.match(await protocolo.evaluar('document.getElementById("resumen-zona").textContent'), /Agotado/);
+      assert.equal(await protocolo.evaluar('document.getElementById("cantidad-general").disabled'), true);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().conteos.habilitados'), 11);
+      await protocolo.evaluar('SelectorAsientos.cerrarEvento()');
+    });
+
+    await t.test('acceso general: POST envía cantidades sin números ni precios y suelta tras reservar', async () => {
+      eventoServidor = await protocolo.evaluar('structuredClone(__general.evento)');
+      await protocolo.evaluar(`SelectorAsientos.cargarEvento(__general);SelectorAsientos.cantidadGeneral('general',1);`);
+      const respuesta = await protocolo.evaluar(`SelectorAsientos.reservar({url:'/reserva',csrf:'csrf_general',requestKey:'general_prueba_1234'})`);
+      assert.equal(respuesta.seleccion.cantidad, 0); assert.equal(respuesta.resultado.reserva, 'res_ejemplo');
+      const enviada = solicitudesAPI.at(-1).solicitud;
+      assert.deepEqual(enviada.accesos_generales, [{event_zone_id:'ez_general',cantidad:1}]);
+      assert.deepEqual(enviada.event_place_ids, []); assert.deepEqual(enviada.event_group_ids, []);
+      assert.equal(enviada.totalCentavos, undefined); assert.equal(enviada.numero, undefined);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().conteos.habilitados'), 11);
+      assert.equal(await protocolo.evaluar('eventoConectado.generales.get("general").disponibles'), 1);
+      await protocolo.evaluar('SelectorAsientos.cerrarEvento()');
+    });
+
     await t.test('conector: recursos externos funcionan bajo CSP sin estilos ni scripts inline', async () => {
       await protocolo.evaluar('for(const h of Object.values(historiales))h.marcarGuardado();actualizarEstadoEdicion()');
       await protocolo.enviar('Page.addScriptToEvaluateOnNewDocument',{source:"window.__cspViolaciones=[];document.addEventListener('securitypolicyviolation',e=>__cspViolaciones.push(e.violatedDirective));"});
@@ -869,6 +937,9 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       assert.ok(await protocolo.evaluar('document.querySelectorAll(".numero-butaca").length') > 0);
       await protocolo.evaluar(`document.querySelector('.butaca[data-id="F3-1-1"]').focus()`);await protocolo.tecla('Enter','Enter',13);
       assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'),2);
+      await protocolo.evaluar(`SelectorAsientos.cerrarEvento();SelectorAsientos.cargarEvento(${JSON.stringify(ejemploGeneral)});explorarZona('general');SelectorAsientos.cantidadGeneral('general',1);`);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'), 1);
+      assert.equal(await protocolo.evaluar('document.getElementById("compra-general").hidden'), false);
       assert.deepEqual(await protocolo.evaluar('window.__cspViolaciones'),[]);
       if(process.env.SELECTOR_CAPTURA){
         await protocolo.enviar('Emulation.setDeviceMetricsOverride',{width:1440,height:900,deviceScaleFactor:1,mobile:false});

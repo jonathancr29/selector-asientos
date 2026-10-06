@@ -877,8 +877,9 @@ inventar sectores, filas físicas o palcos a partir de su geometría o etiquetas
 
 ## Niveles, regiones y filas libres (fase 4)
 
-En **Niveles y regiones**, **Butacas con número interior en este nivel** activa una silueta
-con centro amplio y la etiqueta existente de cada lugar. El número permanece horizontal
+En **Niveles y regiones**, **Silueta amplia de butaca en este nivel** cambia el icono sin mostrar
+números. **Mostrar número interior en este nivel** activa esa silueta y la etiqueta existente
+de cada lugar. Desactivar los números conserva la silueta amplia. El número permanece horizontal
 aunque gire la butaca; las marcas de estado se muestran en una esquina para no taparlo.
 La opción se guarda por nivel, se puede deshacer y requiere borrador si el mapa está publicado.
 Los mapas sin la opción conservan el icono anterior. No renumera ni mueve lugares; para leer
@@ -1074,6 +1075,28 @@ El anfitrión recibe selecciones por callback o evento DOM, consulta y reserva m
 mismo origen con CSRF. Las peticiones envían IDs opacos del evento; el importe mostrado no autoriza
 una venta. Errores de consulta suspenden la compra hasta confirmar de nuevo disponibilidad.
 Actualizaciones validan revisión, identidades y versión, y avisan al soltar selecciones afectadas.
+
+### Acceso general por evento
+
+El snapshot comercial versión 2 declara cada zona como asignada o general. En general,
+el visor conserva las butacas como referencia, usa la silueta amplia y oculta sus números,
+etiquetas de fila y selección individual. Pulsar la zona o una de sus butacas abre **Cantidad
+de entradas** dentro del visor. Se informa ubicación por orden de llegada, precio por entrada,
+cupo habilitado y disponibilidad del conjunto de la zona, aunque atraviese varios niveles.
+Las cantidades se conservan al cambiar de piso y se suman con las butacas asignadas en el resumen.
+
+El conector envía ID opaco de zona y cantidad; no asigna asientos invisibles. Cupo desconocido
+impide seleccionar; cero disponibles indica agotado, y precio cero significa gratis. Si una
+actualización ya no permite la cantidad elegida se suelta y exige elegir de nuevo. Reservar
+suelta las cantidades enviadas aunque quede cupo. Sin Taquilla debe validar y reservar ese cupo
+atómicamente. El selector no emite boletos ni modifica aquel sistema.
+
+La modalidad pertenece al evento, no al JSON físico. Cargar solamente un mapa conserva la
+previsualización de lugares físicos; no convierte una zona llamada «General» en venta por cantidad.
+Los eventos versión 1 mantienen su contrato y selección anteriores. En versión 2 las zonas con
+mesas o palcos conservan venta por lugar/conjunto; convertirlas a general queda fuera de este contrato.
+Ver [ejemplo de venta mixta](docs/ejemplo-conector-general.json) y
+[campos de integración](docs/INTEGRACION_EVENTOS_SINTAQUILLA.md).
 
 La entrega externa funciona con `style-src 'self'` y `script-src 'self'`. El HTML autónomo sigue
 funcionando sin servidor. El [ejemplo completo](docs/ejemplo-conector-evento.json) usa tres niveles,
