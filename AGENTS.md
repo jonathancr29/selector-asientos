@@ -209,10 +209,20 @@ comentarios `// ----`.
 
 ## Reglas que no se deben romper
 
+- **Acceso general conectado:** la versión 2 declara modalidad por zona. La cantidad vive en
+  `cantidadesGenerales`, nunca en el mapa ni en `elegidas`. No fabricar IDs de butacas para
+  reservas generales. Cupo se limita a inventario físicamente utilizable y no excluido;
+  disponibilidad desconocida suspende compra. Cantidad inválida tras actualizar se suelta,
+  no se recorta. Una reserva exitosa suelta la cantidad enviada aunque quede disponibilidad.
+  Modalidad e identidad de zona permanecen fijas durante la sesión; recargar es explícito.
+  Las zonas con grupos físicos siguen venta individual o completa, no general.
+
 - **Icono numerado por nivel:** `butacasNumeradas` es una opción de presentación, no una
   asignación de etiquetas. El número usa la etiqueta vigente y permanece horizontal;
   las marcas se buscan por clase, no por posición de hijo, y se colocan aparte del texto.
-  Conserva área de clic, foco, selección y los iconos clásicos de niveles sin la opción.
+  `siluetaAmplia` permite el mismo icono sin número; desactivar los números lo conserva.
+  El evento general oculta números y etiquetas individuales sin borrar los del inventario.
+  Conserva área de clic, foco, selección y los iconos clásicos de niveles sin las opciones.
 
 - **Realce de palcos:** zona y palco explorados son estado transitorio, independiente de compra.
   El contorno público sigue las butacas con esquinas suaves; los recuadros físicos solo aparecen

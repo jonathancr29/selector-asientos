@@ -4,7 +4,25 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Butacas con número interior por nivel
+## Sin publicar — Acceso general por cantidad en selector y conector
+
+Rama `claude/acceso-general`.
+
+- Snapshot comercial v2 con modalidad por zona, cupo y disponibilidad general independientes
+  del inventario físico. Compra mixta mediante IDs opacos de lugares, grupos y cantidades por zona;
+  compatibilidad con snapshots y solicitudes v1.
+- Cantidad dentro del visor, precio por entrada, resumen compartido entre niveles y referencias
+  sin números ni selección individual. Cambios de disponibilidad sueltan cantidades inválidas;
+  reserva exitosa suelta las enviadas, incluso con cupo restante.
+- Silueta amplia por nivel separada de la visibilidad de números. No altera inventario ni etiquetas.
+- Contrato y ejemplo ejecutable para Sin Taquilla; no se modifica el servidor de ventas.
+- Verificado: 221 pruebas de lógica y 35 de navegador, transporte de compra mixta y CSP;
+  revisión visual en escritorio y móvil con Galería de 184 lugares y los 619 IDs conservados.
+
+## 2026-10-06 — PR #60: Butacas con número interior por nivel
+
+[PR #60](https://github.com/jonathancr29/selector-asientos/pull/60), fusionado en `main` con el
+commit `24af70b`.
 
 Rama `claude/butacas-numeradas`.
 

@@ -52,6 +52,117 @@ assert.ok(!conComa, 'la parte sin DOM declara varios nombres en una sentencia:\n
 const cargar = () => new Function(fuente + '\nreturn { ' + declarados.join(', ') + ' };')();
 
 const ejemploConector = () => JSON.parse(readFileSync(new URL('./docs/ejemplo-conector-evento.json', import.meta.url), 'utf8'));
+const ejemploGeneral = () => JSON.parse(readFileSync(new URL('./docs/ejemplo-conector-general.json', import.meta.url), 'utf8'));
+
+test('acceso general: inventario intacto, cupo y disponibilidad independientes, sin IDs de venta por butaca', () => {
+  const a = cargar(), f = ejemploGeneral(), antes = JSON.stringify(f.mapa);
+  const r = a.resolverEventoDeMapa(f.mapa, f.evento);
+  assert.equal(r.errores, undefined);
+  assert.deepEqual(a.conteosDeEvento(r.evento), f.esperado);
+  assert.equal(JSON.stringify(f.mapa), antes);
+  const z = r.evento.generales.get('general');
+  assert.equal(z.capacidad, 3); assert.equal(z.cupo, 3); assert.equal(z.disponibles, 2);
+  for (const p of r.evento.lugares.values()) if (p.accesoGeneral) {
+    assert.equal(p.event_place_id, null); assert.equal(p.comprable, false);
+    assert.equal(a.alternarLugarEvento(new Set(), p.local_place_id, r.evento), null);
+  }
+});
+
+test('acceso general: compra mixta suma entradas y envía solo ID opaco de zona y cantidad', () => {
+  const a = cargar(), f = ejemploGeneral(), e = a.resolverEventoDeMapa(f.mapa, f.evento).evento;
+  const cantidades = new Map(), ids = new Set(['F1-1-1']);
+  assert.deepEqual(a.cambiarCantidadGeneral(cantidades, 'general', 2, e), { cantidad: 2 });
+  const s = a.solicitudDeSeleccionEvento(ids, e, cantidades);
+  assert.equal(s.cantidad, 3);
+  assert.equal(s.totalCentavos, e.lugares.get('F1-1-1').categoria.precioCentavos + 2 * e.generales.get('general').categoria.precioCentavos);
+  assert.deepEqual(s.solicitud.accesos_generales, [{ event_zone_id: 'ez_general', cantidad: 2 }]);
+  assert.deepEqual(s.solicitud.event_place_ids, [e.lugares.get('F1-1-1').event_place_id]);
+  assert.equal(s.solicitud.precio, undefined);
+  assert.ok(a.solicitudDeSeleccionEvento(new Set(['F4-1-1']), e).errores);
+});
+
+test('acceso general: gratis no equivale a cupo desconocido, agotado o cerrado', () => {
+  const a = cargar(), f = ejemploGeneral();
+  f.evento.categorias.find(c => c.id === 'ett_general').precioCentavos = 0;
+  let e = a.resolverEventoDeMapa(f.mapa, f.evento).evento;
+  assert.equal(a.solicitudDeSeleccionEvento(new Set(), e, new Map([['general', 2]])).totalCentavos, 0);
+  for (const disponibles of [null, 0]) {
+    f.evento.zonas.find(z => z.id === 'general').disponibles = disponibles;
+    e = a.resolverEventoDeMapa(f.mapa, f.evento).evento;
+    assert.equal(e.generales.get('general').comprable, false);
+    assert.ok(a.cambiarCantidadGeneral(new Map(), 'general', 1, e).motivo);
+    assert.equal(a.conteosDeEvento(e).habilitados, 11);
+    assert.equal(a.conteosDeEvento(e).disponibles, 8);
+  }
+  Object.assign(f.evento.zonas.find(z => z.id === 'general'), { cupo: 0, disponibles: 0 });
+  f.evento.exclusiones.zona = ['general'];
+  e = a.resolverEventoDeMapa(f.mapa, f.evento).evento;
+  assert.equal(a.conteosDeEvento(e).inventariados, 15); assert.equal(a.conteosDeEvento(e).habilitados, 8);
+});
+
+test('acceso general: cantidades inválidas y reducción de disponibilidad no se ajustan silenciosamente', () => {
+  const a = cargar(), f = ejemploGeneral(); let e = a.resolverEventoDeMapa(f.mapa, f.evento).evento;
+  const cantidades = new Map([['general', 2]]);
+  for (const n of [-1, .5, 3, NaN, Infinity, '1']) assert.ok(a.cambiarCantidadGeneral(cantidades, 'general', n, e).motivo);
+  assert.deepEqual([...cantidades], [['general', 2]]);
+  f.evento.zonas.find(z => z.id === 'general').disponibles = 1;
+  e = a.resolverEventoDeMapa(f.mapa, f.evento).evento;
+  assert.deepEqual(a.conciliarCantidadesGenerales(cantidades, e), ['general']); assert.equal(cantidades.size, 0);
+  assert.ok(a.cambiarCantidadGeneral(cantidades, 'luneta', 1, e).motivo);
+  assert.equal(a.cambiarCantidadGeneral(cantidades, 'general', 0, e).motivo, undefined);
+});
+
+test('acceso general: validación rechaza sobrecupo, tarifas mezcladas, identidades duplicadas y snapshots incompletos', () => {
+  const cambios = [f => f.evento.zonas.pop(), f => f.evento.zonas[2].modalidad = 'otro',
+    f => f.evento.zonas[2].cupo = 4, f => f.evento.zonas[2].disponibles = 4,
+    f => delete f.evento.zonas[2].disponibles, f => f.evento.zonas[2].event_zone_id = f.evento.lugares[0].event_place_id,
+    f => f.evento.asignaciones.push({ tipo: 'zona', id: 'general', categoriaId: 'ett_general' }),
+    f => f.evento.lugares.push({ local_place_id: 'F4-1-1', event_place_id: 'ep_general', estado: 'libre' }),
+    f => f.evento.exclusiones.nivel = ['n2'], f => f.evento.categorias.find(c => c.id === 'ett_general').activa = false];
+  for (const cambiar of cambios) {
+    const a = cargar(), f = ejemploGeneral(); cambiar(f);
+    assert.ok(a.resolverEventoDeMapa(f.mapa, f.evento).errores, String(cambiar));
+  }
+});
+
+test('acceso general: modalidad de grupos físicos requiere política independiente', () => {
+  const a = cargar(), f = ejemploGeneral();
+  Object.assign(f.evento.zonas[0], { modalidad: 'general', event_zone_id: 'ez_luneta', categoriaId: 'ett_luneta', cupo: 1, disponibles: 1 });
+  assert.match(a.resolverEventoDeMapa(f.mapa, f.evento).errores.join(), /mesas o palcos físicos/);
+});
+
+test('acceso general: identidad y modalidad fijas, firma detecta cambios del cupo', () => {
+  const a = cargar(), f = ejemploGeneral(), actual = a.resolverEventoDeMapa(f.mapa, f.evento).evento;
+  f.evento.zonas[2].disponibles = 1;
+  let nuevo = a.resolverEventoDeMapa(f.mapa, f.evento).evento;
+  assert.notEqual(a.firmaDeEvento(actual), a.firmaDeEvento(nuevo)); assert.equal(a.motivoCambioDeEvento(actual, nuevo), null);
+  f.evento.zonas[2].event_zone_id = 'ez_otro'; nuevo = a.resolverEventoDeMapa(f.mapa, f.evento).evento;
+  assert.match(a.motivoCambioDeEvento(actual, nuevo), /modalidad o identidad/);
+  f.evento.zonas[2] = { id: 'general', modalidad: 'asignada' };
+  f.evento.asignaciones.push({ tipo: 'zona', id: 'general', categoriaId: 'ett_general' });
+  f.evento.lugares.push(...ejemploConector().evento.lugares.filter(p => f.mapa.identidadFisica[p.local_place_id].zona === 'general'));
+  nuevo = a.resolverEventoDeMapa(f.mapa, f.evento).evento;
+  assert.match(a.motivoCambioDeEvento(actual, nuevo), /modalidad o identidad/);
+  const v1 = ejemploConector(); nuevo = a.resolverEventoDeMapa(v1.mapa, v1.evento).evento;
+  assert.match(a.motivoCambioDeEvento(actual, nuevo), /versión del contrato/);
+});
+
+test('silueta amplia: números independientes, guardar y abrir conserva geometría e identidad', () => {
+  const a = cargar(), f = ejemploConector(); f.mapa.revisionFisica.estado = 'borrador'; delete f.mapa.revisionFisica.huella;
+  const p = a.definicionDeMapa(f.mapa), antes = structuredClone(p.identidadFisica);
+  let nuevo = a.mostrarSiluetaAmplia(p, 'n2', true);
+  assert.equal(nuevo.niveles[1].butacasNumeradas, undefined);
+  const mapa = a.mapaDesdePlano('Silueta sin números', nuevo);
+  const r = a.validarMapa(JSON.parse(JSON.stringify(mapa)));
+  assert.equal(r.errores, undefined); assert.equal(r.mapa.niveles[1].siluetaAmplia, true);
+  assert.deepEqual(nuevo.identidadFisica, antes);
+  nuevo = a.mostrarButacasNumeradas(nuevo, 'n2', true);
+  nuevo = a.mostrarButacasNumeradas(nuevo, 'n2', false);
+  assert.equal(nuevo.niveles[1].siluetaAmplia, true); assert.equal(nuevo.niveles[1].butacasNumeradas, undefined);
+  mapa.niveles[1].siluetaAmplia = 'si'; assert.match(a.validarMapa(mapa).errores.join(), /silueta amplia/);
+  f.mapa.revisionFisica.estado = 'publicada';
+  assert.match(a.mostrarSiluetaAmplia(f.mapa, 'n2', true).motivo, /borrador/);
+});
 
 test('explorar zonas: sin evento no infiere precios ni disponibilidad del ejemplo', () => {
   const a = cargar();

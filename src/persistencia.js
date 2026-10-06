@@ -4,12 +4,13 @@
 function actualizarResumen() {
   // En orden de plano, no de clic: el detalle sale estable.
   const lista = butacas.filter((b) => elegidas.has(b.id));
-  document.getElementById('cuenta').textContent = String(lista.length);
-  const seleccionEvento = eventoConectado && solicitudDeSeleccionEvento(elegidas, eventoConectado);
+  const seleccionEvento = eventoConectado && solicitudDeSeleccionEvento(elegidas, eventoConectado, cantidadesGenerales);
+  const cantidad = seleccionEvento && !seleccionEvento.errores ? seleccionEvento.cantidad : lista.length;
+  document.getElementById('cuenta').textContent = String(cantidad);
   document.getElementById('total').textContent = seleccionEvento && !seleccionEvento.errores
     ? dinero(seleccionEvento.totalCentavos) : 'Precio no disponible';
-  document.getElementById('vacio').hidden = lista.length > 0;
-  document.getElementById('detalle-vacio').hidden = lista.length > 0;
+  document.getElementById('vacio').hidden = cantidad > 0;
+  document.getElementById('detalle-vacio').hidden = cantidad > 0;
 
   const cubos = new Map();
   for (const b of lista) {
@@ -31,6 +32,13 @@ function actualizarResumen() {
       (eventoConectado ? ' · ' + dinero(items.reduce((s, b) => s + eventoConectado.lugares.get(b.id).categoria.precioCentavos, 0)) : '');
     detalle.appendChild(li);
   }
+  for (const [id, cantidad] of cantidadesGenerales) {
+    const zona = eventoConectado?.generales.get(id);
+    if (!zona) continue;
+    const li = document.createElement('li');
+    li.textContent = zona.nombre + ' · Acceso general · ' + plural(cantidad, 'entrada', 'entradas') + ' · ' + dinero(cantidad * zona.categoria.precioCentavos);
+    detalle.appendChild(li);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -46,7 +54,8 @@ function actualizarAforo(sala) {
   if (eventoConectado) {
     const c = conteosDeEvento(eventoConectado);
     document.getElementById('aforo').textContent = c.inventariados + ' inventariados · ' + c.utilizables + ' utilizables · ' +
-      c.habilitados + ' habilitados · ' + c.disponibles + ' libres · ' + c.comprables + ' comprables · ' + c.conjuntosComprables + ' conjuntos completos disponibles';
+      c.habilitados + ' habilitados · ' + c.disponibles + ' disponibles confirmados · ' + c.comprables + ' comprables · ' + c.conjuntosComprables + ' conjuntos completos disponibles' +
+      ([...eventoConectado.generales.values()].some(z => z.disponibles === null) ? ' · Acceso general con disponibilidad sin confirmar' : '');
     return;
   }
   const bandasDeFilas = hojasDe(sala.bandas).filter((b) => b.tipo === 'filas');

@@ -2,7 +2,8 @@
 
 Estado: contrato acordado en fase 1. Las fases 3 y 4 implementan identidad por lugar, numeracion
 explicita, revisiones locales, niveles, regiones y bloques rectos o en arco con correcciones.
-La fase 5 implementa sectores, entidades de fila y palcos; la conexion de venta sigue pendiente. Los vinculos graficos
+La fase 5 implementa sectores, entidades de fila y palcos; la fase 6 incorpora el conector cliente.
+La venta del servidor sigue en otro proyecto. Los vinculos graficos
 de region transforman bloques; no determinan pertenencias fisicas ni modalidades comerciales.
 Complementa el contrato de lugares para Sin Taquilla y prevalece sobre sus reglas comerciales
 anteriores cuando haya diferencias. Los nombres de campos siguientes son un contrato logico,
@@ -87,6 +88,12 @@ fisica ni cupo habilitado. Mostrar conjuntos comprables aparte: un lugar libre p
 a un conjunto no comprable. Condicion fisica, exclusion del evento y disponibilidad son campos
 distintos. Un cambio de configuracion no invalida reservas ni ventas existentes silenciosamente.
 
+Para acceso general, el evento declara modalidad por zona, tarifa por entrada y cupo ofertado
+limitado al inventario utilizable no excluido. Disponibilidad se entrega como saldo de entradas,
+o desconocida. No se asignan butacas a quien compra; los lugares físicos se conservan para
+representación y límites. Cantidades generales y lugares asignados pueden coexistir en la compra.
+El contrato ejecutable v2 está en [la guía del conector](INTEGRACION_EVENTOS_SINTAQUILLA.md).
+
 ## 5. Venta agrupada comun
 
 Mesa y palco comparten mecanismo de seleccion, reserva y compra, pero tienen geometria y
@@ -107,7 +114,8 @@ procede del catalogo del recinto y el costo de su configuracion de evento. Preci
 es cero: mostrar sin precio disponible. Cero confirmado es gratuito. La pagina autonoma sigue
 permitiendo editar y seleccionar sin servidor, sin simular una compra o una tarifa.
 
-Compra: IDs de lugares o grupos del evento, nunca precio como autoridad. Servidor valida revision,
+Compra: IDs de lugares o grupos del evento y, en acceso general, ID opaco de zona y cantidad;
+nunca precio como autoridad. Servidor valida revision,
 habilitacion, categoria, modalidad y disponibilidad en una transaccion. El conector no es un
 plugin de Codex: es la interfaz entre aplicaciones. Autenticacion, endpoints, errores y refresco
 se concretan para el cliente en la [guia de fase 6](INTEGRACION_EVENTOS_SINTAQUILLA.md).

@@ -33,6 +33,10 @@ function textoDeZona(lista) {
   if (!eventoConectado) return partes.join(' · ') + ' · Precio no disponible · Disponibilidad sin confirmar';
   const formato = new Intl.NumberFormat('es-MX', { style: 'currency', currency: eventoConectado.cabecera.moneda });
   const precio = (v) => v === 0 ? 'Gratis' : formato.format(v / 100);
+  const general = eventoConectado.generales.get(zonaExplorada);
+  if (general) return partes.join(' · ') + ' · Acceso general · ' + precio(general.categoria.precioCentavos) + ' por entrada · ' +
+    general.cupo + ' entradas habilitadas en toda la zona · ' + (general.disponibles === null ? 'Disponibilidad sin confirmar' :
+      general.disponibles === 0 ? (general.cupo ? 'Agotado' : 'No habilitada para esta función') : general.disponibles + ' disponibles en toda la zona');
   const rango = (ps) => ps.length === 1 ? precio(ps[0]) : 'De ' + precio(ps[0]) + ' a ' + precio(ps.at(-1));
   partes.push(r.habilitados ? r.habilitados + ' habilitados' : 'No habilitada para esta función');
   partes.push(r.comprables + ' lugares comprables');
@@ -51,6 +55,7 @@ function textoDeZona(lista) {
 function actualizarExploradorZonas() {
   const panel = document.getElementById('explorador-zonas');
   panel.hidden = modo !== 'vista';
+  actualizarControlGeneral();
   capaRealceZona.textContent = '';
   if (panel.hidden) return;
   const presentes = new Set(butacas.map((b) => b.zona));
@@ -100,6 +105,22 @@ function actualizarExploradorZonas() {
     capaRealceZona.appendChild(nodo('path', { d: trazoSuaveDeContorno(puntos) }));
   }
 }
+
+function actualizarControlGeneral() {
+  const zona = eventoConectado?.generales.get(zonaExplorada);
+  document.getElementById('compra-general').hidden = modo !== 'vista' || !zona;
+  const input = document.getElementById('cantidad-general');
+  input.disabled = !zona?.comprable;
+  input.max = String(zona?.disponibles ?? 0);
+  input.value = String(cantidadesGenerales.get(zonaExplorada) || 0);
+}
+
+document.getElementById('cantidad-general').addEventListener('change', (e) => {
+  try {
+    cantidadGeneralDelEvento(zonaExplorada, e.target.value === '' ? NaN : Number(e.target.value));
+    anunciar('Cantidad de acceso general actualizada.');
+  } catch (error) { actualizarControlGeneral(); anunciar(error.message); }
+});
 
 function encuadrarZona() {
   const lista = lugaresDeZonaVisible();
@@ -1040,6 +1061,12 @@ function alternar(elemento) {
   }
   const b = elemento && porNodo(elemento);
   if (eventoConectado) {
+    if (b?.accesoGeneral) {
+      explorarZona(b.zona);
+      const input = document.getElementById('cantidad-general');
+      if (!input.disabled) input.focus({ preventScroll: true });
+      return;
+    }
     const elegida = alternarLugarEvento(elegidas, b?.id, eventoConectado);
     if (elegida === null) return;
     const grupo = eventoConectado.grupos.get(b.grupo?.id);

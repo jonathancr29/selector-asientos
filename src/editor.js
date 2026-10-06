@@ -1297,6 +1297,13 @@ document.getElementById('butacas-numeradas').addEventListener('change', (e) => {
   planos[tipoActual] = nuevo;
   regenerar('Presentación de butacas actualizada; números e IDs conservados.');
 });
+document.getElementById('silueta-amplia').addEventListener('change', (e) => {
+  if (modo !== 'editor') return;
+  const nuevo = mostrarSiluetaAmplia(planoEditable(), salaActual.nivel, e.target.checked);
+  if (nuevo.motivo) { anunciar(nuevo.motivo); actualizarControlesGeometria(); return; }
+  planos[tipoActual] = nuevo;
+  regenerar('Silueta de butacas actualizada; números e IDs conservados.');
+});
 document.getElementById('agregar-nivel').addEventListener('click', () => {
   const nuevo = agregarNivel(planoEditable(), document.getElementById('nombre-nivel').value);
   if (nuevo.motivo) { anunciar(nuevo.motivo); return; }
@@ -1320,6 +1327,9 @@ function actualizarControlesGeometria() {
   const plano = planos[tipoActual] || TIPOS_DE_SALA[tipoActual];
   document.getElementById('butacas-numeradas').checked = nivelesDe(plano).find((n) => n.id === salaActual.nivel)?.butacasNumeradas === true;
   document.getElementById('butacas-numeradas').disabled = modo !== 'editor' || plano.revisionFisica?.estado === 'publicada';
+  const nivel = nivelesDe(plano).find(n => n.id === salaActual.nivel);
+  document.getElementById('silueta-amplia').checked = nivel?.siluetaAmplia === true || nivel?.butacasNumeradas === true;
+  document.getElementById('silueta-amplia').disabled = modo !== 'editor' || plano.revisionFisica?.estado === 'publicada';
   actualizarPestanasNiveles();
   document.getElementById('eliminar-nivel').disabled = salaActual.niveles.length === 1;
   const p = piezaPorId(mesaActiva);

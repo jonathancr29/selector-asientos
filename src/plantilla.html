@@ -218,6 +218,11 @@
         <label id="etiqueta-nivel-zona" hidden>Nivel de la zona <select id="nivel-zona"></select></label>
         <label id="etiqueta-palco-vista" hidden>Destacar palco <select id="palco-vista"></select></label>
         <p id="resumen-zona" class="resumen-zona" role="status" aria-live="polite">Elige una zona para ver su ubicación e información.</p>
+        <div id="compra-general" class="compra-general" hidden>
+          <p>Acceso general: ubicación por orden de llegada, sin asiento asignado.</p>
+          <label for="cantidad-general">Cantidad de entradas</label>
+          <input id="cantidad-general" type="number" min="0" step="1" value="0" inputmode="numeric" aria-describedby="resumen-zona">
+        </div>
       </section>
       <!-- Hojas de informacion, de una en una. En escritorio el panel baja sobre el plano.
            Se abren solo al pulsar el boton de informacion. -->
@@ -363,7 +368,8 @@
       <details class="grupo numeracion-oficial" id="grupo-niveles">
         <summary>Niveles y regiones</summary>
         <label for="nombre-nivel">Nombre del nivel</label><input id="nombre-nivel" maxlength="40" placeholder="Ej.: Galería">
-        <label><input id="butacas-numeradas" type="checkbox"> Butacas con número interior en este nivel</label>
+        <label><input id="silueta-amplia" type="checkbox"> Silueta amplia de butaca en este nivel</label>
+        <label><input id="butacas-numeradas" type="checkbox"> Mostrar número interior en este nivel</label>
         <button id="agregar-nivel" type="button">Agregar nivel</button>
         <button id="renombrar-nivel" type="button">Renombrar nivel actual</button>
         <button id="eliminar-nivel" type="button">Eliminar nivel actual</button>

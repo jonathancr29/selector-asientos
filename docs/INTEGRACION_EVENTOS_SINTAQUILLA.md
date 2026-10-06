@@ -3,7 +3,7 @@
 Esta fase implementa el lado del selector. No modifica Sin Taquilla, su base de datos ni sus
 ventas. El anfitrión aún debe implementar administración, endpoints, reservas transaccionales,
 caducidad y emisión de boletos. Una selección y su importe en pantalla no son una reserva.
-El mapa del Clavijero se construirá por separado, después de estos ajustes.
+El mapa físico se construye y conserva por separado de la configuración de cada evento.
 
 ## Entrega y seguridad
 
@@ -29,10 +29,11 @@ El visor incluye exploración de zonas físicas: navega al nivel, encuadra y res
 lugares. Su resumen por zona y piso deriva habilitación, comprables y tarifas del snapshot vigente;
 para venta agrupada muestra el importe y disponibilidad del conjunto completo. Actualizar el
 evento o suspender disponibilidad refresca esa información. No requiere campos adicionales del
-conector ni altera la solicitud de compra. Sin evento conectado no presenta disponibilidad de
+conector para zonas asignadas ni altera su solicitud de compra. Sin evento conectado no presenta disponibilidad de
 venta ni precios supuestos.
 
-`window.SelectorAsientos.version === 1`. Los métodos arrojan `Error` al rechazar datos:
+`window.SelectorAsientos.version === 2`. Admite snapshots comerciales 1 y 2; el contrato de
+peticiones v1 permanece compatible. Los métodos arrojan `Error` al rechazar datos:
 
 | Método | Función |
 |---|---|
@@ -40,6 +41,7 @@ venta ni precios supuestos.
 | `evaluarConfiguracion(mapa, evento)` | Valida y devuelve conteos, nombres físicos de zonas y habilitación/categoría por lugar para el formulario anfitrión. No conecta ni guarda. |
 | `actualizarEvento(evento)` | Reemplaza un snapshot validado. Conserva solo selecciones todavía comprables. |
 | `seleccion()` | Devuelve `{ solicitud, cantidad, totalCentavos, conteos }`, copiados, sin referencias mutables al motor. |
+| `cantidadGeneral(zonaId, cantidad)` | Cambia una cantidad entera usando el ID físico de zona. Cero la quita; desconocido, sobrecupo o zona asignada se rechazan. También puede elegirse desde el visor. |
 | `refrescar({ url, signal? })` | GET de disponibilidad, con cookies del mismo origen y sin caché. |
 | `reservar({ url, csrf, requestKey?, signal? })` | POST de IDs seleccionados. Devuelve `{ seleccion, resultado }` tras validar la respuesta de disponibilidad. |
 | `cerrarEvento()` | Descarta datos comerciales y restaura el recinto y selección previos de la vista autónoma. |
@@ -132,6 +134,49 @@ comprables. Un integrante libre puede no ser comprable si falla su conjunto. Res
 no reducen capacidad física. La exclusión no elimina lugares. Un cambio de modalidad nunca
 completa automáticamente una selección parcial: la suelta y exige elegir de nuevo.
 
+## Snapshot completo, versión 2: zonas asignadas y acceso general
+
+[Ejemplo ejecutable de venta mixta](ejemplo-conector-general.json). Conserva categorías,
+exclusiones, grupos, revisión y versión de estado de v1 y añade una lista completa de zonas:
+
+```json
+"zonas": [
+  { "id": "luneta", "modalidad": "asignada" },
+  { "id": "mesas", "modalidad": "asignada" },
+  { "id": "general", "modalidad": "general", "event_zone_id": "ez_opaca",
+    "categoriaId": "ett_general", "cupo": 3, "disponibles": 2 }
+]
+```
+
+- Una entrada por cada zona del mapa, incluso vacía o cerrada. Nombres físicos vienen del mapa.
+  Modalidades: `asignada` y `general`. No se guardan en el JSON físico.
+- `event_zone_id` es único entre zonas generales, lugares y grupos del evento. Conservarlo y
+  conservar la modalidad durante actualizaciones. Cambiarlos requiere cargar una sesión nueva;
+  eso no autoriza al servidor a transformar un evento con ventas o reservas existentes.
+- `cupo` es entero entre cero y la cantidad de lugares utilizables no excluidos de esa zona.
+  Permite ofrecer menos entradas sin eliminar butacas. Excluir zona/nivel/sector/fila/lugar reduce
+  el máximo físico; el servidor debe enviar un cupo coherente. Cerrar toda la zona requiere cupo cero.
+- `disponibles` es entero entre cero y cupo, o `null` si no está confirmado. No se calcula contando
+  iconos, no se duplica por nivel y nunca reduce cupo. Reservas, ventas y bloqueos comerciales
+  reducen disponibilidad en el servidor. El conteo agregado suma disponibilidad confirmada;
+  una zona desconocida aporta cero comprables y se indica como sin confirmar.
+- Tarifa general: `categoriaId` de la zona, activa para cualquier cupo positivo. Cero centavos
+  es gratuito explícito. No enviar asignaciones de tarifa que apliquen a sus butacas, tampoco
+  por nivel o fila compartidos: son contradictorias con esta modalidad y se rechazan.
+- `lugares` contiene únicamente los lugares de zonas asignadas, incluidos sus excluidos e
+  inutilizables; todos requieren ID opaco. Los generales no reciben `event_place_id` ni estado
+  de venta individual. Permanecen en el catálogo físico, para capacidad y representación.
+- Mesas y palcos usan la política por grupo existente. No se admite convertir una zona con
+  grupos físicos a acceso general en esta versión. En zonas asignadas, venta completa/individual
+  mantiene sus validaciones anteriores.
+
+En el visor, pulsar una referencia de butaca general abre el control de cantidad, no selecciona
+esa butaca. Se ocultan números, etiquetas individuales y marcas de venta por lugar; quedan
+geometría, nombre físico y contorno de la zona. Las etiquetas del inventario se conservan para
+una futura función asignada; las provisionales deben verificarse antes de usarlas como oficiales.
+Seleccionar cantidades no cambia la revisión, no se guarda en localStorage y comparte resumen
+con lugares asignados. Una reducción que invalida la cantidad la suelta entera, sin recortarla.
+
 ## Peticiones y respuesta de transporte
 
 GET devuelve `{ "evento": <snapshot> }`. POST envía únicamente:
@@ -147,12 +192,20 @@ GET devuelve `{ "evento": <snapshot> }`. POST envía únicamente:
 }
 ```
 
-No envía precio ni cantidad como autoridad, ni IDs físicos para resolver una compra. El importe
+En v2 añade `"accesos_generales": [{ "event_zone_id": "ez_opaca", "cantidad": 2 }]`, o una lista
+vacía si no hay cantidades. No envía IDs de butacas generales, filas, números ni precios.
+`cantidad` es la intención de compra, no una autorización de cupo: el servidor la verifica.
+V1 conserva exactamente sus campos anteriores, sin `accesos_generales`.
+
+No envía precios como autoridad ni IDs físicos para resolver una compra. El importe
 de pantalla suma los lugares elegidos, incluso conjuntos con distintas categorías si no hay
 contradicciones por lugar. Un POST satisfactorio debe devolver
 `{ "evento": <snapshot confirmado>, "resultado": <respuesta del anfitrión> }`.
 El conector devuelve `resultado` al anfitrión, sin interpretarlo como pago o boleto emitido.
 El servidor debería marcar los lugares retenidos como reservados; el selector los suelta y avisa.
+Para general, debe descontar las entradas retenidas del saldo y devolver el snapshot completo
+con versión de estado actualizada. El cliente suelta las cantidades enviadas tras éxito, incluso
+si el saldo aún permite repetirlas. No elimina una cantidad posterior diferente a la enviada.
 
 HTTP 409, error de red, cancelación, JSON/snapshot inválido o error HTTP suspenden la disponibilidad
 actual y sueltan selecciones cuando la consulta sigue siendo la vigente. El plano no inventa libres.
@@ -194,6 +247,13 @@ esta guía; la propuesta anterior de filas/columnas no representa por sí sola l
 8. Probar con MySQL/MariaDB: compras concurrentes del mismo lugar/conjunto, expiración y reintentos
    idempotentes, aislamiento entre organizaciones, evento parcial, cupos generales junto con
    numerados, historial y accesos. No ejecutar migraciones en producción sin su procedimiento.
+
+Para acceso general v2, Sin Taquilla debe resolver el ID opaco de zona, validar cantidad positiva
+y reservar cupo atómicamente junto con cualquier lugar/grupo de la misma orden. Emitir entradas
+con zona y modalidad general, sin fila/butaca asignadas. Caducidad/cancelación libera cantidades;
+los reintentos idempotentes no deben volver a descontarlas. La configuración del evento habilita
+modalidad, tarifa y cupo sin editar geometría, IDs ni revisión del recinto. Estas funciones son
+trabajo del otro proyecto; aquí se implementa únicamente su contrato y comportamiento cliente.
 
 Las pruebas de este repositorio verifican el cliente con respuestas HTTP de ejemplo y CSP.
 **No demuestran atomicidad, autenticación ni venta real del servidor.** Esas pruebas pertenecen
