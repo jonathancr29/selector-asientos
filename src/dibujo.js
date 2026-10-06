@@ -215,8 +215,8 @@ function dibujarSeleccionBanda() {
 
 // El icono de butaca en la celda (x, y), girado 'mira' grados sobre su centro:
 // hacia el tablero en un lugar de mesa, hacia el escenario en una butaca de fila.
-function glifoButaca(x, y, mira = 0) {
-  const glifo = nodo('use', { href: '#butaca',
+function glifoButaca(x, y, mira = 0, numerada = false) {
+  const glifo = nodo('use', { href: numerada ? '#butaca-numerada' : '#butaca',
     x: x * PASO + (PASO - GLIFO) / 2, y: y * PASO + (PASO - GLIFO) / 2, width: GLIFO, height: GLIFO });
   if (mira) glifo.setAttribute('transform', `rotate(${mira} ${(x + 0.5) * PASO} ${(y + 0.5) * PASO})`);
   return glifo;
@@ -231,6 +231,12 @@ function ponerMarca(b) {
   const marca = nodo('use', { class: 'marca marca-' + cual, href: '#marca-' + cual,
     x: b.x * PASO + (PASO - GLIFO) / 2, y: b.y * PASO + (PASO - GLIFO) / 2,
     width: GLIFO, height: GLIFO });
+  if (b.butacaNumerada) {
+    marca.setAttribute('x', b.x * PASO + PASO - 3);
+    marca.setAttribute('y', b.y * PASO);
+    marca.setAttribute('width', 3); marca.setAttribute('height', 3);
+    b.nodo.appendChild(marca); return;
+  }
   // El hueco del icono, donde va la marca, es horizontal con el asiento a 0 o
   // 180 grados y vertical a 90 o 270. Solo en esos dos giros la marca gira con
   // el asiento: derecha no cabe en el hueco y se pisa con respaldo y asiento.
@@ -273,18 +279,28 @@ function dibujarButacas() {
       // El area sensible ocupa exactamente la celda. El glifo queda encima.
       g.appendChild(nodo('rect', { class: 'toque', x: b.x * PASO, y: b.y * PASO,
         width: PASO, height: PASO, rx: 2 }));
-      g.appendChild(glifoButaca(b.x, b.y, b.mira));
+      g.appendChild(glifoButaca(b.x, b.y, b.mira, b.butacaNumerada));
     }
-    const geometria = b.x + ',' + b.y + ',' + b.mira;
+    const geometria = b.x + ',' + b.y + ',' + b.mira + ',' + b.butacaNumerada;
     const cambioGeometria = g._geometria !== undefined && g._geometria !== geometria;
     if (cambioGeometria) {
       g.firstElementChild.setAttribute('x', b.x * PASO);
       g.firstElementChild.setAttribute('y', b.y * PASO);
-      g.replaceChild(glifoButaca(b.x, b.y, b.mira), g.children[1]);
+      g.replaceChild(glifoButaca(b.x, b.y, b.mira, b.butacaNumerada), g.children[1]);
     }
     g._geometria = geometria;
+    let numero = g.querySelector('.numero-butaca');
+    if (b.butacaNumerada) {
+      if (!numero) { numero = nodo('text', { class: 'numero-butaca', 'aria-hidden': 'true' }); g.appendChild(numero); }
+      const angulo = (b.mira || 0) * Math.PI / 180;
+      numero.setAttribute('x', (b.x + .5) * PASO - Math.sin(angulo) * GLIFO / 24);
+      numero.setAttribute('y', (b.y + .5) * PASO + Math.cos(angulo) * GLIFO / 24);
+      numero.textContent = String(b.numero);
+      if (String(b.numero).length > 2) { numero.setAttribute('textLength', 4.8); numero.setAttribute('lengthAdjust', 'spacingAndGlyphs'); }
+      else { numero.removeAttribute('textLength'); numero.removeAttribute('lengthAdjust'); }
+    } else numero?.remove();
     const pieza = b.grupo && b.grupo.tipo !== 'palco' ? b.grupo.id : b.bloque || b.suelta || '';
-    const clase = 'butaca' + (seleccionable ? '' : ' ' + b.estado) +
+    const clase = 'butaca' + (b.butacaNumerada ? ' numerada' : '') + (seleccionable ? '' : ' ' + b.estado) +
       (modo === 'editor' && herramienta === 'fisica' && seleccionFisica.has(b.id) ? ' fisica-seleccionada' : '') +
       (elegida || dePincel ? ' elegida' : '') +
       (piezasActivas.has(pieza) && modo === 'editor' && !conButacas() ? ' de-pieza-activa' : '');
@@ -312,7 +328,7 @@ function dibujarButacas() {
     // igualmente, oculta por CSS: en un recinto grande son 18.000 nodos que nadie mira, la
     // cuarta parte del plano. Al elegirla la pone 'alternar'.
     const marca = !seleccionable ? b.estado : elegida || dePincel ? 'elegida' : null;
-    const anterior = g.lastElementChild?.classList.contains('marca') ? g.lastElementChild : null;
+    const anterior = g.querySelector('.marca');
     if (!marca) anterior?.remove();
     else if (cambioGeometria || anterior?.getAttribute('href') !== '#marca-' + marca) {
       anterior?.remove();

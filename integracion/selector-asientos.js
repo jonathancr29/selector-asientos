@@ -1117,6 +1117,16 @@ function renombrarNivel(plano, id, nombre) {
   nuevo.niveles = copiarDatos(nivelesDe(plano)).map((n) => n.id === id ? { ...n, nombre: nombre.trim() } : n);
   return nuevo;
 }
+function mostrarButacasNumeradas(plano, id, mostrar) {
+  if (typeof mostrar !== 'boolean' || !nivelesDe(plano).some((n) => n.id === id)) return { motivo: 'nivel u opción inválidos' };
+  if (plano.revisionFisica?.estado === 'publicada') return { motivo: 'Crea un borrador antes de cambiar la presentación del nivel.' };
+  const nuevo = copiarPlano(plano);
+  nuevo.niveles = copiarDatos(nivelesDe(plano));
+  const nivel = nuevo.niveles.find((n) => n.id === id);
+  if (mostrar) nivel.butacasNumeradas = true;
+  else delete nivel.butacasNumeradas;
+  return nuevo;
+}
 function eliminarNivel(plano, id) {
   const niveles = nivelesDe(plano);
   if (!niveles.some((n) => n.id === id)) return { motivo: 'nivel desconocido' };
@@ -1144,7 +1154,7 @@ function generarPlano(tipo, plano = null) {
     sala = generarPlanoNivel(definicion, n.id === activo && !plano ? null : local);
     sala.nivel = n.id;
     sala.niveles = niveles.map(({ id, nombre }) => ({ id, nombre }));
-    for (const b of butacas) { b.nivel = n.id; b.nombreNivel = n.nombre; }
+    for (const b of butacas) { b.nivel = n.id; b.nombreNivel = n.nombre; b.butacaNumerada = n.butacasNumeradas === true; }
     if (niveles.length > 1 || bloquesFilas.some((p) => p.geometria)) {
       const fallo = primeraPiezaQueNoCabe(sala);
       if (fallo) sala.errorDeGeometria = fallo;
@@ -2790,6 +2800,7 @@ function validarMapaNiveles(dato) {
   let principal;
   for (let i = 0; i < dato.niveles.length; i++) {
     const n = dato.niveles[i];
+    if (n?.butacasNumeradas !== undefined && typeof n.butacasNumeradas !== 'boolean') errores.push('opción de butacas numeradas inválida');
     if (!n || !/^n[1-9]\d{0,5}$/.test(n.id) || idsNivel.has(n.id) || typeof n.nombre !== 'string' || !n.nombre.trim() || n.nombre.length > 40 ||
         nombres.has(n.nombre.trim().toLocaleUpperCase('es')) || (i > 0 && (!n.plano || typeof n.plano !== 'object'))) { errores.push('nivel inválido o repetido'); continue; }
     idsNivel.add(n.id); nombres.add(n.nombre.trim().toLocaleUpperCase('es'));
@@ -2809,8 +2820,8 @@ function validarMapaNiveles(dato) {
     const dibujo = [...nodosDeBandas(m.bandas).map((p) => p.id), ...piezasDe(m).filter((p) => p.id).map((p) => p.id), ...m.regionesLibres.map((r) => r.id)];
     for (const id of dibujo) { if (idsDibujo.has(id)) errores.push('ID de dibujo repetido entre niveles: ' + id); idsDibujo.add(id); }
     for (const [k, f] of Object.entries(m.identidadFisica)) { if (identidad[k]) errores.push('clave de lugar repetida entre niveles'); identidad[k] = f; }
-    if (!i) { principal = m; niveles.push({ id: n.id, nombre: n.nombre.trim() }); }
-    else niveles.push({ id: n.id, nombre: n.nombre.trim(), plano: geometriaDeNivel(m) });
+    if (!i) { principal = m; niveles.push({ id: n.id, nombre: n.nombre.trim(), ...(n.butacasNumeradas ? { butacasNumeradas: true } : {}) }); }
+    else niveles.push({ id: n.id, nombre: n.nombre.trim(), ...(n.butacasNumeradas ? { butacasNumeradas: true } : {}), plano: geometriaDeNivel(m) });
   }
   if (errores.length) return { errores };
   if (Object.keys(identidad).length !== Object.keys(dato.identidadFisica || {}).length) return { errores: ['nivel físico desconocido en el inventario'] };
@@ -4504,8 +4515,8 @@ function dibujarSeleccionBanda() {
 
 // El icono de butaca en la celda (x, y), girado 'mira' grados sobre su centro:
 // hacia el tablero en un lugar de mesa, hacia el escenario en una butaca de fila.
-function glifoButaca(x, y, mira = 0) {
-  const glifo = nodo('use', { href: '#butaca',
+function glifoButaca(x, y, mira = 0, numerada = false) {
+  const glifo = nodo('use', { href: numerada ? '#butaca-numerada' : '#butaca',
     x: x * PASO + (PASO - GLIFO) / 2, y: y * PASO + (PASO - GLIFO) / 2, width: GLIFO, height: GLIFO });
   if (mira) glifo.setAttribute('transform', `rotate(${mira} ${(x + 0.5) * PASO} ${(y + 0.5) * PASO})`);
   return glifo;
@@ -4520,6 +4531,12 @@ function ponerMarca(b) {
   const marca = nodo('use', { class: 'marca marca-' + cual, href: '#marca-' + cual,
     x: b.x * PASO + (PASO - GLIFO) / 2, y: b.y * PASO + (PASO - GLIFO) / 2,
     width: GLIFO, height: GLIFO });
+  if (b.butacaNumerada) {
+    marca.setAttribute('x', b.x * PASO + PASO - 3);
+    marca.setAttribute('y', b.y * PASO);
+    marca.setAttribute('width', 3); marca.setAttribute('height', 3);
+    b.nodo.appendChild(marca); return;
+  }
   // El hueco del icono, donde va la marca, es horizontal con el asiento a 0 o
   // 180 grados y vertical a 90 o 270. Solo en esos dos giros la marca gira con
   // el asiento: derecha no cabe en el hueco y se pisa con respaldo y asiento.
@@ -4562,18 +4579,28 @@ function dibujarButacas() {
       // El area sensible ocupa exactamente la celda. El glifo queda encima.
       g.appendChild(nodo('rect', { class: 'toque', x: b.x * PASO, y: b.y * PASO,
         width: PASO, height: PASO, rx: 2 }));
-      g.appendChild(glifoButaca(b.x, b.y, b.mira));
+      g.appendChild(glifoButaca(b.x, b.y, b.mira, b.butacaNumerada));
     }
-    const geometria = b.x + ',' + b.y + ',' + b.mira;
+    const geometria = b.x + ',' + b.y + ',' + b.mira + ',' + b.butacaNumerada;
     const cambioGeometria = g._geometria !== undefined && g._geometria !== geometria;
     if (cambioGeometria) {
       g.firstElementChild.setAttribute('x', b.x * PASO);
       g.firstElementChild.setAttribute('y', b.y * PASO);
-      g.replaceChild(glifoButaca(b.x, b.y, b.mira), g.children[1]);
+      g.replaceChild(glifoButaca(b.x, b.y, b.mira, b.butacaNumerada), g.children[1]);
     }
     g._geometria = geometria;
+    let numero = g.querySelector('.numero-butaca');
+    if (b.butacaNumerada) {
+      if (!numero) { numero = nodo('text', { class: 'numero-butaca', 'aria-hidden': 'true' }); g.appendChild(numero); }
+      const angulo = (b.mira || 0) * Math.PI / 180;
+      numero.setAttribute('x', (b.x + .5) * PASO - Math.sin(angulo) * GLIFO / 24);
+      numero.setAttribute('y', (b.y + .5) * PASO + Math.cos(angulo) * GLIFO / 24);
+      numero.textContent = String(b.numero);
+      if (String(b.numero).length > 2) { numero.setAttribute('textLength', 4.8); numero.setAttribute('lengthAdjust', 'spacingAndGlyphs'); }
+      else { numero.removeAttribute('textLength'); numero.removeAttribute('lengthAdjust'); }
+    } else numero?.remove();
     const pieza = b.grupo && b.grupo.tipo !== 'palco' ? b.grupo.id : b.bloque || b.suelta || '';
-    const clase = 'butaca' + (seleccionable ? '' : ' ' + b.estado) +
+    const clase = 'butaca' + (b.butacaNumerada ? ' numerada' : '') + (seleccionable ? '' : ' ' + b.estado) +
       (modo === 'editor' && herramienta === 'fisica' && seleccionFisica.has(b.id) ? ' fisica-seleccionada' : '') +
       (elegida || dePincel ? ' elegida' : '') +
       (piezasActivas.has(pieza) && modo === 'editor' && !conButacas() ? ' de-pieza-activa' : '');
@@ -4601,7 +4628,7 @@ function dibujarButacas() {
     // igualmente, oculta por CSS: en un recinto grande son 18.000 nodos que nadie mira, la
     // cuarta parte del plano. Al elegirla la pone 'alternar'.
     const marca = !seleccionable ? b.estado : elegida || dePincel ? 'elegida' : null;
-    const anterior = g.lastElementChild?.classList.contains('marca') ? g.lastElementChild : null;
+    const anterior = g.querySelector('.marca');
     if (!marca) anterior?.remove();
     else if (cambioGeometria || anterior?.getAttribute('href') !== '#marca-' + marca) {
       anterior?.remove();
@@ -7174,6 +7201,13 @@ function actualizarPestanasNiveles() {
   }
   document.getElementById('panel-nivel').setAttribute('aria-labelledby', 'pestana-' + salaActual.nivel);
 }
+document.getElementById('butacas-numeradas').addEventListener('change', (e) => {
+  if (modo !== 'editor') return;
+  const nuevo = mostrarButacasNumeradas(planoEditable(), salaActual.nivel, e.target.checked);
+  if (nuevo.motivo) { anunciar(nuevo.motivo); actualizarControlesGeometria(); return; }
+  planos[tipoActual] = nuevo;
+  regenerar('Presentación de butacas actualizada; números e IDs conservados.');
+});
 document.getElementById('agregar-nivel').addEventListener('click', () => {
   const nuevo = agregarNivel(planoEditable(), document.getElementById('nombre-nivel').value);
   if (nuevo.motivo) { anunciar(nuevo.motivo); return; }
@@ -7195,6 +7229,8 @@ document.getElementById('eliminar-nivel').addEventListener('click', () => {
 function actualizarControlesGeometria() {
   if (!salaActual) return;
   const plano = planos[tipoActual] || TIPOS_DE_SALA[tipoActual];
+  document.getElementById('butacas-numeradas').checked = nivelesDe(plano).find((n) => n.id === salaActual.nivel)?.butacasNumeradas === true;
+  document.getElementById('butacas-numeradas').disabled = modo !== 'editor' || plano.revisionFisica?.estado === 'publicada';
   actualizarPestanasNiveles();
   document.getElementById('eliminar-nivel').disabled = salaActual.niveles.length === 1;
   const p = piezaPorId(mesaActiva);

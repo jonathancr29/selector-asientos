@@ -297,6 +297,9 @@
      y su marca comparten tono. Todos pasan 3:1 contra el fondo del plano. */
   .butaca, .muestra { color: #8a8a9a; fill: currentColor; transition: color .15s; }
   .butaca .toque { fill: transparent; }      /* area de clic: una celda exacta, sin solape */
+  .numero-butaca { font: 3.15px Arial, sans-serif; text-anchor: middle; dominant-baseline: central; fill: #eeeef5; pointer-events: none; }
+  .butaca.numerada.elegida { --relleno-num: .35; }
+  .butaca.numerada.bloqueada .numero-butaca { fill: #a4a4b2; }
   .butaca:not(.ocupada):not(.bloqueada) { cursor: pointer; }
   /* El hover solo aclara si NO esta seleccionada, para que la confirmacion
      visual no desaparezca bajo el cursor. */
