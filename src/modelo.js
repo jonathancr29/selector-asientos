@@ -4033,4 +4033,82 @@ function contornosDeZona(lista) {
   return contornos;
 }
 
+// Envolvente ajustada a las butacas, en vez de su rectángulo horizontal.
+function envolventeDePalco(lista) {
+  const puntos = lista.flatMap((b) => [-.7, .7].flatMap((dx) => [-.7, .7].map((dy) => ({ x: b.x + .5 + dx, y: b.y + .5 + dy }))));
+  puntos.sort((a, b) => a.x - b.x || a.y - b.y);
+  const giro = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  const mitad = (ps) => {
+    const borde = [];
+    for (const p of ps) {
+      while (borde.length > 1 && giro(borde.at(-2), borde.at(-1), p) <= 0) borde.pop();
+      borde.push(p);
+    }
+    return borde.slice(0, -1);
+  };
+  return puntos.length ? [...mitad(puntos), ...mitad([...puntos].reverse())] : [];
+}
+
+// Franja radial para un conjunto de palcos dispuesto alrededor del escenario.
+// No impone una herradura a mapas con uno/dos palcos o una disposición recta.
+function contornosDePalcos(lista, centro) {
+  const grupos = new Map();
+  for (const b of lista) {
+    if (!grupos.has(b.grupo.id)) grupos.set(b.grupo.id, []);
+    grupos.get(b.grupo.id).push(b);
+  }
+  const separados = () => [...grupos.values()].map(envolventeDePalco);
+  if (grupos.size < 3 || !Number.isFinite(centro.x) || !Number.isFinite(centro.y)) return separados();
+  const esquinas = lista.flatMap((b) => [-.85, .85].flatMap((dx) => [-.85, .85].map((dy) => {
+    const x = b.x + .5 + dx - centro.x, y = b.y + .5 + dy - centro.y;
+    return { angulo: Math.atan2(y, x), radio: Math.hypot(x, y) };
+  })));
+  const min = Math.min(...esquinas.map((p) => p.angulo)), max = Math.max(...esquinas.map((p) => p.angulo));
+  if (max - min < 1 || max - min > Math.PI * 1.5) return separados();
+  const cantidad = Math.ceil((max - min) / .035);
+  const paso = (max - min) / cantidad;
+  const bandas = Array.from({ length: cantidad + 1 }, () => ({ interior: Infinity, exterior: -Infinity }));
+  for (let i = 0; i < esquinas.length; i += 4) {
+    const ps = esquinas.slice(i, i + 4);
+    const desde = Math.max(0, Math.floor((Math.min(...ps.map((p) => p.angulo)) - min) / paso));
+    const hasta = Math.min(cantidad, Math.ceil((Math.max(...ps.map((p) => p.angulo)) - min) / paso));
+    const interior = Math.min(...ps.map((p) => p.radio)), exterior = Math.max(...ps.map((p) => p.radio));
+    for (let j = desde; j <= hasta; j++) {
+      bandas[j].interior = Math.min(bandas[j].interior, interior);
+      bandas[j].exterior = Math.max(bandas[j].exterior, exterior);
+    }
+  }
+  for (let i = 0; i <= cantidad; i++) if (!Number.isFinite(bandas[i].interior)) {
+    let antes = i - 1, despues = i + 1;
+    while (antes >= 0 && !Number.isFinite(bandas[antes].interior)) antes--;
+    while (despues <= cantidad && !Number.isFinite(bandas[despues].interior)) despues++;
+    if (antes < 0 || despues > cantidad || (despues - antes) * paso > .45) return separados();
+    const t = (i - antes) / (despues - antes);
+    bandas[i] = { interior: bandas[antes].interior * (1 - t) + bandas[despues].interior * t,
+      exterior: bandas[antes].exterior * (1 - t) + bandas[despues].exterior * t };
+  }
+  const internos = [], externos = [];
+  // Suavizar la franja completa y compensar hacia fuera conserva todas las butacas
+  // sin trasladar al borde cada salto entre compartimentos.
+  const suavizar = (campo) => bandas.map((_, i) => {
+    let total = 0, peso = 0;
+    for (let j = Math.max(0, i - 12); j <= Math.min(cantidad, i + 12); j++) {
+      const w = Math.exp(-((j - i) ** 2) / 32);
+      total += bandas[j][campo] * w; peso += w;
+    }
+    return total / peso;
+  });
+  const interiorSuave = suavizar('interior'), exteriorSuave = suavizar('exterior');
+  const margenInterior = Math.max(0, ...bandas.map((b, i) => interiorSuave[i] - b.interior)) + .2;
+  const margenExterior = Math.max(0, ...bandas.map((b, i) => b.exterior - exteriorSuave[i])) + .2;
+  for (let i = 0; i <= cantidad; i++) {
+    const interior = Math.max(.1, interiorSuave[i] - margenInterior);
+    const exterior = exteriorSuave[i] + margenExterior;
+    const angulo = min + i * paso;
+    internos.push({ x: centro.x + Math.cos(angulo) * interior, y: centro.y + Math.sin(angulo) * interior });
+    externos.push({ x: centro.x + Math.cos(angulo) * exterior, y: centro.y + Math.sin(angulo) * exterior });
+  }
+  return [[...externos, ...internos.reverse()]];
+}
+
 // === Fin de la parte sin DOM. pruebas.mjs evalua todo lo anterior en Node. ===

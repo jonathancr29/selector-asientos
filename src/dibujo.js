@@ -52,8 +52,8 @@ function dibujarMuebles() {
     const ancho = Math.max(...lista.map((b) => b.x)) + 1 - x;
     const alto = Math.max(...lista.map((b) => b.y)) + 1 - y;
     const g = nodo('g', { class: 'palco-fisico', 'aria-hidden': 'true' });
-    g.append(nodo('rect', { x: x * PASO - 2, y: y * PASO - 2, width: ancho * PASO + 4, height: alto * PASO + 4, rx: 3 }),
-      texto('subtitulo', x * PASO, y * PASO - 4, lista[0].grupo.nombre));
+    if (modo === 'editor') g.appendChild(nodo('rect', { x: x * PASO - 2, y: y * PASO - 2, width: ancho * PASO + 4, height: alto * PASO + 4, rx: 3 }));
+    g.appendChild(texto('subtitulo', x * PASO, y * PASO - 4, lista[0].grupo.nombre));
     capaMuebles.appendChild(g);
   }
   for (const r of planos[tipoActual]?.regionesLibres || TIPOS_DE_SALA[tipoActual].regionesLibres || []) {

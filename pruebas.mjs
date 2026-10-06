@@ -99,6 +99,46 @@ test('explorar zonas: contornos separan huecos, niveles y filas curvas sin cubri
   assert.equal(compartimento.length, 1); assert.equal(compartimento[0].length, 4);
 });
 
+test('palcos: envolvente diagonal sigue las butacas sin ocupar las esquinas del rectangulo', () => {
+  const a = cargar(), lista = [{ x: 0, y: 0 }, { x: 2, y: 2 }, { x: 4, y: 4 }];
+  const antes = JSON.stringify(lista), borde = a.envolventeDePalco(lista);
+  assert.equal(borde.length, 6);
+  assert.ok(borde.every(p => Math.abs(p.x - p.y) <= 1.400001));
+  assert.equal(JSON.stringify(lista), antes);
+  assert.deepEqual(a.envolventeDePalco([]), []);
+});
+
+test('palcos: franja continua rodea las butacas y conserva el centro libre', () => {
+  const a = cargar(), centro = { x: 20, y: 20 };
+  const lista = Array.from({ length: 60 }, (_, i) => {
+    const angulo = -Math.PI + .15 + i * (Math.PI - .3) / 59;
+    return { x: centro.x + 10 * Math.cos(angulo) - .5, y: centro.y + 10 * Math.sin(angulo) - .5, grupo: { id: 'p' + Math.floor(i / 5) } };
+  });
+  const antes = JSON.stringify(lista), contornos = a.contornosDePalcos(lista, centro);
+  assert.equal(contornos.length, 1);
+  const dentro = (p, poligono) => {
+    let si = false;
+    for (let i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
+      const a = poligono[i], b = poligono[j];
+      if ((a.y > p.y) !== (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) si = !si;
+    }
+    return si;
+  };
+  assert.ok(lista.every(b => dentro({ x: b.x + .5, y: b.y + .5 }, contornos[0])));
+  assert.equal(dentro(centro, contornos[0]), false);
+  assert.ok(contornos[0].every(p => Number.isFinite(p.x) && Number.isFinite(p.y)));
+  assert.equal(JSON.stringify(lista), antes);
+});
+
+test('palcos: disposiciones rectas, aisladas o sin escenario conservan contornos separados', () => {
+  const a = cargar();
+  const lista = [0, 4, 8].map((x, i) => ({ x, y: 0, grupo: { id: 'p' + i } }));
+  assert.equal(a.contornosDePalcos(lista, { x: 4, y: 100 }).length, 3);
+  assert.equal(a.contornosDePalcos(lista, { x: 0, y: -Infinity }).length, 3);
+  assert.equal(a.contornosDePalcos(lista.slice(0, 2), { x: 4, y: 10 }).length, 2);
+  assert.deepEqual(a.contornosDePalcos([], { x: 0, y: 0 }), []);
+});
+
 test('laterales: cada plantilla conserva lugares, etiquetas, pertenencias y escenario al ampliar', () => {
   for (const tipo of Object.keys(cargar().TIPOS_DE_SALA)) for (const lado of ['izquierdo', 'derecho']) {
     const a = cargar(); const sala = a.generarPlano(tipo); const p = a.planoDesdeSala(tipo, sala);

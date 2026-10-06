@@ -413,6 +413,9 @@
 #zonas-vista button[aria-pressed="true"] { background: var(--acento); color: white; }
 .resumen-zona { font-size: 12px; line-height: 1.6; color: var(--texto-tenue); margin: 8px 0 0; }
 #etiqueta-nivel-zona { font-size: 12px; margin-top: 8px; }
+#etiqueta-palco-vista { font-size: 12px; margin-top: 8px; }
+#palco-vista { margin-left: 6px; max-width: 100%; padding: 5px 8px; border: 1px solid var(--borde); border-radius: 6px; background: #26262f; color: var(--texto-claro); font: inherit; }
+#palco-vista:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
 #realce-zona { pointer-events: none; }
 #realce-zona path { fill: rgba(59, 130, 246, .16); stroke: #93c5fd; stroke-width: .7; stroke-linejoin: round; }
 </style>
@@ -617,6 +620,7 @@
           <button type="button" id="quitar-realce-zona" hidden>Ver todo</button>
         </div>
         <label id="etiqueta-nivel-zona" hidden>Nivel de la zona <select id="nivel-zona"></select></label>
+        <label id="etiqueta-palco-vista" hidden>Destacar palco <select id="palco-vista"></select></label>
         <p id="resumen-zona" class="resumen-zona" role="status" aria-live="polite">Elige una zona para ver su ubicación e información.</p>
       </section>
       <!-- Hojas de informacion, de una en una. En escritorio el panel baja sobre el plano.
@@ -4899,6 +4903,84 @@ function contornosDeZona(lista) {
   return contornos;
 }
 
+// Envolvente ajustada a las butacas, en vez de su rectángulo horizontal.
+function envolventeDePalco(lista) {
+  const puntos = lista.flatMap((b) => [-.7, .7].flatMap((dx) => [-.7, .7].map((dy) => ({ x: b.x + .5 + dx, y: b.y + .5 + dy }))));
+  puntos.sort((a, b) => a.x - b.x || a.y - b.y);
+  const giro = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  const mitad = (ps) => {
+    const borde = [];
+    for (const p of ps) {
+      while (borde.length > 1 && giro(borde.at(-2), borde.at(-1), p) <= 0) borde.pop();
+      borde.push(p);
+    }
+    return borde.slice(0, -1);
+  };
+  return puntos.length ? [...mitad(puntos), ...mitad([...puntos].reverse())] : [];
+}
+
+// Franja radial para un conjunto de palcos dispuesto alrededor del escenario.
+// No impone una herradura a mapas con uno/dos palcos o una disposición recta.
+function contornosDePalcos(lista, centro) {
+  const grupos = new Map();
+  for (const b of lista) {
+    if (!grupos.has(b.grupo.id)) grupos.set(b.grupo.id, []);
+    grupos.get(b.grupo.id).push(b);
+  }
+  const separados = () => [...grupos.values()].map(envolventeDePalco);
+  if (grupos.size < 3 || !Number.isFinite(centro.x) || !Number.isFinite(centro.y)) return separados();
+  const esquinas = lista.flatMap((b) => [-.85, .85].flatMap((dx) => [-.85, .85].map((dy) => {
+    const x = b.x + .5 + dx - centro.x, y = b.y + .5 + dy - centro.y;
+    return { angulo: Math.atan2(y, x), radio: Math.hypot(x, y) };
+  })));
+  const min = Math.min(...esquinas.map((p) => p.angulo)), max = Math.max(...esquinas.map((p) => p.angulo));
+  if (max - min < 1 || max - min > Math.PI * 1.5) return separados();
+  const cantidad = Math.ceil((max - min) / .035);
+  const paso = (max - min) / cantidad;
+  const bandas = Array.from({ length: cantidad + 1 }, () => ({ interior: Infinity, exterior: -Infinity }));
+  for (let i = 0; i < esquinas.length; i += 4) {
+    const ps = esquinas.slice(i, i + 4);
+    const desde = Math.max(0, Math.floor((Math.min(...ps.map((p) => p.angulo)) - min) / paso));
+    const hasta = Math.min(cantidad, Math.ceil((Math.max(...ps.map((p) => p.angulo)) - min) / paso));
+    const interior = Math.min(...ps.map((p) => p.radio)), exterior = Math.max(...ps.map((p) => p.radio));
+    for (let j = desde; j <= hasta; j++) {
+      bandas[j].interior = Math.min(bandas[j].interior, interior);
+      bandas[j].exterior = Math.max(bandas[j].exterior, exterior);
+    }
+  }
+  for (let i = 0; i <= cantidad; i++) if (!Number.isFinite(bandas[i].interior)) {
+    let antes = i - 1, despues = i + 1;
+    while (antes >= 0 && !Number.isFinite(bandas[antes].interior)) antes--;
+    while (despues <= cantidad && !Number.isFinite(bandas[despues].interior)) despues++;
+    if (antes < 0 || despues > cantidad || (despues - antes) * paso > .45) return separados();
+    const t = (i - antes) / (despues - antes);
+    bandas[i] = { interior: bandas[antes].interior * (1 - t) + bandas[despues].interior * t,
+      exterior: bandas[antes].exterior * (1 - t) + bandas[despues].exterior * t };
+  }
+  const internos = [], externos = [];
+  // Suavizar la franja completa y compensar hacia fuera conserva todas las butacas
+  // sin trasladar al borde cada salto entre compartimentos.
+  const suavizar = (campo) => bandas.map((_, i) => {
+    let total = 0, peso = 0;
+    for (let j = Math.max(0, i - 12); j <= Math.min(cantidad, i + 12); j++) {
+      const w = Math.exp(-((j - i) ** 2) / 32);
+      total += bandas[j][campo] * w; peso += w;
+    }
+    return total / peso;
+  });
+  const interiorSuave = suavizar('interior'), exteriorSuave = suavizar('exterior');
+  const margenInterior = Math.max(0, ...bandas.map((b, i) => interiorSuave[i] - b.interior)) + .2;
+  const margenExterior = Math.max(0, ...bandas.map((b, i) => b.exterior - exteriorSuave[i])) + .2;
+  for (let i = 0; i <= cantidad; i++) {
+    const interior = Math.max(.1, interiorSuave[i] - margenInterior);
+    const exterior = exteriorSuave[i] + margenExterior;
+    const angulo = min + i * paso;
+    internos.push({ x: centro.x + Math.cos(angulo) * interior, y: centro.y + Math.sin(angulo) * interior });
+    externos.push({ x: centro.x + Math.cos(angulo) * exterior, y: centro.y + Math.sin(angulo) * exterior });
+  }
+  return [[...externos, ...internos.reverse()]];
+}
+
 // === Fin de la parte sin DOM. pruebas.mjs evalua todo lo anterior en Node. ===
 
 // ---------------------------------------------------------------------------
@@ -4955,8 +5037,8 @@ function dibujarMuebles() {
     const ancho = Math.max(...lista.map((b) => b.x)) + 1 - x;
     const alto = Math.max(...lista.map((b) => b.y)) + 1 - y;
     const g = nodo('g', { class: 'palco-fisico', 'aria-hidden': 'true' });
-    g.append(nodo('rect', { x: x * PASO - 2, y: y * PASO - 2, width: ancho * PASO + 4, height: alto * PASO + 4, rx: 3 }),
-      texto('subtitulo', x * PASO, y * PASO - 4, lista[0].grupo.nombre));
+    if (modo === 'editor') g.appendChild(nodo('rect', { x: x * PASO - 2, y: y * PASO - 2, width: ancho * PASO + 4, height: alto * PASO + 4, rx: 3 }));
+    g.appendChild(texto('subtitulo', x * PASO, y * PASO - 4, lista[0].grupo.nombre));
     capaMuebles.appendChild(g);
   }
   for (const r of planos[tipoActual]?.regionesLibres || TIPOS_DE_SALA[tipoActual].regionesLibres || []) {
@@ -5263,14 +5345,29 @@ const listaBandas = document.getElementById('lista-bandas');
 
 // Estado transitorio del visor; no pertenece al plano ni a la selección de compra.
 let zonaExplorada = null;
+let palcoExplorado = null;
 const botonesZonasVista = document.getElementById('zonas-vista');
 const selectorNivelZona = document.getElementById('nivel-zona');
-const lugaresDeZonaVisible = () => butacasVisibles().filter((b) => b.zona === zonaExplorada);
+const selectorPalcoVista = document.getElementById('palco-vista');
+const lugaresDeZonaVisible = () => butacasVisibles().filter((b) => b.zona === zonaExplorada && (!palcoExplorado || b.grupo?.id === palcoExplorado));
+
+function trazoSuaveDeContorno(puntos) {
+  if (!puntos.length) return '';
+  const esquinas = puntos.map((p, i) => {
+    const anterior = puntos[(i + puntos.length - 1) % puntos.length], siguiente = puntos[(i + 1) % puntos.length];
+    const a = Math.hypot(p.x - anterior.x, p.y - anterior.y), b = Math.hypot(p.x - siguiente.x, p.y - siguiente.y);
+    const r = Math.min(.4, a / 3, b / 3);
+    return { p, antes: { x: p.x + (anterior.x - p.x) * r / (a || 1), y: p.y + (anterior.y - p.y) * r / (a || 1) },
+      despues: { x: p.x + (siguiente.x - p.x) * r / (b || 1), y: p.y + (siguiente.y - p.y) * r / (b || 1) } };
+  });
+  const xy = (p) => p.x * PASO + ',' + p.y * PASO;
+  return 'M' + xy(esquinas[0].antes) + esquinas.map((e, i) => (i ? 'L' + xy(e.antes) : '') + 'Q' + xy(e.p) + ' ' + xy(e.despues)).join(' ') + 'Z';
+}
 
 function textoDeZona(lista) {
   const r = resumenDeZona(lista, eventoConectado);
   const nombreNivel = salaActual.niveles.find((n) => n.id === salaActual.nivel)?.nombre || '';
-  const partes = [zonas[zonaExplorada].nombre + ' · ' + nombreNivel,
+  const partes = [zonas[zonaExplorada].nombre + ' · ' + nombreNivel + (palcoExplorado ? ' · ' + lista[0].grupo.nombre : ''),
     r.inventariados + ' lugares físicos'];
   if (!eventoConectado) return partes.join(' · ') + ' · Precio no disponible · Disponibilidad sin confirmar';
   const formato = new Intl.NumberFormat('es-MX', { style: 'currency', currency: eventoConectado.cabecera.moneda });
@@ -5320,10 +5417,26 @@ function actualizarExploradorZonas() {
   }
   selectorNivelZona.value = salaActual.nivel;
   const resumen = document.getElementById('resumen-zona');
+  const listaZona = butacasVisibles().filter((b) => b.zona === zonaExplorada);
+  const palcos = new Map(listaZona.filter((b) => b.grupo?.tipo === 'palco').map((b) => [b.grupo.id, b.grupo.nombre]));
+  if (palcoExplorado && !palcos.has(palcoExplorado)) palcoExplorado = null;
+  document.getElementById('etiqueta-palco-vista').hidden = !palcos.size;
+  const opcionesPalco = JSON.stringify([...palcos]);
+  if (selectorPalcoVista.dataset.opciones !== opcionesPalco) {
+    selectorPalcoVista.textContent = ''; selectorPalcoVista.appendChild(new Option('Todos los palcos', ''));
+    for (const [id, nombre] of palcos) selectorPalcoVista.appendChild(new Option(nombre, id));
+    selectorPalcoVista.dataset.opciones = opcionesPalco;
+  }
+  selectorPalcoVista.value = palcoExplorado || '';
   if (!zonaExplorada) { resumen.textContent = 'Elige una zona para ver su ubicación e información.'; return; }
   const lista = lugaresDeZonaVisible();
   resumen.textContent = lista.length ? textoDeZona(lista) : zonas[zonaExplorada].nombre + ' · Esta zona está en otro nivel.';
-  for (const puntos of contornosDeZona(lista)) {
+  const lugaresPalco = lista.filter((b) => b.grupo?.tipo === 'palco');
+  const contornos = [...contornosDeZona(lista.filter((b) => b.grupo?.tipo !== 'palco')),
+    ...(palcoExplorado ? [envolventeDePalco(lugaresPalco)] : contornosDePalcos(lugaresPalco, centroDelEscenario(escenario)))];
+  for (const puntos of contornos) {
+    if (!puntos.length) continue;
+    if (lugaresPalco.length) { capaRealceZona.appendChild(nodo('path', { d: trazoSuaveDeContorno(puntos) })); continue; }
     capaRealceZona.appendChild(nodo('path', { d: puntos.map((p, i) => (i ? 'L' : 'M') + p.x * PASO + ',' + p.y * PASO).join(' ') + 'Z' }));
   }
 }
@@ -5348,6 +5461,7 @@ function explorarZona(id, nivel = null) {
   const lista = butacas.filter((b) => b.zona === id);
   if (!lista.length) return;
   zonaExplorada = id;
+  palcoExplorado = null;
   const destino = nivel || (lista.some((b) => b.nivel === salaActual.nivel) ? salaActual.nivel : lista[0].nivel);
   cambiarNivelVista(destino);
   actualizarExploradorZonas();
@@ -5364,8 +5478,12 @@ botonesZonasVista.addEventListener('keydown', (e) => {
   if (boton && ['Enter', ' '].includes(e.key)) { e.preventDefault(); boton.click(); }
 });
 selectorNivelZona.addEventListener('change', () => explorarZona(zonaExplorada, selectorNivelZona.value));
+selectorPalcoVista.addEventListener('change', () => {
+  palcoExplorado = selectorPalcoVista.value || null;
+  actualizarExploradorZonas(); reencuadrar(); encuadrarZona();
+});
 document.getElementById('quitar-realce-zona').addEventListener('click', () => {
-  zonaExplorada = null; actualizarExploradorZonas(); reencuadrar();
+  zonaExplorada = null; palcoExplorado = null; actualizarExploradorZonas(); reencuadrar();
 });
 
 // Las zonas fisicas que pueden llevar filas (todas menos la de mesas).
@@ -8039,6 +8157,7 @@ function actualizarAforo(sala) {
 function redibujar(tipo) {
   if (eventoConectado && tipo !== tipoActual) { anunciar('El evento conserva su recinto y revisión.'); return; }
   zonaExplorada = null;
+  palcoExplorado = null;
   seleccionFisica.clear();
   if (arrastreMesa) terminarArrastreMesa(false);
   tipoActual = tipo;

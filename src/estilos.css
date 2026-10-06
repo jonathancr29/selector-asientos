@@ -397,5 +397,8 @@
 #zonas-vista button[aria-pressed="true"] { background: var(--acento); color: white; }
 .resumen-zona { font-size: 12px; line-height: 1.6; color: var(--texto-tenue); margin: 8px 0 0; }
 #etiqueta-nivel-zona { font-size: 12px; margin-top: 8px; }
+#etiqueta-palco-vista { font-size: 12px; margin-top: 8px; }
+#palco-vista { margin-left: 6px; max-width: 100%; padding: 5px 8px; border: 1px solid var(--borde); border-radius: 6px; background: #26262f; color: var(--texto-claro); font: inherit; }
+#palco-vista:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
 #realce-zona { pointer-events: none; }
 #realce-zona path { fill: rgba(59, 130, 246, .16); stroke: #93c5fd; stroke-width: .7; stroke-linejoin: round; }
