@@ -4,7 +4,21 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Contornos uniformes de filas
+## Sin publicar — Butacas con número interior por nivel
+
+Rama `claude/butacas-numeradas`.
+
+- Opción por nivel para una silueta de butaca con centro amplio y número horizontal,
+  incluso con giro. Las marcas de estado quedan en una esquina y no tapan el número.
+- Guardado, importación, deshacer y validación de la opción; niveles sin ella conservan
+  su apariencia. Sin cambios en IDs, etiquetas, coordenadas o compra.
+- Verificado: 213 pruebas de lógica y 32 de navegador; revisión visual en escritorio,
+  móvil y detalle. Mapa local con 328 butacas numeradas y 619 lugares totales conservados.
+
+## 2026-10-06 — PR #59: Contornos uniformes de filas
+
+[PR #59](https://github.com/jonathancr29/selector-asientos/pull/59), fusionado en `main` con el
+commit `ab07cd8`.
 
 Rama `claude/contornos-platea`.
 

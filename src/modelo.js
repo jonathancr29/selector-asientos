@@ -1117,6 +1117,16 @@ function renombrarNivel(plano, id, nombre) {
   nuevo.niveles = copiarDatos(nivelesDe(plano)).map((n) => n.id === id ? { ...n, nombre: nombre.trim() } : n);
   return nuevo;
 }
+function mostrarButacasNumeradas(plano, id, mostrar) {
+  if (typeof mostrar !== 'boolean' || !nivelesDe(plano).some((n) => n.id === id)) return { motivo: 'nivel u opción inválidos' };
+  if (plano.revisionFisica?.estado === 'publicada') return { motivo: 'Crea un borrador antes de cambiar la presentación del nivel.' };
+  const nuevo = copiarPlano(plano);
+  nuevo.niveles = copiarDatos(nivelesDe(plano));
+  const nivel = nuevo.niveles.find((n) => n.id === id);
+  if (mostrar) nivel.butacasNumeradas = true;
+  else delete nivel.butacasNumeradas;
+  return nuevo;
+}
 function eliminarNivel(plano, id) {
   const niveles = nivelesDe(plano);
   if (!niveles.some((n) => n.id === id)) return { motivo: 'nivel desconocido' };
@@ -1144,7 +1154,7 @@ function generarPlano(tipo, plano = null) {
     sala = generarPlanoNivel(definicion, n.id === activo && !plano ? null : local);
     sala.nivel = n.id;
     sala.niveles = niveles.map(({ id, nombre }) => ({ id, nombre }));
-    for (const b of butacas) { b.nivel = n.id; b.nombreNivel = n.nombre; }
+    for (const b of butacas) { b.nivel = n.id; b.nombreNivel = n.nombre; b.butacaNumerada = n.butacasNumeradas === true; }
     if (niveles.length > 1 || bloquesFilas.some((p) => p.geometria)) {
       const fallo = primeraPiezaQueNoCabe(sala);
       if (fallo) sala.errorDeGeometria = fallo;
@@ -2790,6 +2800,7 @@ function validarMapaNiveles(dato) {
   let principal;
   for (let i = 0; i < dato.niveles.length; i++) {
     const n = dato.niveles[i];
+    if (n?.butacasNumeradas !== undefined && typeof n.butacasNumeradas !== 'boolean') errores.push('opción de butacas numeradas inválida');
     if (!n || !/^n[1-9]\d{0,5}$/.test(n.id) || idsNivel.has(n.id) || typeof n.nombre !== 'string' || !n.nombre.trim() || n.nombre.length > 40 ||
         nombres.has(n.nombre.trim().toLocaleUpperCase('es')) || (i > 0 && (!n.plano || typeof n.plano !== 'object'))) { errores.push('nivel inválido o repetido'); continue; }
     idsNivel.add(n.id); nombres.add(n.nombre.trim().toLocaleUpperCase('es'));
@@ -2809,8 +2820,8 @@ function validarMapaNiveles(dato) {
     const dibujo = [...nodosDeBandas(m.bandas).map((p) => p.id), ...piezasDe(m).filter((p) => p.id).map((p) => p.id), ...m.regionesLibres.map((r) => r.id)];
     for (const id of dibujo) { if (idsDibujo.has(id)) errores.push('ID de dibujo repetido entre niveles: ' + id); idsDibujo.add(id); }
     for (const [k, f] of Object.entries(m.identidadFisica)) { if (identidad[k]) errores.push('clave de lugar repetida entre niveles'); identidad[k] = f; }
-    if (!i) { principal = m; niveles.push({ id: n.id, nombre: n.nombre.trim() }); }
-    else niveles.push({ id: n.id, nombre: n.nombre.trim(), plano: geometriaDeNivel(m) });
+    if (!i) { principal = m; niveles.push({ id: n.id, nombre: n.nombre.trim(), ...(n.butacasNumeradas ? { butacasNumeradas: true } : {}) }); }
+    else niveles.push({ id: n.id, nombre: n.nombre.trim(), ...(n.butacasNumeradas ? { butacasNumeradas: true } : {}), plano: geometriaDeNivel(m) });
   }
   if (errores.length) return { errores };
   if (Object.keys(identidad).length !== Object.keys(dato.identidadFisica || {}).length) return { errores: ['nivel físico desconocido en el inventario'] };

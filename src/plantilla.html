@@ -264,6 +264,10 @@
           <symbol id="butaca" viewBox="0 0 24 24">
             <path d="M4 18v3h3v-3h10v3h3v-6H4zm15-8h3v5h-3V10zM2 10h3v5H2V10zm3-6h14c1.1 0 2 .9 2 2v2H3V6c0-1.1.9-2 2-2z"></path>
           </symbol>
+          <symbol id="butaca-numerada" viewBox="0 0 24 24">
+            <path fill="currentColor" fill-opacity="var(--relleno-num, 0)" d="M4.55 5.3 Q12 4.6 19.45 5.3 V20.8 Q12 23 4.55 20.8 Z"></path>
+            <path fill="none" stroke="currentColor" stroke-width=".85" stroke-linecap="round" stroke-linejoin="round" d="M4.5 1.5 Q12 .55 19.5 1.5 C21.85 1.7 23.55 3.35 23.55 5.3 V21 C23.55 23.55 19.45 23.55 19.45 21 V5.3 Q12 4.6 4.55 5.3 V21 C4.55 23.55 .45 23.55 .45 21 V5.3 C.45 3.35 2.15 1.7 4.5 1.5 Z M4.55 20.8 Q12 23 19.45 20.8"></path>
+          </symbol>
           <!-- Marcas de estado. Van en el hueco entre respaldo y asiento (y 8 a 15),
                que el icono deja vacio, y comparten viewBox con la butaca. -->
           <symbol id="marca-elegida" viewBox="0 0 24 24"><path d="M8.5 11.5l2.5 2.5 4.5-4.5"></path></symbol>
@@ -359,6 +363,7 @@
       <details class="grupo numeracion-oficial" id="grupo-niveles">
         <summary>Niveles y regiones</summary>
         <label for="nombre-nivel">Nombre del nivel</label><input id="nombre-nivel" maxlength="40" placeholder="Ej.: Galería">
+        <label><input id="butacas-numeradas" type="checkbox"> Butacas con número interior en este nivel</label>
         <button id="agregar-nivel" type="button">Agregar nivel</button>
         <button id="renombrar-nivel" type="button">Renombrar nivel actual</button>
         <button id="eliminar-nivel" type="button">Eliminar nivel actual</button>

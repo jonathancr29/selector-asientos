@@ -99,6 +99,35 @@ test('explorar zonas: contornos separan huecos, niveles y filas curvas sin cubri
   assert.equal(compartimento.length, 1); assert.equal(compartimento[0].length, 4);
 });
 
+test('butacas numeradas: opcion por nivel conserva inventario, etiquetas y guardado', () => {
+  const a = cargar(), mapa = ejemploConector().mapa;
+  mapa.revisionFisica.estado = 'borrador'; delete mapa.revisionFisica.huella;
+  const antes = JSON.stringify(mapa.identidadFisica);
+  const nuevo = a.mostrarButacasNumeradas(mapa, 'n1', true);
+  assert.equal(JSON.stringify(nuevo.identidadFisica), antes);
+  assert.equal(mapa.niveles[0].butacasNumeradas, undefined);
+  const validado = a.validarMapa(JSON.parse(JSON.stringify(nuevo)));
+  assert.equal(validado.errores, undefined);
+  assert.equal(validado.mapa.niveles[0].butacasNumeradas, true);
+  a.generarPlano(a.definicionDeMapa(validado.mapa));
+  assert.ok(a.butacas.filter(b => b.nivel === 'n1').every(b => b.butacaNumerada));
+  assert.ok(a.butacas.filter(b => b.nivel !== 'n1').every(b => !b.butacaNumerada));
+  const plano = a.planoDesdeSala(a.definicionDeMapa(validado.mapa), a.generarPlano(a.definicionDeMapa(validado.mapa)));
+  const cambiado = a.cambiarNivelPlano(plano, 'n2');
+  const guardado = a.mapaDesdePlano('Butacas numeradas', cambiado, null);
+  assert.equal(guardado.niveles[0].butacasNumeradas, true);
+  assert.equal(guardado.niveles[1].butacasNumeradas, undefined);
+  const publicado = a.publicarRevisionFisica(validado.mapa);
+  assert.equal(publicado.errores, undefined);
+  assert.equal(a.validarMapa(publicado.mapa).errores, undefined);
+  assert.equal(publicado.mapa.niveles[0].butacasNumeradas, true);
+  assert.equal(a.mostrarButacasNumeradas(nuevo, 'n1', false).niveles[0].butacasNumeradas, undefined);
+  nuevo.niveles[0].butacasNumeradas = 'si';
+  assert.ok(a.validarMapa(nuevo).errores.some(e => /numeradas/.test(e)));
+  mapa.revisionFisica.estado = 'publicada';
+  assert.match(a.mostrarButacasNumeradas(mapa, 'n1', true).motivo, /borrador/);
+});
+
 test('contornos: tramos casi rectos tienen lados paralelos y respetan huecos e inventario', () => {
   const a = cargar();
   const lista = [0, .08, -.04, .1, 0].map((x, i) => ({ id: 'b' + i, x, y: i * 2, fila: 'B', nivel: 'n1' }));

@@ -877,6 +877,13 @@ inventar sectores, filas físicas o palcos a partir de su geometría o etiquetas
 
 ## Niveles, regiones y filas libres (fase 4)
 
+En **Niveles y regiones**, **Butacas con número interior en este nivel** activa una silueta
+con centro amplio y la etiqueta existente de cada lugar. El número permanece horizontal
+aunque gire la butaca; las marcas de estado se muestran en una esquina para no taparlo.
+La opción se guarda por nivel, se puede deshacer y requiere borrador si el mapa está publicado.
+Los mapas sin la opción conservan el icono anterior. No renumera ni mueve lugares; para leer
+los números en planos grandes se puede acercar la vista.
+
 ### Explorar zonas en el visor
 
 En Previsualizar y en compra conectada, **Explorar zonas** muestra únicamente las zonas físicas

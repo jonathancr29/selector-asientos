@@ -209,6 +209,11 @@ comentarios `// ----`.
 
 ## Reglas que no se deben romper
 
+- **Icono numerado por nivel:** `butacasNumeradas` es una opción de presentación, no una
+  asignación de etiquetas. El número usa la etiqueta vigente y permanece horizontal;
+  las marcas se buscan por clase, no por posición de hijo, y se colocan aparte del texto.
+  Conserva área de clic, foco, selección y los iconos clásicos de niveles sin la opción.
+
 - **Realce de palcos:** zona y palco explorados son estado transitorio, independiente de compra.
   El contorno público sigue las butacas con esquinas suaves; los recuadros físicos solo aparecen
   en el editor. Una franja radial requiere varios grupos alrededor de un escenario finito;

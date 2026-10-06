@@ -665,6 +665,31 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       await protocolo.evaluar(`cambiarModo('vista')`);
     });
 
+    await t.test('butacas numeradas: opcion local, numeros horizontales, estados y reapertura', async () => {
+      await protocolo.evaluar(`(()=>{const m=${JSON.stringify(ejemploEvento.mapa)};m.nombre='Numeracion navegador';m.revisionFisica.estado='borrador';delete m.revisionFisica.huella;
+        redibujar(registrarMapa(m));cambiarModo('editor');window.__inventarioNumeros=JSON.stringify(planoEditable().identidadFisica);
+        document.querySelector('#butacas-numeradas').click();cambiarModo('vista');})()`);
+      assert.equal(await protocolo.evaluar('document.querySelectorAll(".numero-butaca").length'), await protocolo.evaluar('butacasVisibles().length'));
+      assert.equal(await protocolo.evaluar('[...document.querySelectorAll(".numero-butaca")].every(n=>!n.hasAttribute("transform"))'), true);
+      assert.equal(await protocolo.evaluar('JSON.stringify(planoEditable().identidadFisica)'), await protocolo.evaluar('__inventarioNumeros'));
+      await protocolo.evaluar(`window.__numeroElegido=butacasVisibles().find(b=>b.estado==='libre');alternar(__numeroElegido.nodo);dibujarTodo();`);
+      assert.equal(await protocolo.evaluar('__numeroElegido.nodo.querySelector(".numero-butaca").textContent'), await protocolo.evaluar('String(__numeroElegido.numero)'));
+      assert.equal(await protocolo.evaluar('__numeroElegido.nodo.querySelector(".marca").getAttribute("width")'), '3');
+      await protocolo.evaluar(`cambiarNivelVista('n2');`);
+      assert.equal(await protocolo.evaluar('document.querySelectorAll(".numero-butaca").length'), 0);
+      assert.equal(await protocolo.evaluar('elegidas.has(__numeroElegido.id)'), true);
+      await protocolo.evaluar(`cambiarNivelVista('n1');cambiarModo('editor');guardarMapa();
+        Object.values(historiales).forEach(h=>h.marcarGuardado());actualizarEstadoEdicion();`);
+      const carga = protocolo.evento('Page.loadEventFired'); await protocolo.enviar('Page.reload', {ignoreCache:true}); await carga;
+      await protocolo.evaluar(`redibujar('mapa:Numeracion navegador');cambiarModo('vista');`);
+      assert.equal(await protocolo.evaluar('document.querySelectorAll(".numero-butaca").length'), await protocolo.evaluar('butacasVisibles().length'));
+      await protocolo.evaluar(`cambiarModo('editor');document.querySelector('#butacas-numeradas').click();`);
+      assert.equal(await protocolo.evaluar('document.querySelectorAll(".numero-butaca").length'), 0);
+      await protocolo.evaluar(`restaurarEdicion('deshacer');`);
+      assert.ok(await protocolo.evaluar('document.querySelectorAll(".numero-butaca").length') > 0);
+      await protocolo.evaluar(`Object.values(historiales).forEach(h=>h.marcarGuardado());actualizarEstadoEdicion();cambiarModo('vista');`);
+    });
+
     await t.test('conector: carga revision publicada con tarifas externas y cierra el editor', async () => {
       await protocolo.evaluar(`window.__fixtureEvento=${JSON.stringify(ejemploEvento)}; window.__cambiosEvento=[];
         SelectorAsientos.cargarEvento({...__fixtureEvento,alSeleccionar:s=>__cambiosEvento.push(s)});`);
@@ -838,7 +863,10 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       await esperar(()=>protocolo.evaluar('location.pathname === "/integracion/index.html" && document.readyState === "complete" && !!window.SelectorAsientos && !!document.querySelector(".butaca")'),'entrega CSP');
       assert.equal(await protocolo.evaluar('document.querySelectorAll("style,script:not([src]),[style],[onclick]").length'),0);
       const estilo=await protocolo.evaluar('getComputedStyle(document.body).backgroundColor');assert.notEqual(estilo,'rgba(0, 0, 0, 0)');
-      await protocolo.evaluar(`SelectorAsientos.cargarEvento(${JSON.stringify(ejemploEvento)});`);
+      await protocolo.evaluar(`(()=>{const f=${JSON.stringify(ejemploEvento)};f.mapa.revisionFisica.estado='borrador';
+        delete f.mapa.revisionFisica.huella;f.mapa.niveles[0].butacasNumeradas=true;
+        f.mapa=publicarRevisionFisica(f.mapa).mapa;f.evento.evento.revision={...f.mapa.revisionFisica};SelectorAsientos.cargarEvento(f);})()`);
+      assert.ok(await protocolo.evaluar('document.querySelectorAll(".numero-butaca").length') > 0);
       await protocolo.evaluar(`document.querySelector('.butaca[data-id="F3-1-1"]').focus()`);await protocolo.tecla('Enter','Enter',13);
       assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'),2);
       assert.deepEqual(await protocolo.evaluar('window.__cspViolaciones'),[]);

@@ -1290,6 +1290,13 @@ function actualizarPestanasNiveles() {
   }
   document.getElementById('panel-nivel').setAttribute('aria-labelledby', 'pestana-' + salaActual.nivel);
 }
+document.getElementById('butacas-numeradas').addEventListener('change', (e) => {
+  if (modo !== 'editor') return;
+  const nuevo = mostrarButacasNumeradas(planoEditable(), salaActual.nivel, e.target.checked);
+  if (nuevo.motivo) { anunciar(nuevo.motivo); actualizarControlesGeometria(); return; }
+  planos[tipoActual] = nuevo;
+  regenerar('Presentación de butacas actualizada; números e IDs conservados.');
+});
 document.getElementById('agregar-nivel').addEventListener('click', () => {
   const nuevo = agregarNivel(planoEditable(), document.getElementById('nombre-nivel').value);
   if (nuevo.motivo) { anunciar(nuevo.motivo); return; }
@@ -1311,6 +1318,8 @@ document.getElementById('eliminar-nivel').addEventListener('click', () => {
 function actualizarControlesGeometria() {
   if (!salaActual) return;
   const plano = planos[tipoActual] || TIPOS_DE_SALA[tipoActual];
+  document.getElementById('butacas-numeradas').checked = nivelesDe(plano).find((n) => n.id === salaActual.nivel)?.butacasNumeradas === true;
+  document.getElementById('butacas-numeradas').disabled = modo !== 'editor' || plano.revisionFisica?.estado === 'publicada';
   actualizarPestanasNiveles();
   document.getElementById('eliminar-nivel').disabled = salaActual.niveles.length === 1;
   const p = piezaPorId(mesaActiva);
