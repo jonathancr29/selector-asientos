@@ -656,6 +656,7 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       assert.equal(await protocolo.evaluar('document.activeElement.getAttribute("aria-pressed")'), 'true');
       assert.match(await protocolo.evaluar('document.querySelector("#resumen-zona").textContent'), /Precio no disponible.*Disponibilidad sin confirmar/);
       assert.ok(await protocolo.evaluar('document.querySelectorAll("#realce-zona path").length') > 0);
+      assert.equal(await protocolo.evaluar('[...capaRealceZona.children].every(p=>p.getAttribute("d").includes("Q"))'), true);
       assert.equal(await protocolo.evaluar('getComputedStyle(capaRealceZona).pointerEvents'), 'none');
       await protocolo.evaluar('document.querySelector("#quitar-realce-zona").click()');
       assert.equal(await protocolo.evaluar('document.querySelectorAll("#realce-zona path").length'), 0);

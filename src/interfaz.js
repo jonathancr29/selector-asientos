@@ -97,8 +97,7 @@ function actualizarExploradorZonas() {
     ...(palcoExplorado ? [envolventeDePalco(lugaresPalco)] : contornosDePalcos(lugaresPalco, centroDelEscenario(escenario)))];
   for (const puntos of contornos) {
     if (!puntos.length) continue;
-    if (lugaresPalco.length) { capaRealceZona.appendChild(nodo('path', { d: trazoSuaveDeContorno(puntos) })); continue; }
-    capaRealceZona.appendChild(nodo('path', { d: puntos.map((p, i) => (i ? 'L' : 'M') + p.x * PASO + ',' + p.y * PASO).join(' ') + 'Z' }));
+    capaRealceZona.appendChild(nodo('path', { d: trazoSuaveDeContorno(puntos) }));
   }
 }
 

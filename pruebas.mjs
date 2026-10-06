@@ -99,6 +99,36 @@ test('explorar zonas: contornos separan huecos, niveles y filas curvas sin cubri
   assert.equal(compartimento.length, 1); assert.equal(compartimento[0].length, 4);
 });
 
+test('contornos: tramos casi rectos tienen lados paralelos y respetan huecos e inventario', () => {
+  const a = cargar();
+  const lista = [0, .08, -.04, .1, 0].map((x, i) => ({ id: 'b' + i, x, y: i * 2, fila: 'B', nivel: 'n1' }));
+  const antes = JSON.stringify(lista), borde = a.contornosDeZona(lista)[0];
+  assert.equal(borde.length, 4);
+  assert.equal(borde[0].x, borde[1].x); assert.equal(borde[2].x, borde[3].x);
+  for (const b of lista) {
+    assert.ok(b.x + .5 > Math.min(...borde.map(p => p.x)) && b.x + .5 < Math.max(...borde.map(p => p.x)));
+  }
+  const diagonal = lista.map((p, i) => ({ ...p, x: i * 1.4, y: i * 1.4 + p.x }));
+  const d = a.contornosDeZona(diagonal)[0];
+  assert.equal(d.length, 4);
+  assert.ok(Math.abs((d[1].x - d[0].x) + (d[3].x - d[2].x)) < 1e-9);
+  assert.equal(JSON.stringify(lista), antes);
+});
+
+test('contornos: curvas reflejadas conservan margenes y el centro vacio', () => {
+  const a = cargar();
+  const lista = Array.from({ length: 7 }, (_, i) => ({ id: 'c' + i, x: 12 * Math.cos(i * .12),
+    y: 12 * Math.sin(i * .12), fila: 'C', nivel: 'n1' }));
+  const borde = a.contornosDeZona(lista)[0];
+  const espejo = a.contornosDeZona(lista.map(b => ({ ...b, x: 40 - b.x - 1 })))[0];
+  assert.ok(borde.length > lista.length * 2);
+  assert.equal(borde.length, espejo.length);
+  for (const p of borde) {
+    assert.ok(Math.hypot(p.x - .5, p.y - .5) > 10);
+    assert.ok(espejo.some(q => Math.hypot(q.x - (40 - p.x), q.y - p.y) < 1e-8));
+  }
+});
+
 test('palcos: envolvente diagonal sigue las butacas sin ocupar las esquinas del rectangulo', () => {
   const a = cargar(), lista = [{ x: 0, y: 0 }, { x: 2, y: 2 }, { x: 4, y: 4 }];
   const antes = JSON.stringify(lista), borde = a.envolventeDePalco(lista);
