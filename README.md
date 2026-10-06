@@ -900,6 +900,12 @@ Los rótulos del visor muestran la identificación breve del palco hacia el exte
 butacas, con letras claras y horizontales. El palco presidencial se identifica en dos líneas:
 **PALCO / PRESIDENCIAL**. Los nombres físicos completos permanecen en el editor, el selector
 de palcos y las etiquetas accesibles de las butacas.
+
+Para sectores laterales con filas físicas, **Estructura física → Sector → Mostrar letras y
+divisiones de las filas de este sector lateral en el visor** activa rótulos oficiales y separadores
+punteados entre filas vecinas. La opción se guarda en el sector como `mostrarFilasEnVisor: true`;
+ausente está desactivada. No cambia el inventario, la numeración ni la modalidad de compra.
+Las referencias se limitan al sector y al nivel visibles; no convierten filas en palcos.
 **Destacar palco** permite encuadrar y resaltar únicamente un compartimento; su resumen muestra
 los lugares, precios y disponibilidad de ese palco. Volver a **Todos los palcos** recupera el
 resaltado de la zona. Los recuadros de referencia permanecen en el editor y se ocultan al público.

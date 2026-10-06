@@ -80,6 +80,11 @@ function dibujarMuebles() {
         x2: d.hasta.x * PASO, y2: d.hasta.y * PASO }));
     }
     capaMuebles.appendChild(divisiones);
+    const referencias = referenciasDeFilasLaterales(butacasVisibles(), centroDelEscenario(escenario));
+    const filas = nodo('g', { class: 'referencias-filas', 'aria-hidden': 'true' });
+    for (const d of referencias.divisiones) filas.appendChild(nodo('line', { x1: d.desde.x * PASO, y1: d.desde.y * PASO, x2: d.hasta.x * PASO, y2: d.hasta.y * PASO }));
+    for (const r of referencias.rotulos) filas.appendChild(texto('rotulo-fila-lateral', r.x * PASO, r.y * PASO, r.lineas.join(' ')));
+    capaMuebles.appendChild(filas);
   }
   for (const r of planos[tipoActual]?.regionesLibres || TIPOS_DE_SALA[tipoActual].regionesLibres || []) {
     const g = nodo('g', { class: 'region-libre', 'aria-hidden': 'true', transform: `translate(${r.x * PASO} ${r.y * PASO}) rotate(${r.giro})` });

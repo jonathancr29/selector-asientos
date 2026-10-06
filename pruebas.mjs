@@ -179,6 +179,36 @@ test('palcos: rótulos legibles separados de butacas y divisiones sin renombrar 
   assert.equal(a.rotuloDePalco([], { x: 0, y: 0 }), null);
 });
 
+test('filas laterales: seis divisiones y ocho rótulos, sin mezclar sectores ni alterar lugares', () => {
+  const a = cargar(), lista = [];
+  for (let lado = 0; lado < 2; lado++) for (let fila = 0; fila < 4; fila++) for (let i = 0; i < 3; i++) lista.push({
+    id: lado + '-' + fila + '-' + i, x: lado ? 30 : 0, y: fila * 8 + i,
+    sectorFisico: { id: 'sector' + lado, mostrarFilasEnVisor: true },
+    filaFisica: { id: 'fila' + lado + fila, nombre: 'ABCDEFGH'[lado * 4 + fila] } });
+  const antes = JSON.stringify(lista), r = a.referenciasDeFilasLaterales(lista, { x: 15, y: 40 });
+  assert.equal(r.rotulos.length, 8); assert.equal(r.divisiones.length, 6);
+  assert.deepEqual(r.rotulos.flatMap(r => r.lineas).sort(), [...'ABCDEFGH']);
+  assert.ok(r.divisiones.every(d => d.filas[0].slice(0, 5) === d.filas[1].slice(0, 5)));
+  assert.ok(r.divisiones.every(d => Math.abs(d.desde.y - d.hasta.y) < 1e-8));
+  assert.equal(JSON.stringify(lista), antes);
+  assert.deepEqual(a.referenciasDeFilasLaterales(lista.map(b => ({ ...b, sectorFisico: { ...b.sectorFisico, mostrarFilasEnVisor: false } })), { x: 15, y: 40 }), { rotulos: [], divisiones: [] });
+  assert.deepEqual(a.referenciasDeFilasLaterales(lista.slice(0, 3).map(b => ({ ...b, filaFisica: { ...b.filaFisica, nombre: 'Presidencial' } })), { x: 15, y: 40 }).rotulos[0].lineas, ['Presidencial']);
+});
+
+test('filas laterales: opción por sector sobrevive al JSON, valida tipos y conserva inventario', () => {
+  const a = cargar(), original = ejemploConector().mapa;
+  original.revisionFisica.estado = 'borrador'; delete original.revisionFisica.huella;
+  const antes = JSON.stringify(original), id = original.sectores[0].id;
+  const nuevo = a.mostrarFilasDeSector(original, id, true);
+  assert.equal(a.validarMapa(JSON.parse(JSON.stringify(nuevo))).mapa.sectores[0].mostrarFilasEnVisor, true);
+  assert.deepEqual(nuevo.identidadFisica, original.identidadFisica);
+  assert.equal(JSON.stringify(original), antes);
+  assert.equal(a.mostrarFilasDeSector(nuevo, id, false).sectores[0].mostrarFilasEnVisor, undefined);
+  nuevo.sectores[0].mostrarFilasEnVisor = 'sí';
+  assert.ok(a.validarMapa(nuevo).errores.some(e => /referencia visual/.test(e)));
+  assert.ok(a.mostrarFilasDeSector(original, 'inexistente', true).motivo);
+});
+
 test('laterales: cada plantilla conserva lugares, etiquetas, pertenencias y escenario al ampliar', () => {
   for (const tipo of Object.keys(cargar().TIPOS_DE_SALA)) for (const lado of ['izquierdo', 'derecho']) {
     const a = cargar(); const sala = a.generarPlano(tipo); const p = a.planoDesdeSala(tipo, sala);

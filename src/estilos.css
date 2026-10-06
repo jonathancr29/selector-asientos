@@ -384,13 +384,13 @@
   .nota code { color: var(--texto-tenue); }
   .nota + .nota { border-left-color: #fbbf24; }
 .palco-fisico { pointer-events: none; }
-.divisiones-palcos { pointer-events: none; }
-.divisiones-palcos line { stroke: #a4bdd9; stroke-width: .6; stroke-dasharray: 2 2; stroke-linecap: round; }
+.divisiones-palcos, .referencias-filas { pointer-events: none; }
+.divisiones-palcos line, .referencias-filas line { stroke: #a4bdd9; stroke-width: .6; stroke-dasharray: 2 2; stroke-linecap: round; }
 .region-libre { pointer-events: none; }
 .region-libre rect { fill: none; stroke: var(--realce); stroke-width: .6; stroke-dasharray: 2 2; }
 .palco-fisico rect { fill: none; stroke: #a4bdd9; stroke-width: .6; stroke-dasharray: 2 2; }
 .palco-fisico text { text-anchor: start; font-size: 4px; }
-.palco-fisico .rotulo-palco { text-anchor: middle; dominant-baseline: middle; font-size: 6px; font-weight: 500; fill: var(--texto-claro); }
+.palco-fisico .rotulo-palco, .rotulo-fila-lateral { text-anchor: middle; dominant-baseline: middle; font-size: 6px; font-weight: 500; fill: var(--texto-claro); }
 .butaca.fisica-seleccionada .toque { stroke: #facc15; stroke-width: 1.4; }
 .explorador-zonas { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--borde); border-radius: 10px; }
 .zonas-controles, #zonas-vista { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }

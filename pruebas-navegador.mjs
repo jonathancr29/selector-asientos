@@ -584,6 +584,25 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       assert.equal(await protocolo.evaluar('planoEditable().filasFisicas.length'),1);
     });
 
+    await t.test('referencias de filas por sector se configuran y deshacen sin cambiar compra', async () => {
+      await protocolo.evaluar(`(()=>{window.__lugaresAntesReferencia=JSON.stringify(planoEditable().identidadFisica);window.__seleccionFisicaReferencia=[...seleccionFisica];
+        const tipo=document.querySelector('#tipo-fisico');tipo.value='sector';tipo.dispatchEvent(new Event('change'));
+        const entidad=document.querySelector('#entidad-fisica');entidad.value='sector1';entidad.dispatchEvent(new Event('change'));
+        document.querySelector('#mostrar-filas-visor').click();})()`);
+      assert.equal(await protocolo.evaluar('planoEditable().sectores[0].mostrarFilasEnVisor'), true);
+      assert.equal(await protocolo.evaluar('JSON.stringify(planoEditable().identidadFisica)'), await protocolo.evaluar('__lugaresAntesReferencia'));
+      await protocolo.evaluar(`cambiarModo('vista')`);
+      assert.equal(await protocolo.evaluar('document.querySelectorAll(".rotulo-fila-lateral").length'), 1);
+      assert.equal(await protocolo.evaluar('getComputedStyle(document.querySelector(".referencias-filas")).pointerEvents'), 'none');
+      assert.equal(await protocolo.evaluar('elegidas.size'), 0);
+      await protocolo.evaluar(`cambiarModo('editor');restaurarEdicion('deshacer');`);
+      assert.equal(await protocolo.evaluar('planoEditable().sectores[0].mostrarFilasEnVisor'), undefined);
+      await protocolo.evaluar(`(()=>{const tipo=document.querySelector('#tipo-fisico');tipo.value='fila';tipo.dispatchEvent(new Event('change'));
+        const entidad=document.querySelector('#entidad-fisica');entidad.value='fila1';entidad.dispatchEvent(new Event('change'));
+        cambiarHerramienta('fisica');seleccionFisica.clear();__seleccionFisicaReferencia.forEach(id=>seleccionFisica.add(id));actualizarControlesFisicos();
+        porId.get(__seleccionFisicaReferencia[0]).nodo.focus();})()`);
+    });
+
     await t.test('palco exige desvincular fila, guarda numeracion propia y mantiene piezas editables', async () => {
       await protocolo.evaluar(`(() => {
         const tipo=document.querySelector('#tipo-fisico'); tipo.value='palco'; tipo.dispatchEvent(new Event('change'));

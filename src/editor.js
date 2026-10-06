@@ -1476,6 +1476,10 @@ function actualizarControlesFisicos() {
   llenarOpcionesFisicas('entidad-fisica', [['','— crear o elegir —'], ...lista.map((e) => [e.id,e.nombre])]);
   const id = document.getElementById('entidad-fisica').value;
   const entidad = entidadFisicaDe(plano,tipo,id);
+  document.getElementById('opcion-filas-visor').hidden = tipo !== 'sector' || !entidad;
+  const filasVisor = document.getElementById('mostrar-filas-visor');
+  filasVisor.checked = tipo === 'sector' && entidad?.mostrarFilasEnVisor === true;
+  filasVisor.disabled = modo !== 'editor' || plano.revisionFisica?.estado === 'publicada' || !entidad;
   document.getElementById('detalle-entidad-fisica').textContent = entidad ? entidad.id + ' · ' + miembrosFisicos(plano,tipo,id).length + ' lugares · ' + salaActual.niveles.find((n) => n.id === entidad.nivel).nombre : 'Las entidades vacías no añaden aforo.';
   for (const boton of ['renombrar-entidad-fisica','eliminar-entidad-fisica','fisica-miembros']) document.getElementById(boton).disabled = !entidad;
   document.getElementById('asignar-entidad-fisica').disabled = !entidad || !seleccionFisica.size;
@@ -1504,6 +1508,12 @@ for (const id of ['tipo-fisico','zona-fisica-entidad','entidad-fisica']) documen
   actualizarControlesFisicos();
   const e = entidadFisicaDe(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('entidad-fisica').value);
   document.getElementById('nombre-entidad-fisica').value = e?.nombre || '';
+});
+document.getElementById('mostrar-filas-visor').addEventListener('change', () => {
+  if (document.getElementById('tipo-fisico').value === 'sector') aplicarResultadoFisico(
+    mostrarFilasDeSector(planoEditable(), document.getElementById('entidad-fisica').value, document.getElementById('mostrar-filas-visor').checked),
+    'Referencias visuales de filas actualizadas; lugares conservados.');
+  actualizarControlesFisicos();
 });
 document.getElementById('agregar-entidad-fisica').addEventListener('click', () => {
   const resultado = agregarEntidadFisica(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('nombre-entidad-fisica').value,salaActual.nivel,document.getElementById('zona-fisica-entidad').value);
