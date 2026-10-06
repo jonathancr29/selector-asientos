@@ -218,6 +218,9 @@ comentarios `// ----`.
   recortan contra ella. No interceptan clics ni atraviesan butacas para inventar una separación.
   Los rótulos breves del visor no renombran entidades físicas ni etiquetas accesibles.
   Se colocan hacia el exterior de las butacas; sin escenario usan una referencia superior.
+  Las referencias de filas laterales requieren activación explícita por sector
+  (`mostrarFilasEnVisor`), usan IDs y letras de filas físicas y no mezclan sectores o niveles.
+  Nunca inferir la función por nombres como «Platea» o por los IDs de un teatro particular.
 
 - **Explorar zonas no compra ni edita:** `zonaExplorada` es estado transitorio del visor, separado
   de `elegidas` y del mapa. El realce no intercepta clics; se calcula por filas, tramos y grupos,

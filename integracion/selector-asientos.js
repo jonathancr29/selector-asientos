@@ -1933,6 +1933,15 @@ function agregarEntidadFisica(plano, tipo, nombre, nivel, zona) {
   return { plano: nuevo, id };
 }
 
+function mostrarFilasDeSector(plano, id, mostrar) {
+  if (!entidadFisicaDe(plano, 'sector', id) || typeof mostrar !== 'boolean') return { motivo: 'sector o referencia visual inválidos' };
+  const nuevo = copiarPlano(plano);
+  const sector = nuevo.sectores.find(e => e.id === id);
+  if (mostrar) sector.mostrarFilasEnVisor = true;
+  else delete sector.mostrarFilasEnVisor;
+  return nuevo;
+}
+
 function renombrarEntidadFisica(plano, tipo, id, nombre) {
   const t = TIPOS_FISICOS[tipo];
   const e = entidadFisicaDe(plano, tipo, id);
@@ -2696,7 +2705,9 @@ function validarEstructuraFisica(dato, errores) {
       const nombre = JSON.stringify([e.nivel,e.zona,nombreFisicoNormalizado(e.nombre)]);
       if (nombres.has(nombre)) errores.push('nombre físico repetido: ' + tipo);
       nombres.add(nombre);
-      limpio[t.lista].push({ id: e.id, nombre: e.nombre.trim(), nivel: e.nivel, zona: e.zona });
+      if (e.mostrarFilasEnVisor !== undefined && (tipo !== 'sector' || typeof e.mostrarFilasEnVisor !== 'boolean')) errores.push('referencia visual de filas inválida: ' + e.id);
+      limpio[t.lista].push({ id: e.id, nombre: e.nombre.trim(), nivel: e.nivel, zona: e.zona,
+        ...(tipo === 'sector' && e.mostrarFilasEnVisor === true ? { mostrarFilasEnVisor: true } : {}) });
     }
     if (!esEntero(dato[t.contador],1,1e6)) errores.push('contador físico inválido: ' + tipo);
     limpio[t.contador] = Math.max(dato[t.contador] || 1, ...[...ids, ...limpio.entidadesRetiradas.filter((id) => id.startsWith(t.prefijo))].map((id) => Number(id.slice(t.prefijo.length)) + 1));
@@ -4166,10 +4177,10 @@ function divisionesDePalcos(lista, centro) {
 }
 
 // Rótulo visual hacia el exterior del palco; no cambia su nombre físico.
-function rotuloDePalco(lista, centro, divisiones = []) {
+function rotuloDePalco(lista, centro, divisiones = [], lineasExplicitas = null) {
   if (!lista.length) return null;
   const nombre = lista[0].grupo.nombre.replace(/^Palco\s+/i, '');
-  const lineas = /^presidencial$/i.test(nombre) ? ['PALCO', 'PRESIDENCIAL'] : [nombre];
+  const lineas = lineasExplicitas || (/^presidencial$/i.test(nombre) ? ['PALCO', 'PRESIDENCIAL'] : [nombre]);
   const cx = lista.reduce((s, b) => s + b.x + .5, 0) / lista.length;
   const cy = lista.reduce((s, b) => s + b.y + .5, 0) / lista.length;
   const finito = Number.isFinite(centro.x) && Number.isFinite(centro.y);
@@ -4195,6 +4206,46 @@ function rotuloDePalco(lista, centro, divisiones = []) {
     }
   }
   return posicion;
+}
+
+// Referencias optativas de filas de un sector lateral, independientes de compra.
+function referenciasDeFilasLaterales(lista, centro) {
+  const sectores = new Map();
+  for (const b of lista) {
+    if (!b.sectorFisico?.mostrarFilasEnVisor || !b.filaFisica || b.grupo) continue;
+    const id = b.sectorFisico.id;
+    if (!sectores.has(id)) sectores.set(id, new Map());
+    const filas = sectores.get(id);
+    if (!filas.has(b.filaFisica.id)) filas.set(b.filaFisica.id, []);
+    filas.get(b.filaFisica.id).push({ ...b, grupo: { id: b.filaFisica.id, nombre: b.filaFisica.nombre } });
+  }
+  const rotulos = [], divisiones = [];
+  for (const filas of sectores.values()) {
+    const orden = [...filas.values()].map(lugares => ({ lugares,
+      x: lugares.reduce((s, b) => s + b.x + .5, 0) / lugares.length,
+      y: lugares.reduce((s, b) => s + b.y + .5, 0) / lugares.length }));
+    orden.sort((a, b) => Number.isFinite(centro.y) ? Math.atan2(a.y - centro.y, a.x - centro.x) - Math.atan2(b.y - centro.y, b.x - centro.x) : a.y - b.y);
+    const limites = [];
+    for (let i = 1; i < orden.length; i++) {
+      const a = orden[i - 1], b = orden[i], largo = Math.hypot(b.x - a.x, b.y - a.y);
+      if (largo < .01) continue;
+      const nx = (b.x - a.x) / largo, ny = (b.y - a.y) / largo, dx = -ny, dy = nx;
+      const proyectar = p => (p.x + .5) * nx + (p.y + .5) * ny;
+      const fin = Math.max(...a.lugares.map(proyectar)), inicio = Math.min(...b.lugares.map(proyectar));
+      if (inicio - fin < 1) continue;
+      const mitad = (fin + inicio) / 2, x = (a.x + b.x) / 2, y = (a.y + b.y) / 2;
+      const ajuste = mitad - x * nx - y * ny;
+      const origen = { x: x + ajuste * nx, y: y + ajuste * ny };
+      const posiciones = [...a.lugares, ...b.lugares].map(p => (p.x + .5 - origen.x) * dx + (p.y + .5 - origen.y) * dy);
+      const desde = Math.min(...posiciones) - .7, hasta = Math.max(...posiciones) + .7;
+      limites.push({ palcos: [a.lugares[0].grupo.id, b.lugares[0].grupo.id],
+        desde: { x: origen.x + dx * desde, y: origen.y + dy * desde }, hasta: { x: origen.x + dx * hasta, y: origen.y + dy * hasta } });
+    }
+    for (const fila of orden) rotulos.push({ fila: fila.lugares[0].grupo.id,
+      ...rotuloDePalco(fila.lugares, centro, limites, [fila.lugares[0].filaFisica.nombre]) });
+    divisiones.push(...limites.map(d => ({ filas: d.palcos, desde: d.desde, hasta: d.hasta })));
+  }
+  return { rotulos, divisiones };
 }
 
 // === Fin de la parte sin DOM. pruebas.mjs evalua todo lo anterior en Node. ===
@@ -4281,6 +4332,11 @@ function dibujarMuebles() {
         x2: d.hasta.x * PASO, y2: d.hasta.y * PASO }));
     }
     capaMuebles.appendChild(divisiones);
+    const referencias = referenciasDeFilasLaterales(butacasVisibles(), centroDelEscenario(escenario));
+    const filas = nodo('g', { class: 'referencias-filas', 'aria-hidden': 'true' });
+    for (const d of referencias.divisiones) filas.appendChild(nodo('line', { x1: d.desde.x * PASO, y1: d.desde.y * PASO, x2: d.hasta.x * PASO, y2: d.hasta.y * PASO }));
+    for (const r of referencias.rotulos) filas.appendChild(texto('rotulo-fila-lateral', r.x * PASO, r.y * PASO, r.lineas.join(' ')));
+    capaMuebles.appendChild(filas);
   }
   for (const r of planos[tipoActual]?.regionesLibres || TIPOS_DE_SALA[tipoActual].regionesLibres || []) {
     const g = nodo('g', { class: 'region-libre', 'aria-hidden': 'true', transform: `translate(${r.x * PASO} ${r.y * PASO}) rotate(${r.giro})` });
@@ -7268,6 +7324,10 @@ function actualizarControlesFisicos() {
   llenarOpcionesFisicas('entidad-fisica', [['','— crear o elegir —'], ...lista.map((e) => [e.id,e.nombre])]);
   const id = document.getElementById('entidad-fisica').value;
   const entidad = entidadFisicaDe(plano,tipo,id);
+  document.getElementById('opcion-filas-visor').hidden = tipo !== 'sector' || !entidad;
+  const filasVisor = document.getElementById('mostrar-filas-visor');
+  filasVisor.checked = tipo === 'sector' && entidad?.mostrarFilasEnVisor === true;
+  filasVisor.disabled = modo !== 'editor' || plano.revisionFisica?.estado === 'publicada' || !entidad;
   document.getElementById('detalle-entidad-fisica').textContent = entidad ? entidad.id + ' · ' + miembrosFisicos(plano,tipo,id).length + ' lugares · ' + salaActual.niveles.find((n) => n.id === entidad.nivel).nombre : 'Las entidades vacías no añaden aforo.';
   for (const boton of ['renombrar-entidad-fisica','eliminar-entidad-fisica','fisica-miembros']) document.getElementById(boton).disabled = !entidad;
   document.getElementById('asignar-entidad-fisica').disabled = !entidad || !seleccionFisica.size;
@@ -7296,6 +7356,12 @@ for (const id of ['tipo-fisico','zona-fisica-entidad','entidad-fisica']) documen
   actualizarControlesFisicos();
   const e = entidadFisicaDe(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('entidad-fisica').value);
   document.getElementById('nombre-entidad-fisica').value = e?.nombre || '';
+});
+document.getElementById('mostrar-filas-visor').addEventListener('change', () => {
+  if (document.getElementById('tipo-fisico').value === 'sector') aplicarResultadoFisico(
+    mostrarFilasDeSector(planoEditable(), document.getElementById('entidad-fisica').value, document.getElementById('mostrar-filas-visor').checked),
+    'Referencias visuales de filas actualizadas; lugares conservados.');
+  actualizarControlesFisicos();
 });
 document.getElementById('agregar-entidad-fisica').addEventListener('click', () => {
   const resultado = agregarEntidadFisica(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('nombre-entidad-fisica').value,salaActual.nivel,document.getElementById('zona-fisica-entidad').value);

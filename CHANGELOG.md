@@ -4,7 +4,21 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Identificación visual de palcos
+## Sin publicar — Letras y divisiones de filas laterales
+
+Rama `claude/divisiones-platea`.
+
+- Referencias visuales optativas por sector: letras de filas físicas y divisiones punteadas
+  siguiendo la distribución lateral, sin crear palcos ni cambiar compra o inventario.
+- Control en Estructura física, persistencia del atributo y deshacer; sin nombres de teatro
+  ni zonas codificados en el visor. Activado en los dos laterales del mapa local del Clavijero.
+- Verificado: 210 pruebas de lógica y 31 de navegador; ocho letras y seis divisiones,
+  guardado de la opción, deshacer, inventario conservado y revisión de escritorio/móvil.
+
+## 2026-10-05 — PR #57: Identificación visual de palcos
+
+[PR #57](https://github.com/jonathancr29/selector-asientos/pull/57), fusionado en `main` con el
+commit `aaa2483`.
 
 Rama `claude/rotulos-palcos`.
 
