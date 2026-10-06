@@ -4,7 +4,21 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Acceso general por cantidad en selector y conector
+## Sin publicar — Guía operativa del selector y conector
+
+Rama `claude/guia-conector`.
+
+- Amplía la guía MD existente para Sin Taquilla: funcionamiento del selector, publicación del
+  mapa, versiones, instalación, arranque, API, compra mixta, reservas, errores y comprobación.
+- README y AGENTS apuntan al documento de integración; distingue funciones implementadas en
+  el cliente y responsabilidades del servidor. Sin cambios de comportamiento ni archivos del mapa.
+- Verificado: 221 pruebas de lógica y 35 de navegador; entrega sincronizada, sintaxis de cinco
+  ejemplos JavaScript y tres JSON, cuatro enlaces locales y llamadas a métodos públicos vigentes.
+
+## 2026-10-06 — PR #61: Acceso general por cantidad en selector y conector
+
+[PR #61](https://github.com/jonathancr29/selector-asientos/pull/61), fusionado en `main` con el
+commit `79df35a`.
 
 Rama `claude/acceso-general`.
 

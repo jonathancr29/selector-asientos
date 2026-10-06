@@ -1,9 +1,71 @@
-# Conector de eventos: entrega para Sin Taquilla (fase 6)
+# Selector de asientos y conector: guía de integración con Sin Taquilla
 
-Esta fase implementa el lado del selector. No modifica Sin Taquilla, su base de datos ni sus
+Guía del comportamiento implementado hasta el PR #61, fusionado el 6 de octubre de 2026.
+Este documento describe el contrato ejecutable del cliente y el procedimiento para conectarlo.
+Los ejemplos de rutas son propuestas para el anfitrión, no endpoints existentes del selector.
+
+El proyecto implementa el lado del selector. No modifica Sin Taquilla, su base de datos ni sus
 ventas. El anfitrión aún debe implementar administración, endpoints, reservas transaccionales,
 caducidad y emisión de boletos. Una selección y su importe en pantalla no son una reserva.
 El mapa físico se construye y conserva por separado de la configuración de cada evento.
+
+## Cómo funciona y qué conserva cada sistema
+
+| Componente | Qué hace y qué conserva |
+| --- | --- |
+| Editor del recinto | Diseña niveles, regiones, escenario, filas, curvas, mesas y palcos. Guarda geometría, inventario, pertenencias e identificación oficial. |
+| Visor autónomo | Importa el JSON físico y permite previsualizar lugares. Sin evento no ofrece tarifas ni disponibilidad comercial confirmada. |
+| Visor conectado | Usa el mapa publicado y los datos del evento; muestra precios, habilitación y disponibilidad. Permite elegir butacas, conjuntos o cantidades generales y calcula el resumen. |
+| Conector del selector | Valida los datos comerciales, notifica la selección y consulta/reserva mediante HTTP del mismo origen. No tiene endpoints propios ni conexión directa a la base de datos. |
+| Sin Taquilla | Guarda y sirve mapa y revisión, configura modalidades y precios por evento, mantiene disponibilidad y ejecuta reservas, cobro, caducidad y boletos. |
+
+El dibujo es SVG generado a partir de datos. Un lugar conserva su identidad aunque se mueva,
+gire o cambie su etiqueta; nombres y números no son claves de compra. Bandas y regiones ayudan
+a editar la distribución, mientras las pertenencias físicas quedan resueltas en el inventario.
+El visor permite zoom, desplazamiento, cambio de nivel y exploración de zonas. Explorar resalta
+sin comprar; elegir compra según la modalidad del evento. La selección se conserva entre pisos.
+
+El mismo mapa puede usarse en eventos diferentes. Sin Taquilla puede cambiar configuración
+comercial sin modificar dimensiones, curvas, iconos, números ni IDs físicos del recinto.
+Una zona no se vuelve general por llamarse «General» o «Galería»: lo declara el evento v2.
+
+## Versiones: no confundir archivo, API, revisión y disponibilidad
+
+| Dato | Versión actual / significado |
+| --- | --- |
+| Mapa físico | `formato: "selector-asientos/mapa"`, versión 8. Contiene todos los niveles del recinto. |
+| Catálogo físico | `formato: "selector-asientos/lugares"`, versión 5. Identidad, ubicación y condición por lugar; no tarifas. |
+| Snapshot comercial | `formato: "sintaquilla/evento-asientos"`, versión 2 recomendada. Versión 1 sigue admitida para venta por lugares/conjuntos. |
+| API pública | `window.SelectorAsientos.version === 2`. No es la versión del mapa. |
+| Revisión física | `recintoId`, `numero`, `estado` y `huella`. El evento queda asociado a una revisión publicada concreta. |
+| Versión comercial | `evento.versionEstado`. Aumenta al cambiar configuración o disponibilidad del evento; no cambia la revisión física. |
+
+Usar el catálogo de la misma revisión para resolver los IDs. No sustituir el mapa de un evento
+publicado por un borrador ni por otra revisión aunque conserve muchos IDs. El servidor conserva
+la ubicación y el precio históricos de cada boleto.
+
+## Preparar el mapa e instalar el visor
+
+1. En `index.html`, importar el mapa en el editor. Revisar inventario, zonas físicas y nombres,
+   niveles, grupos y numeración oficial cuando corresponda. En general pueden conservarse
+   referencias provisionales internas, que no se ofrecerán como asientos asignados.
+2. Confirmar las asignaciones físicas heredadas que el editor marque como pendientes. La
+   publicación valida identidad, ubicación, etiquetas y geometría; no inventa numeración oficial.
+3. Usar **Congelar y exportar revisión** y obtener el JSON publicado. Exportar también el
+   catálogo con **Validar y exportar catálogo de lugares**, a partir de esa misma revisión.
+   Un mapa con `revisionFisica.estado: "borrador"` no se puede conectar a una venta.
+4. Registrar mapa y catálogo en Sin Taquilla. Generar sus identidades opacas de evento para
+   lugares asignados, grupos y zonas generales; no transformar los números visibles en IDs.
+5. Ejecutar `node construir.mjs` y `node construir.mjs --check`. Desplegar juntos los tres
+   archivos de `integracion/`: `index.html`, `selector-asientos.css` y `selector-asientos.js`.
+   Conservar sus rutas relativas; no mezclar JS de una versión con HTML de otra.
+6. Servir esa página bajo el mismo origen que los endpoints del evento y la sesión del comprador.
+   Añadir el arranque del anfitrión en un JS externo, después del JS del selector, con `defer`.
+   Para cambiar esta página desde el proyecto, editar fuentes y regenerar; no editar salidas generadas.
+
+El visor espera el documento completo de `integracion/index.html`; no basta copiar su SVG a
+otra página. No hay una API para montar varios selectores ni para configurar un componente
+por instancia. Un cambio de despliegue debe mantener el DOM y recursos esperados por el motor.
 
 ## Entrega y seguridad
 
@@ -15,8 +77,8 @@ El documento incluye los controles del editor; al conectar un evento queda en co
 recinto fijo y editor deshabilitado. No es un componente que se monte varias veces en una página.
 
 No relajar `style-src 'self'` ni `script-src 'self'`. No se necesita `unsafe-inline`, `eval`,
-CDN ni dependencias. Usar una página propia: la política `frame-ancestors 'none'` de Sin Taquilla
-impide incrustarla en un iframe. Los recursos externos conservan el mismo motor que la entrega
+CDN ni dependencias. Usar una página propia. Si el anfitrión aplica `frame-ancestors 'none'` a
+esta entrega, no podrá incrustarse en un iframe. Los recursos externos conservan el mismo motor que la entrega
 autónoma. El anfitrión protege las rutas administrativas y las operaciones del servidor;
 deshabilitar controles en el navegador no sustituye permisos.
 
@@ -42,7 +104,7 @@ peticiones v1 permanece compatible. Los métodos arrojan `Error` al rechazar dat
 | `actualizarEvento(evento)` | Reemplaza un snapshot validado. Conserva solo selecciones todavía comprables. |
 | `seleccion()` | Devuelve `{ solicitud, cantidad, totalCentavos, conteos }`, copiados, sin referencias mutables al motor. |
 | `cantidadGeneral(zonaId, cantidad)` | Cambia una cantidad entera usando el ID físico de zona. Cero la quita; desconocido, sobrecupo o zona asignada se rechazan. También puede elegirse desde el visor. |
-| `refrescar({ url, signal? })` | GET de disponibilidad, con cookies del mismo origen y sin caché. |
+| `refrescar({ url, signal? })` | GET de disponibilidad, con cookies del mismo origen y sin caché. Devuelve una promesa de `{ seleccion }`. |
 | `reservar({ url, csrf, requestKey?, signal? })` | POST de IDs seleccionados. Devuelve `{ seleccion, resultado }` tras validar la respuesta de disponibilidad. |
 | `cerrarEvento()` | Descarta datos comerciales y restaura el recinto y selección previos de la vista autónoma. |
 
@@ -67,12 +129,101 @@ SelectorAsientos.cargarEvento({
 ```
 
 Las rutas del ejemplo no existen todavía. No hay consulta automática de red ni evento deducido
-de parámetros de URL. El anfitrión asigna endpoints y suministra el CSRF de su sesión en la
+de parámetros de URL. `actualizarCompra` representa una función del anfitrión, no de la API:
+debe implementarse allí u omitirse `alSeleccionar` al cargar. El ejemplo de la sección siguiente
+conecta sin depender de esa función.
+
+El anfitrión asigna endpoints y suministra el CSRF de su sesión en la
 cabecera `X-CSRF-Token`. El transporte rechaza otro origen, credenciales en URL, fragmentos y
 redirecciones; usa `credentials: 'same-origin'`. Permite un POST de reserva en curso a la vez.
 Pasar `signal` para cancelar o limitar el tiempo desde el anfitrión. Generar/conservar
 `requestKey` para reintentos de la misma operación; si se omite se genera un UUID por llamada.
 El servidor debe implementar su idempotencia: el navegador no evita compras duplicadas por sí solo.
+
+## Recorrido de conexión y ejemplos de llamadas
+
+La carga inicial la realiza el anfitrión, con una respuesta `{ mapa, evento }`. El selector no
+busca automáticamente un evento ni deduce su identidad desde la URL. Este arranque puede ir
+en `arranque-selector.js`, servido después de `selector-asientos.js`:
+
+```js
+async function iniciarSelector() {
+  const respuesta = await fetch('/api/eventos/evt_ejemplo/selector', {
+    credentials: 'same-origin', cache: 'no-store', redirect: 'error',
+    headers: { Accept: 'application/json' },
+  });
+  if (!respuesta.ok) throw new Error('No se pudo cargar el evento.');
+  const datos = await respuesta.json();
+  return SelectorAsientos.cargarEvento({ mapa: datos.mapa, evento: datos.evento });
+}
+
+iniciarSelector().catch(error => {
+  document.getElementById('resumen-zona').textContent = error.message;
+});
+```
+
+Las rutas de estos ejemplos deben implementarse o sustituirse por las reales de Sin Taquilla.
+No publicar la página de venta antes de recibir un evento válido: si la carga falla, la vista
+autónoma inicial no es una función habilitada para comprar. El botón de continuar pertenece al
+anfitrión y debe quedar deshabilitado hasta conectar; validar en servidor sigue siendo obligatorio.
+
+La selección se puede observar sin modificar el selector:
+
+```js
+document.addEventListener('selector-asientos:seleccion', ({ detail }) => {
+  // detail: { solicitud, cantidad, totalCentavos, conteos }.
+  // Aquí Sin Taquilla actualiza su interfaz de compra, sin guardar datos en el mapa.
+  console.info('Entradas seleccionadas:', detail.cantidad);
+});
+```
+
+El evento DOM y el callback pueden dispararse varias veces por una interacción o actualización;
+tratarlos como notificaciones de estado, no como instrucciones para crear una orden. Los cambios
+de tarifa pueden conservar la selección válida y actualizar el total: antes de cobrar, el
+anfitrión debe confirmar el importe calculado por su servidor.
+
+Para actualizar disponibilidad, desde el botón de reconsulta o el mecanismo del anfitrión:
+
+```js
+const { seleccion: seleccionActualizada } = await SelectorAsientos.refrescar({
+  url: '/api/eventos/evt_ejemplo/disponibilidad',
+  signal: AbortSignal.timeout(15000),
+});
+// El GET debe responder { evento: snapshotCompleto }, sin necesidad de otro mapa.
+```
+
+No hay sondeo automático ni intervalos internos. El anfitrión decide cuándo refrescar y cómo
+mostrar los errores de la promesa. `signal` es opcional; puede usarse un `AbortController` si
+los navegadores del despliegue no admiten `AbortSignal.timeout`.
+
+Si Sin Taquilla recibe datos por otro canal, puede llamar a `actualizarEvento(snapshotCompleto)`
+directamente; el mismo motor valida revisión, IDs, versión y selección. Nunca escribir estados
+en el SVG ni modificar las variables internas del selector desde el anfitrión.
+
+Para pedir una reserva, desde el flujo de compra del anfitrión:
+
+```js
+async function reservarSeleccion(csrf, requestKey) {
+  if (!SelectorAsientos.seleccion().cantidad) throw new Error('Elige entradas antes de continuar.');
+  const respuesta = await SelectorAsientos.reservar({
+    url: '/api/eventos/evt_ejemplo/reservas',
+    csrf, requestKey, signal: AbortSignal.timeout(15000),
+  });
+  // respuesta.seleccion ya refleja el snapshot confirmado.
+  // respuesta.resultado lo define Sin Taquilla: por ejemplo, ID de reserva y vencimiento.
+  return respuesta.resultado;
+}
+```
+
+El token CSRF lo obtiene el anfitrión de su sesión; no se incluye en el mapa ni se persiste
+mediante el selector. `requestKey` debe tener de 16 a 100 caracteres ASCII alfanuméricos,
+guion o guion bajo. Si se omite, el cliente usa `crypto.randomUUID()`, que requiere un contexto
+seguro del navegador. Desplegar compra mediante HTTPS. Conservar la clave en el flujo de la orden.
+
+Tras una reserva, Sin Taquilla decide la navegación a pago; el selector no navega ni emite boletos.
+Si falla el POST, no asumir que el servidor no reservó: reconsultar el estado de la operación
+por su clave antes de crear otra intención de compra. Las selecciones pueden haberse soltado;
+el conector no guarda una orden ni reenvía automáticamente la petición anterior.
 
 ## Snapshot completo, versión 1
 
@@ -128,6 +279,11 @@ y precio vienen del evento. No sobrescribir un nombre físico al cambiar una tar
   comercial. Una versión igual con datos iguales confirma sin perder selección; una igual con
   datos diferentes se rechaza. Versiones anteriores y respuestas de otra sesión/evento se rechazan.
   Las respuestas son snapshots completos; no se interpretan como parches.
+
+Las identidades opacas de evento/categoría/lugar/grupo/zona general usan entre 3 y 100
+caracteres ASCII: empiezan por letra y continúan con letras, números, guion o guion bajo.
+No usar etiquetas como «A-1», posiciones o IDs de base de datos como identidad pública de compra.
+Todos los precios están en **centavos enteros MXN**; actualmente no se admiten otras monedas.
 
 Conteos: inventariados, utilizables, habilitados, libres, comprables y conjuntos completos
 comprables. Un integrante libre puede no ser comprable si falla su conjunto. Reservar y vender
@@ -216,6 +372,8 @@ secretos o datos personales como mensajes públicos.
 
 ## Trabajo del lado de Sin Taquilla
 
+Las referencias a archivos y funciones de aquel servidor en esta sección son antecedentes de
+una lectura histórica, no una API que este repositorio provea ni una garantía de su estado actual.
 La lectura local fue de `docs/variantes-selector-asientos`, HEAD `cac1455a`, con cambios sin commit
 en eventos, ventas y esquema. No se tocaron esos archivos. Revisar su estado actual antes de aplicar
 esta guía; la propuesta anterior de filas/columnas no representa por sí sola los niveles y grupos v5.
@@ -258,3 +416,55 @@ trabajo del otro proyecto; aquí se implementa únicamente su contrato y comport
 Las pruebas de este repositorio verifican el cliente con respuestas HTTP de ejemplo y CSP.
 **No demuestran atomicidad, autenticación ni venta real del servidor.** Esas pruebas pertenecen
 al proyecto Sin Taquilla y son necesarias antes de poner la integración en servicio.
+
+## Diagnóstico de problemas comunes
+
+| Síntoma o rechazo | Qué revisar |
+| --- | --- |
+| No existe `window.SelectorAsientos` | Ruta del JS, carga con `defer`, orden del arranque, CSP y que los tres recursos correspondan a la misma versión. |
+| Evento requiere revisión publicada | Se entregó un borrador; publicar en el editor y asociar el evento a ese JSON y catálogo. |
+| Evento corresponde a otra revisión | Comparar `recintoId`, `numero` y `huella` del mapa publicado con `evento.revision`; no recalcular la huella en el cliente de compra. |
+| Faltan modalidades de zonas | V2 necesita una entrada para cada zona física, incluso vacía o cerrada. |
+| Faltan identidades de lugares | Falta un lugar asignado, incluido excluido/inutilizable. Los generales se omiten de `lugares` v2. |
+| Tarifa general por zona, sin tarifas por butaca | Quitar las asignaciones que alcanzan butacas generales, incluso las de nivel/fila compartidos; usar su `categoriaId` de zona. |
+| Tarifas contradictorias | Dos referencias del mismo lugar asignan categorías distintas. El orden de asignación no resuelve el conflicto. |
+| Cupo general superior a capacidad | Recontar utilizables no excluidos; el cupo ofrecido no puede excederlos y el saldo no puede exceder el cupo. |
+| Misma versión contiene datos diferentes | Incrementar `versionEstado` cuando cambie precio, habilitación, modalidad de grupo o disponibilidad; no reutilizar versiones para snapshots distintos. |
+| Cambió modalidad o identidad de zona | Mantenerlas estables durante actualizaciones; para otra configuración cargar explícitamente una nueva sesión, con las restricciones del servidor sobre ventas previas. |
+| URL rechazada o falta CSRF | Endpoint HTTP(S) del mismo origen, sin credenciales/fragmento; token válido del anfitrión para POST. No redirigir a login: responder el error HTTP apropiado. |
+| Galería muestra datos de butaca | Se abrió solo el mapa, se envió v1 o se declaró la zona como asignada. Para general usar snapshot v2 y modalidad de zona `general`. |
+| Entrada gratuita no seleccionable | Precio cero no abre la zona: revisar cupo, saldo confirmado, exclusiones, condición física y categoría activa. |
+
+## Comprobación de la integración
+
+Antes de conectar un recinto real, usar [el ejemplo v1](ejemplo-conector-evento.json) y
+[el ejemplo v2 mixto](ejemplo-conector-general.json). Cada archivo contiene `mapa`, `evento`
+y `esperado`; los dos primeros se pasan a `cargarEvento` y el tercero describe los conteos
+iniciales. Son datos ficticios de prueba, no tarifas ni configuración del Clavijero.
+
+1. Cargar mapa publicado y snapshot íntegro; comprobar editor cerrado y conteos iniciales.
+2. Elegir una butaca asignada, un palco completo y entradas generales; verificar resumen,
+   total en centavos, IDs opacos y ausencia de números de butaca para general.
+3. Cambiar de nivel y explorar otra zona; la compra debe conservarse sin duplicar cupos.
+4. Cerrar una zona o reservar un integrante del grupo; el cliente debe soltar selección inválida
+   sin completar conjuntos ni reducir silenciosamente cantidades generales.
+5. Probar gratis, agotado y desconocido por separado; desconocido no permite comprar.
+6. Reservar mediante POST con CSRF y clave; responder un snapshot completo más reciente y el
+   resultado de reserva. General suelta lo enviado aunque aún quede saldo; el mapa no cambia.
+7. Simular 409, fallo de consulta y respuesta atrasada; recuperar mediante reconsulta válida.
+8. Comprobar que no se escriben evento, precios, token ni cantidades en JSON físico/localStorage.
+9. En Sin Taquilla, probar competencia por el último asiento/cupo, caducidad, cancelación,
+   idempotencia y compra mixta dentro de una transacción. El servidor calcula el precio final.
+10. Abrir la entrega con la CSP de producción, en escritorio y móvil, sin recursos inline ni
+    violaciones de política; verificar teclado, etiquetas accesibles y selección entre niveles.
+
+Verificación reproducible de este proyecto:
+
+```bash
+node construir.mjs --check
+node --test pruebas.mjs
+node --test pruebas-navegador.mjs
+```
+
+Estas comprobaciones validan el selector y sus ejemplos de transporte. Conectar el sistema
+real requiere los endpoints y la lógica transaccional del anfitrión descritos arriba.

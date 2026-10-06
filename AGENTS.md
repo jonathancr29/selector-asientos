@@ -37,7 +37,7 @@ en el propio archivo.
 | `src/modelo.js`, `src/dibujo.js`, `src/interfaz.js`, `src/editor.js`, `src/persistencia.js` | Secciones fuente del script, unidas en ese orden. |
 | `construir.mjs` | Genera `index.html` y comprueba que esté sincronizado con `--check`. |
 | `src/conector.js`, `integracion/` | API de eventos y entrega generada con HTML/CSS/JS externos para CSP; no editar los archivos generados. |
-| `docs/INTEGRACION_EVENTOS_SINTAQUILLA.md` | Snapshot comercial, API pública, transporte y trabajo pendiente de servidor. |
+| `docs/INTEGRACION_EVENTOS_SINTAQUILLA.md` | Guía de conexión: publicación del mapa, versiones, instalación, snapshot comercial, API, transporte, diagnóstico y responsabilidades del servidor. |
 | `medir-render.mjs` | Medición local reproducible del plano de 18.720 butacas en Chrome o Edge; no bloquea la CI. |
 | `pruebas.mjs` | Pruebas con `node:test` de la parte del script que no usa el DOM, y dos que vigilan que estos documentos sigan describiendo el código. |
 | `pruebas-navegador.mjs` | Recorridos de la interfaz en Chrome o Edge: guardado, recarga, importación, grupo, teclado y accesibilidad. |
