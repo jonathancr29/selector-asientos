@@ -4,6 +4,11 @@ La fase 5 del plan revisado añade mapa v8 y catálogo v5, con sectores, filas f
 sobre los niveles y geometría libre de fase 4. La fase 6 implementa el conector del selector;
 la integración de servidor sigue pendiente. Ver [guía de entrega](INTEGRACION_EVENTOS_SINTAQUILLA.md).
 
+El conector cliente actualizado en el PR #61 admite snapshot comercial v2, incluida compra
+mixta con acceso general por cantidad. Para conectar una implementación nueva, seguir primero
+la [guía operativa del selector y conector](INTEGRACION_EVENTOS_SINTAQUILLA.md), que documenta
+el comportamiento ejecutable y conserva la compatibilidad con v1.
+
 Las decisiones nuevas de separación física/comercial y venta agrupada se recogen en
 [Contrato de recinto, evento y conector](CONTRATO_RECINTO_EVENTO.md), que prevalece en esas
 materias. Las secciones siguientes conservan el contexto histórico de la integración inicial.

@@ -11,6 +11,13 @@ navegador tal cual. Las fuentes están separadas y se unen con Node, sin depende
 Tres formas de venta pueden convivir en el mismo plano: filas numeradas, mesas con lugares
 agrupados y zonas de acceso general. Hay salas mixtas, solo de filas y solo de mesas.
 
+Para integrar el visor en Sin Taquilla, empieza por la
+[guía del selector y su conector](docs/INTEGRACION_EVENTOS_SINTAQUILLA.md).
+Incluye preparación y publicación del mapa, versiones de los documentos, instalación con CSP,
+API del navegador, carga del evento, actualización de disponibilidad, reservas y diagnóstico.
+El [ejemplo v2 completo](docs/ejemplo-conector-general.json) permite verificar compra mixta con
+butacas asignadas, mesa/palco completo y acceso general por cantidad.
+
 ## Cómo probarlo
 
 Abre `index.html` en el navegador. Si prefieres servirlo:
