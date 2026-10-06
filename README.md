@@ -893,6 +893,9 @@ no se guarda en el JSON o en localStorage.
 
 Los palcos dispuestos alrededor del escenario se destacan con una franja continua y bordes
 suaves, manteniendo el centro vacío. En otras distribuciones se usan contornos separados.
+En el visor, una línea punteada separa cada par de palcos vecinos de esa franja, siguiendo
+su distribución y recortada entre el borde interior y el exterior. Son referencias visuales
+sin interacción; permanecen al destacar un palco y no crean recuadros superpuestos.
 **Destacar palco** permite encuadrar y resaltar únicamente un compartimento; su resumen muestra
 los lugares, precios y disponibilidad de ese palco. Volver a **Todos los palcos** recupera el
 resaltado de la zona. Los recuadros de referencia permanecen en el editor y se ocultan al público.
