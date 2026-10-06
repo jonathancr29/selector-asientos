@@ -46,6 +46,14 @@ function dibujarMuebles() {
     if (!palcos.has(b.grupo.id)) palcos.set(b.grupo.id, []);
     palcos.get(b.grupo.id).push(b);
   }
+  const zonasPalco = new Map();
+  for (const lista of palcos.values()) {
+    const zona = lista[0].zona;
+    if (!zonasPalco.has(zona)) zonasPalco.set(zona, []);
+    zonasPalco.get(zona).push(...lista);
+  }
+  const divisionesPorZona = new Map(modo === 'vista' ? [...zonasPalco].map(([id, lista]) =>
+    [id, divisionesDePalcos(lista, centroDelEscenario(escenario))]) : []);
   for (const lista of palcos.values()) {
     const x = Math.min(...lista.map((b) => b.x));
     const y = Math.min(...lista.map((b) => b.y));
@@ -53,18 +61,21 @@ function dibujarMuebles() {
     const alto = Math.max(...lista.map((b) => b.y)) + 1 - y;
     const g = nodo('g', { class: 'palco-fisico', 'aria-hidden': 'true' });
     if (modo === 'editor') g.appendChild(nodo('rect', { x: x * PASO - 2, y: y * PASO - 2, width: ancho * PASO + 4, height: alto * PASO + 4, rx: 3 }));
-    g.appendChild(texto('subtitulo', x * PASO, y * PASO - 4, lista[0].grupo.nombre));
+    if (modo === 'editor') g.appendChild(texto('subtitulo', x * PASO, y * PASO - 4, lista[0].grupo.nombre));
+    else {
+      const r = rotuloDePalco(lista, centroDelEscenario(escenario), divisionesPorZona.get(lista[0].zona));
+      const t = nodo('text', { class: 'rotulo-palco', x: r.x * PASO, y: r.y * PASO });
+      r.lineas.forEach((linea, i) => {
+        const tramo = nodo('tspan', { x: r.x * PASO, y: r.y * PASO + (i - (r.lineas.length - 1) / 2) * 6 });
+        tramo.textContent = linea; t.appendChild(tramo);
+      });
+      g.appendChild(t);
+    }
     capaMuebles.appendChild(g);
   }
   if (modo === 'vista') {
-    const zonasPalco = new Map();
-    for (const lista of palcos.values()) {
-      const zona = lista[0].zona;
-      if (!zonasPalco.has(zona)) zonasPalco.set(zona, []);
-      zonasPalco.get(zona).push(...lista);
-    }
     const divisiones = nodo('g', { class: 'divisiones-palcos', 'aria-hidden': 'true' });
-    for (const lista of zonasPalco.values()) for (const d of divisionesDePalcos(lista, centroDelEscenario(escenario))) {
+    for (const lista of divisionesPorZona.values()) for (const d of lista) {
       divisiones.appendChild(nodo('line', { x1: d.desde.x * PASO, y1: d.desde.y * PASO,
         x2: d.hasta.x * PASO, y2: d.hasta.y * PASO }));
     }

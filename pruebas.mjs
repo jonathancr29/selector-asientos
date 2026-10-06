@@ -163,6 +163,22 @@ test('palcos: divisiones únicas entre vecinos, recortadas y sin atravesar las b
   assert.deepEqual(a.divisionesDePalcos(lista.slice(0, 3), centro), []);
 });
 
+test('palcos: rótulos legibles separados de butacas y divisiones sin renombrar el inventario', () => {
+  const a = cargar();
+  const lista = [{ x: 0, y: 1, grupo: { id: 'p1', nombre: 'Palco C' } }, { x: 0, y: 3, grupo: { id: 'p1', nombre: 'Palco C' } }];
+  const antes = JSON.stringify(lista);
+  const divisiones = [{ palcos: ['p1', 'p2'], desde: { x: -3, y: 2 }, hasta: { x: 3, y: 2 } }];
+  const r = a.rotuloDePalco(lista, { x: 10, y: 10 }, divisiones);
+  assert.ok(r.y >= 2.45 - 1e-6, 'el texto queda separado de la división superior');
+  assert.ok(r.x < -.2, 'el texto queda hacia el exterior de las butacas');
+  assert.equal(JSON.stringify(lista), antes);
+  const presidencial = lista.map(b => ({ ...b, grupo: { ...b.grupo, nombre: 'Palco Presidencial' } }));
+  const p = a.rotuloDePalco(presidencial, { x: 0, y: -Infinity });
+  assert.deepEqual(p.lineas, ['PALCO', 'PRESIDENCIAL']);
+  assert.ok(Number.isFinite(p.x) && Number.isFinite(p.y));
+  assert.equal(a.rotuloDePalco([], { x: 0, y: 0 }), null);
+});
+
 test('laterales: cada plantilla conserva lugares, etiquetas, pertenencias y escenario al ampliar', () => {
   for (const tipo of Object.keys(cargar().TIPOS_DE_SALA)) for (const lado of ['izquierdo', 'derecho']) {
     const a = cargar(); const sala = a.generarPlano(tipo); const p = a.planoDesdeSala(tipo, sala);

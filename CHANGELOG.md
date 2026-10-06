@@ -4,7 +4,20 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Divisiones punteadas entre palcos
+## Sin publicar — Identificación visual de palcos
+
+Rama `claude/rotulos-palcos`.
+
+- Letras claras y horizontales hacia el exterior de cada palco, sin el prefijo «Palco» en
+  el plano; el palco presidencial conserva su identificación completa en dos líneas.
+- Nombres físicos, etiquetas accesibles, divisiones y resaltado individual conservados.
+- Verificado: 208 pruebas de lógica y 30 de navegador; identificación de los 19 palcos,
+  rótulos separados de divisiones y revisión visual en escritorio y móvil, con entrega CSP.
+
+## 2026-10-05 — PR #56: Divisiones punteadas entre palcos
+
+[PR #56](https://github.com/jonathancr29/selector-asientos/pull/56), fusionado en `main` con el
+commit `d1c71f3`.
 
 Rama `claude/divisiones-palcos`.
 

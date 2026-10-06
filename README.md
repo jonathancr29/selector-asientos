@@ -896,6 +896,10 @@ suaves, manteniendo el centro vacío. En otras distribuciones se usan contornos 
 En el visor, una línea punteada separa cada par de palcos vecinos de esa franja, siguiendo
 su distribución y recortada entre el borde interior y el exterior. Son referencias visuales
 sin interacción; permanecen al destacar un palco y no crean recuadros superpuestos.
+Los rótulos del visor muestran la identificación breve del palco hacia el exterior de sus
+butacas, con letras claras y horizontales. El palco presidencial se identifica en dos líneas:
+**PALCO / PRESIDENCIAL**. Los nombres físicos completos permanecen en el editor, el selector
+de palcos y las etiquetas accesibles de las butacas.
 **Destacar palco** permite encuadrar y resaltar únicamente un compartimento; su resumen muestra
 los lugares, precios y disponibilidad de ese palco. Volver a **Todos los palcos** recupera el
 resaltado de la zona. Los recuadros de referencia permanecen en el editor y se ocultan al público.
