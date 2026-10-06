@@ -4015,6 +4015,43 @@ function contornosDeZona(lista) {
       contornos.push([{ x: x - .7, y: y - .7 }, { x: x + .7, y: y - .7 },
         { x: x + .7, y: y + .7 }, { x: x - .7, y: y + .7 }]); return;
     }
+    // Ajuste ortogonal: el contorno no reproduce el ruido de un trazado manual.
+    const cx = puntos.reduce((s, p) => s + p.x, 0) / puntos.length;
+    const cy = puntos.reduce((s, p) => s + p.y, 0) / puntos.length;
+    let xx = 0, yy = 0, xy = 0;
+    for (const p of puntos) { xx += (p.x - cx) ** 2; yy += (p.y - cy) ** 2; xy += (p.x - cx) * (p.y - cy); }
+    const angulo = Math.atan2(2 * xy, xx - yy) / 2;
+    let dx = Math.cos(angulo), dy = Math.sin(angulo);
+    // Los tramos casi verticales u horizontales comparten una referencia recta.
+    if (Math.abs(dx) < .06) { dx = 0; dy = 1; }
+    else if (Math.abs(dy) < .06) { dx = 1; dy = 0; }
+    const desvio = Math.max(...puntos.map((p) => Math.abs(-(p.x - cx) * dy + (p.y - cy) * dx)));
+    const primero = puntos[0], segundo = puntos[1], ultimo = puntos.at(-1), penultimo = puntos.at(-2);
+    const giro = Math.abs(Math.atan2((segundo.x - primero.x) * (ultimo.y - penultimo.y) -
+      (segundo.y - primero.y) * (ultimo.x - penultimo.x), (segundo.x - primero.x) * (ultimo.x - penultimo.x) +
+      (segundo.y - primero.y) * (ultimo.y - penultimo.y)));
+    if (desvio <= .2 && (desvio <= .08 || giro <= Math.PI / 22.5)) {
+      const proyecciones = puntos.map((p) => (p.x - cx) * dx + (p.y - cy) * dy);
+      const desde = Math.min(...proyecciones) - .7, hasta = Math.max(...proyecciones) + .7;
+      const margen = .7 + desvio;
+      contornos.push([[desde, margen], [hasta, margen], [hasta, -margen], [desde, -margen]]
+        .map(([t, n]) => ({ x: cx + dx * t - dy * n, y: cy + dy * t + dx * n })));
+      return;
+    }
+    // Curva cuadrática continua por los puntos medios: evita quiebres entre butacas.
+    const suaves = [primero];
+    let inicio = primero;
+    for (let i = 1; i < puntos.length - 1; i++) {
+      const control = puntos[i], siguiente = puntos[i + 1];
+      const fin = i === puntos.length - 2 ? siguiente : { x: (control.x + siguiente.x) / 2, y: (control.y + siguiente.y) / 2 };
+      for (let j = 1; j <= 8; j++) {
+        const t = j / 8, u = 1 - t;
+        suaves.push({ x: u * u * inicio.x + 2 * u * t * control.x + t * t * fin.x,
+          y: u * u * inicio.y + 2 * u * t * control.y + t * t * fin.y });
+      }
+      inicio = fin;
+    }
+    puntos = suaves;
     const lados = [[], []];
     puntos.forEach((p, i) => {
       const antes = puntos[Math.max(0, i - 1)], despues = puntos[Math.min(puntos.length - 1, i + 1)];

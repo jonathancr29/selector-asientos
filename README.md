@@ -891,6 +891,10 @@ arquitectónicos. No cubren el centro vacío con un rectángulo de toda la zona 
 en butacas. Explorar no selecciona ni reserva lugares, no cambia pertenencias ni revisiones y
 no se guarda en el JSON o en localStorage.
 
+Los tramos de filas casi rectos se destacan con rectángulos orientados; las curvas se
+suavizan siguiendo su recorrido. Los extremos se redondean y las pequeñas variaciones del
+trazado no producen bordes quebrados. Este ajuste es visual y no mueve las butacas.
+
 Los palcos dispuestos alrededor del escenario se destacan con una franja continua y bordes
 suaves, manteniendo el centro vacío. En otras distribuciones se usan contornos separados.
 En el visor, una línea punteada separa cada par de palcos vecinos de esa franja, siguiendo
