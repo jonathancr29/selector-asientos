@@ -693,6 +693,8 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       assert.equal(await protocolo.evaluar('capaRealceZona.children.length'), 1);
       assert.ok(await protocolo.evaluar('capaRealceZona.firstChild.getAttribute("d").includes("Q")'));
       assert.equal(await protocolo.evaluar('document.querySelectorAll(".palco-fisico rect").length'), 0);
+      assert.equal(await protocolo.evaluar('document.querySelector(".rotulo-palco").textContent'), 'B');
+      assert.match(await protocolo.evaluar('document.querySelector(".butaca[data-id=F3-1-1]").getAttribute("aria-label")'), /Palco B/);
       assert.equal(await protocolo.evaluar('getComputedStyle(document.querySelector(".divisiones-palcos")).pointerEvents'), 'none');
       assert.equal(await protocolo.evaluar('document.querySelectorAll(".divisiones-palcos line").length'), 0);
       assert.match(await protocolo.evaluar('document.querySelector("#resumen-zona").textContent'), /700.*por palco completo/);

@@ -4165,6 +4165,38 @@ function divisionesDePalcos(lista, centro) {
   return resultado;
 }
 
+// Rótulo visual hacia el exterior del palco; no cambia su nombre físico.
+function rotuloDePalco(lista, centro, divisiones = []) {
+  if (!lista.length) return null;
+  const nombre = lista[0].grupo.nombre.replace(/^Palco\s+/i, '');
+  const lineas = /^presidencial$/i.test(nombre) ? ['PALCO', 'PRESIDENCIAL'] : [nombre];
+  const cx = lista.reduce((s, b) => s + b.x + .5, 0) / lista.length;
+  const cy = lista.reduce((s, b) => s + b.y + .5, 0) / lista.length;
+  const finito = Number.isFinite(centro.x) && Number.isFinite(centro.y);
+  const distancia = finito ? Math.hypot(cx - centro.x, cy - centro.y) : 0;
+  const nx = distancia > .01 ? (cx - centro.x) / distancia : 0;
+  const ny = distancia > .01 ? (cy - centro.y) / distancia : -1;
+  const exterior = Math.max(...lista.map(b => (b.x + .5 - cx) * nx + (b.y + .5 - cy) * ny));
+  const semiancho = Math.max(...lineas.map(l => l.length)) * .17;
+  const semialto = lineas.length === 2 ? .5 : .3;
+  const margen = .7 + Math.abs(nx) * semiancho + Math.abs(ny) * semialto;
+  const posicion = { x: cx + nx * (exterior + margen), y: cy + ny * (exterior + margen), lineas };
+  const limites = divisiones.filter(d => d.palcos.includes(lista[0].grupo.id)).map(d => {
+    const dx = d.hasta.x - d.desde.x, dy = d.hasta.y - d.desde.y, largo = Math.hypot(dx, dy);
+    const signo = (cx - d.desde.x) * -dy + (cy - d.desde.y) * dx >= 0 ? 1 : -1;
+    return { x: d.desde.x, y: d.desde.y, nx: -dy / largo * signo, ny: dx / largo * signo };
+  });
+  limites.push({ x: cx + nx * (exterior + .7), y: cy + ny * (exterior + .7), nx, ny });
+  for (let i = 0; i < 32; i++) for (const l of limites) {
+    const espacio = (posicion.x - l.x) * l.nx + (posicion.y - l.y) * l.ny;
+    const requerido = Math.abs(l.nx) * semiancho + Math.abs(l.ny) * semialto + .15;
+    if (espacio < requerido) {
+      posicion.x += l.nx * (requerido - espacio); posicion.y += l.ny * (requerido - espacio);
+    }
+  }
+  return posicion;
+}
+
 // === Fin de la parte sin DOM. pruebas.mjs evalua todo lo anterior en Node. ===
 
 // ---------------------------------------------------------------------------
@@ -4215,6 +4247,14 @@ function dibujarMuebles() {
     if (!palcos.has(b.grupo.id)) palcos.set(b.grupo.id, []);
     palcos.get(b.grupo.id).push(b);
   }
+  const zonasPalco = new Map();
+  for (const lista of palcos.values()) {
+    const zona = lista[0].zona;
+    if (!zonasPalco.has(zona)) zonasPalco.set(zona, []);
+    zonasPalco.get(zona).push(...lista);
+  }
+  const divisionesPorZona = new Map(modo === 'vista' ? [...zonasPalco].map(([id, lista]) =>
+    [id, divisionesDePalcos(lista, centroDelEscenario(escenario))]) : []);
   for (const lista of palcos.values()) {
     const x = Math.min(...lista.map((b) => b.x));
     const y = Math.min(...lista.map((b) => b.y));
@@ -4222,18 +4262,21 @@ function dibujarMuebles() {
     const alto = Math.max(...lista.map((b) => b.y)) + 1 - y;
     const g = nodo('g', { class: 'palco-fisico', 'aria-hidden': 'true' });
     if (modo === 'editor') g.appendChild(nodo('rect', { x: x * PASO - 2, y: y * PASO - 2, width: ancho * PASO + 4, height: alto * PASO + 4, rx: 3 }));
-    g.appendChild(texto('subtitulo', x * PASO, y * PASO - 4, lista[0].grupo.nombre));
+    if (modo === 'editor') g.appendChild(texto('subtitulo', x * PASO, y * PASO - 4, lista[0].grupo.nombre));
+    else {
+      const r = rotuloDePalco(lista, centroDelEscenario(escenario), divisionesPorZona.get(lista[0].zona));
+      const t = nodo('text', { class: 'rotulo-palco', x: r.x * PASO, y: r.y * PASO });
+      r.lineas.forEach((linea, i) => {
+        const tramo = nodo('tspan', { x: r.x * PASO, y: r.y * PASO + (i - (r.lineas.length - 1) / 2) * 6 });
+        tramo.textContent = linea; t.appendChild(tramo);
+      });
+      g.appendChild(t);
+    }
     capaMuebles.appendChild(g);
   }
   if (modo === 'vista') {
-    const zonasPalco = new Map();
-    for (const lista of palcos.values()) {
-      const zona = lista[0].zona;
-      if (!zonasPalco.has(zona)) zonasPalco.set(zona, []);
-      zonasPalco.get(zona).push(...lista);
-    }
     const divisiones = nodo('g', { class: 'divisiones-palcos', 'aria-hidden': 'true' });
-    for (const lista of zonasPalco.values()) for (const d of divisionesDePalcos(lista, centroDelEscenario(escenario))) {
+    for (const lista of divisionesPorZona.values()) for (const d of lista) {
       divisiones.appendChild(nodo('line', { x1: d.desde.x * PASO, y1: d.desde.y * PASO,
         x2: d.hasta.x * PASO, y2: d.hasta.y * PASO }));
     }
