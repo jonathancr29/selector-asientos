@@ -56,6 +56,20 @@ function dibujarMuebles() {
     g.appendChild(texto('subtitulo', x * PASO, y * PASO - 4, lista[0].grupo.nombre));
     capaMuebles.appendChild(g);
   }
+  if (modo === 'vista') {
+    const zonasPalco = new Map();
+    for (const lista of palcos.values()) {
+      const zona = lista[0].zona;
+      if (!zonasPalco.has(zona)) zonasPalco.set(zona, []);
+      zonasPalco.get(zona).push(...lista);
+    }
+    const divisiones = nodo('g', { class: 'divisiones-palcos', 'aria-hidden': 'true' });
+    for (const lista of zonasPalco.values()) for (const d of divisionesDePalcos(lista, centroDelEscenario(escenario))) {
+      divisiones.appendChild(nodo('line', { x1: d.desde.x * PASO, y1: d.desde.y * PASO,
+        x2: d.hasta.x * PASO, y2: d.hasta.y * PASO }));
+    }
+    capaMuebles.appendChild(divisiones);
+  }
   for (const r of planos[tipoActual]?.regionesLibres || TIPOS_DE_SALA[tipoActual].regionesLibres || []) {
     const g = nodo('g', { class: 'region-libre', 'aria-hidden': 'true', transform: `translate(${r.x * PASO} ${r.y * PASO}) rotate(${r.giro})` });
     g.append(nodo('rect', { x: 0, y: 0, width: r.ancho * PASO, height: r.alto * PASO, rx: 2 }), texto('subtitulo', 3, 5, r.nombre));

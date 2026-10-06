@@ -4111,6 +4111,60 @@ function contornosDePalcos(lista, centro) {
   return [[...externos, ...internos.reverse()]];
 }
 
+// Separadores entre compartimentos vecinos: perpendiculares al recorrido y
+// recortados contra la franja, sin añadir cajas ni límites de compra.
+function divisionesDePalcos(lista, centro) {
+  const grupos = new Map();
+  for (const b of lista) {
+    if (!grupos.has(b.grupo.id)) grupos.set(b.grupo.id, []);
+    grupos.get(b.grupo.id).push(b);
+  }
+  if (grupos.size < 3) return [];
+  const contornos = contornosDePalcos(lista, centro);
+  if (contornos.length !== 1) return [];
+  const orden = [...grupos.entries()].map(([id, lugares]) => {
+    const x = lugares.reduce((s, b) => s + b.x + .5, 0) / lugares.length;
+    const y = lugares.reduce((s, b) => s + b.y + .5, 0) / lugares.length;
+    return { id, lugares, x, y, angulo: Math.atan2(y - centro.y, x - centro.x) };
+  }).sort((a, b) => a.angulo - b.angulo);
+  const resultado = [];
+  for (let i = 1; i < orden.length; i++) {
+    const a = orden[i - 1], b = orden[i];
+    const distancia = Math.hypot(b.x - a.x, b.y - a.y);
+    if (distancia < .01) continue;
+    const nx = (b.x - a.x) / distancia, ny = (b.y - a.y) / distancia;
+    const proyeccion = (p) => (p.x + .5) * nx + (p.y + .5) * ny;
+    const finA = Math.max(...a.lugares.map(proyeccion)), inicioB = Math.min(...b.lugares.map(proyeccion));
+    // Si no hay una separación legible, no atravesar una butaca para inventarla.
+    if (inicioB - finA < 1) continue;
+    const mitad = (inicioB + finA) / 2;
+    const ajuste = mitad - ((a.x + b.x) / 2 * nx + (a.y + b.y) / 2 * ny);
+    const p = { x: (a.x + b.x) / 2 + ajuste * nx, y: (a.y + b.y) / 2 + ajuste * ny };
+    const dx = -ny, dy = nx, cruces = [];
+    const borde = contornos[0];
+    for (let j = 0; j < borde.length; j++) {
+      const v = borde[j], w = borde[(j + 1) % borde.length];
+      const ex = w.x - v.x, ey = w.y - v.y, determinante = dx * ey - dy * ex;
+      if (Math.abs(determinante) < 1e-8) continue;
+      const vx = v.x - p.x, vy = v.y - p.y;
+      const t = (vx * ey - vy * ex) / determinante;
+      const u = (vx * dy - vy * dx) / determinante;
+      if (u >= 0 && u < 1) cruces.push(t);
+    }
+    cruces.sort((x, y) => x - y);
+    // Escoger el tramo dentro de la franja que queda junto a estos dos palcos,
+    // aunque la recta también cruce el otro lateral de la herradura.
+    let tramo = null, cercania = Infinity;
+    for (let j = 0; j + 1 < cruces.length; j += 2) {
+      const desde = cruces[j], hasta = cruces[j + 1];
+      const distanciaTramo = desde > 0 ? desde : hasta < 0 ? -hasta : 0;
+      if (distanciaTramo < cercania) { tramo = [desde, hasta]; cercania = distanciaTramo; }
+    }
+    if (tramo) resultado.push({ palcos: [a.id, b.id], desde: { x: p.x + dx * tramo[0], y: p.y + dy * tramo[0] }, hasta: { x: p.x + dx * tramo[1], y: p.y + dy * tramo[1] } });
+  }
+  return resultado;
+}
+
 // === Fin de la parte sin DOM. pruebas.mjs evalua todo lo anterior en Node. ===
 
 // ---------------------------------------------------------------------------
@@ -4170,6 +4224,20 @@ function dibujarMuebles() {
     if (modo === 'editor') g.appendChild(nodo('rect', { x: x * PASO - 2, y: y * PASO - 2, width: ancho * PASO + 4, height: alto * PASO + 4, rx: 3 }));
     g.appendChild(texto('subtitulo', x * PASO, y * PASO - 4, lista[0].grupo.nombre));
     capaMuebles.appendChild(g);
+  }
+  if (modo === 'vista') {
+    const zonasPalco = new Map();
+    for (const lista of palcos.values()) {
+      const zona = lista[0].zona;
+      if (!zonasPalco.has(zona)) zonasPalco.set(zona, []);
+      zonasPalco.get(zona).push(...lista);
+    }
+    const divisiones = nodo('g', { class: 'divisiones-palcos', 'aria-hidden': 'true' });
+    for (const lista of zonasPalco.values()) for (const d of divisionesDePalcos(lista, centroDelEscenario(escenario))) {
+      divisiones.appendChild(nodo('line', { x1: d.desde.x * PASO, y1: d.desde.y * PASO,
+        x2: d.hasta.x * PASO, y2: d.hasta.y * PASO }));
+    }
+    capaMuebles.appendChild(divisiones);
   }
   for (const r of planos[tipoActual]?.regionesLibres || TIPOS_DE_SALA[tipoActual].regionesLibres || []) {
     const g = nodo('g', { class: 'region-libre', 'aria-hidden': 'true', transform: `translate(${r.x * PASO} ${r.y * PASO}) rotate(${r.giro})` });

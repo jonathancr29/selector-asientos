@@ -139,6 +139,30 @@ test('palcos: disposiciones rectas, aisladas o sin escenario conservan contornos
   assert.deepEqual(a.contornosDePalcos([], { x: 0, y: 0 }), []);
 });
 
+test('palcos: divisiones únicas entre vecinos, recortadas y sin atravesar las butacas', () => {
+  const a = cargar(), centro = { x: 20, y: 20 };
+  const lista = Array.from({ length: 8 }, (_, i) => [9, 11, 13].map(r => {
+    const angulo = -3 + i * .4;
+    return { x: centro.x + r * Math.cos(angulo) - .5, y: centro.y + r * Math.sin(angulo) - .5, grupo: { id: 'p' + i } };
+  })).flat();
+  const antes = JSON.stringify(lista), divisiones = a.divisionesDePalcos(lista, centro);
+  assert.equal(divisiones.length, 7);
+  assert.equal(new Set(divisiones.map(d => d.palcos.join(','))).size, 7);
+  for (const d of divisiones) {
+    assert.ok(Object.values(d.desde).every(Number.isFinite));
+    assert.ok(Object.values(d.hasta).every(Number.isFinite));
+    const dx = d.hasta.x - d.desde.x, dy = d.hasta.y - d.desde.y;
+    assert.ok(Math.hypot(dx, dy) > 3);
+    for (const b of lista.filter(b => d.palcos.includes(b.grupo.id))) {
+      const distancia = Math.abs(dx * (b.y + .5 - d.desde.y) - dy * (b.x + .5 - d.desde.x)) / Math.hypot(dx, dy);
+      assert.ok(distancia >= .5);
+    }
+  }
+  assert.equal(JSON.stringify(lista), antes);
+  assert.deepEqual(a.divisionesDePalcos(lista, { x: 0, y: -Infinity }), []);
+  assert.deepEqual(a.divisionesDePalcos(lista.slice(0, 3), centro), []);
+});
+
 test('laterales: cada plantilla conserva lugares, etiquetas, pertenencias y escenario al ampliar', () => {
   for (const tipo of Object.keys(cargar().TIPOS_DE_SALA)) for (const lado of ['izquierdo', 'derecho']) {
     const a = cargar(); const sala = a.generarPlano(tipo); const p = a.planoDesdeSala(tipo, sala);

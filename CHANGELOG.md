@@ -4,7 +4,20 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Contornos suaves de palcos
+## Sin publicar — Divisiones punteadas entre palcos
+
+Rama `claude/divisiones-palcos`.
+
+- Separadores punteados entre palcos vecinos en el visor, siguiendo el recorrido de la
+  herradura y recortados al borde interior y exterior, sin recuadros superpuestos.
+- Conserva el contorno suave, el resaltado individual y la selección de compra.
+- Verificado: 207 pruebas de lógica y 30 de navegador; 18 divisiones entre los 19 palcos
+  del Clavijero, revisión visual en escritorio y móvil, selección y entrega CSP conservadas.
+
+## 2026-10-05 — PR #55: Contornos suaves de palcos
+
+[PR #55](https://github.com/jonathancr29/selector-asientos/pull/55), fusionado en `main` con el
+commit `c7d0bb5`.
 
 Rama `claude/contornos-palcos`.
 

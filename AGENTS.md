@@ -214,6 +214,8 @@ comentarios `// ----`.
   en el editor. Una franja radial requiere varios grupos alrededor de un escenario finito;
   otras disposiciones conservan envolventes separadas, sin llenar el centro del recinto.
   Destacar un palco filtra encuadre y resumen, nunca habilitación, tarifas ni selección.
+  Las divisiones punteadas del visor se dibujan una vez entre vecinos de la franja y se
+  recortan contra ella. No interceptan clics ni atraviesan butacas para inventar una separación.
 
 - **Explorar zonas no compra ni edita:** `zonaExplorada` es estado transitorio del visor, separado
   de `elegidas` y del mapa. El realce no intercepta clics; se calcula por filas, tramos y grupos,
