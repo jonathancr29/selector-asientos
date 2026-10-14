@@ -1269,8 +1269,9 @@ function generarPlanoNivel(tipo, plano = null) {
   const bloqueadas = new Set((plano && plano.bloqueadas) || definicion.bloqueadas ||
                              idsBloqueadosPorBandas(sala));
   for (const b of butacas) if (bloqueadas.has(b.id)) b.estado = 'bloqueada';
+  const lugaresPorMesa = agruparLugaresPorGrupo(butacas);
   for (const mesa of mesas.filter((m) => m.completa)) {
-    const lugares = butacas.filter((b) => b.grupo && b.grupo.id === mesa.id);
+    const lugares = lugaresPorMesa.get(mesa.id) || [];
     if (lugares.some((b) => b.estado === 'ocupada')) {
       for (const b of lugares) if (b.estado === 'libre') b.estado = 'ocupada';
     }
@@ -3768,18 +3769,26 @@ function marcarMesaCompleta(plano, id, completa) {
 const marcarTodasLasMesas = (plano, completa) => marcarVenta(plano, completa, () => true);
 
 // Los lugares de una mesa, en orden.
-const lugaresDeMesa = (id, lista) => lista.filter((b) => b.grupo && b.grupo.id === id);
+function agruparLugaresPorGrupo(lista) {
+  const grupos = new Map();
+  for (const b of lista) if (b.grupo) {
+    if (!grupos.has(b.grupo.id)) grupos.set(b.grupo.id, []);
+    grupos.get(b.grupo.id).push(b);
+  }
+  return grupos;
+}
+const lugaresDeMesa = (id, lista, grupos = null) => grupos ? grupos.get(id) || [] : lista.filter((b) => b.grupo && b.grupo.id === id);
 
 // Elige o suelta una butaca. En una mesa completa, elige o suelta todos sus lugares
 // libres a la vez. Devuelve si quedo elegida (o null si no se puede elegir).
-function alternarEleccion(ids, butaca, lista) {
+function alternarEleccion(ids, butaca, lista, grupos = null) {
   if (!butaca || butaca.estado !== 'libre') return null;
   if (!butaca.grupo || !butaca.grupo.completa) {
     if (ids.delete(butaca.id)) return false;
     ids.add(butaca.id);
     return true;
   }
-  const libres = lugaresDeMesa(butaca.grupo.id, lista).filter((b) => b.estado === 'libre');
+  const libres = lugaresDeMesa(butaca.grupo.id, lista, grupos).filter((b) => b.estado === 'libre');
   const elegida = libres.some((b) => ids.has(b.id));
   for (const b of libres) {
     if (elegida) ids.delete(b.id);
@@ -3793,12 +3802,13 @@ function alternarEleccion(ids, butaca, lista) {
 // nombres de las mesas que se completaron, para avisar.
 function completarMesasElegidas(ids, lista) {
   const completadas = [];
+  const grupos = agruparLugaresPorGrupo(lista);
   const mesasCompletas = new Map();
   for (const b of lista) {
     if (b.grupo && b.grupo.completa) mesasCompletas.set(b.grupo.id, b.grupo.nombre);
   }
   for (const [id, nombre] of mesasCompletas) {
-    const libres = lugaresDeMesa(id, lista).filter((b) => b.estado === 'libre');
+    const libres = lugaresDeMesa(id, lista, grupos).filter((b) => b.estado === 'libre');
     const elegidos = libres.filter((b) => ids.has(b.id)).length;
     if (elegidos && elegidos < libres.length) {
       for (const b of libres) ids.add(b.id);
@@ -3900,12 +3910,47 @@ function referenciasDeLugar(p) {
 // Sin prioridad implicita: dos categorias distintas sobre un mismo lugar son error.
 // El resultado materializa pertenencias cruzadas, sin suponer que forman un arbol.
 function resolverEventoDeMapa(datoMapa, dato) {
+  const preparado = prepararRecintoEvento(datoMapa);
+  return preparado.errores ? preparado : resolverEventoDeRecinto(preparado.recinto, dato);
+}
+
+// El token no expone el catalogo ni sus indices. Se retira con la sesion y es recolectable.
+const RECINTOS_PREPARADOS = new WeakMap();
+function congelarDatos(dato) {
+  if (!dato || typeof dato !== 'object' || Object.isFrozen(dato)) return dato;
+  for (const valor of Object.values(dato)) congelarDatos(valor);
+  return Object.freeze(dato);
+}
+function prepararRecintoEvento(datoMapa) {
   const exportacion = exportarLugaresDeMapa(datoMapa);
   if (exportacion.errores) return exportacion;
-  const catalogo = exportacion.catalogo;
+  const catalogo = congelarDatos(exportacion.catalogo);
+  if (catalogo.revision.estado !== 'publicada') return { errores: ['el evento requiere una revisión física publicada'] };
+  const zonasFisicas = congelarDatos(copiarZonas(datoMapa.zonas));
+  const indices = Object.fromEntries(TIPOS_REFERENCIA_EVENTO.map((t) => [t, new Set()]));
+  const referencias = new Map();
+  for (const p of catalogo.lugares) {
+    const refs = referenciasDeLugar(p);
+    referencias.set(p.local_place_id, refs);
+    for (const [t, id] of Object.entries(refs)) if (id) indices[t].add(id);
+  }
+  for (const z of zonasFisicas) indices.zona.add(z.id);
+  for (const n of catalogo.niveles) indices.nivel.add(n.id);
+  for (const s of catalogo.sectores) indices.sector.add(s.id);
+  for (const f of catalogo.filas) indices.fila.add(f.id);
+  for (const g of catalogo.grupos) indices.grupo.add(g.id);
+  const recinto = Object.freeze({});
+  RECINTOS_PREPARADOS.set(recinto, { catalogo, zonasFisicas, indices, referencias,
+    catalogoPorId: new Map(catalogo.lugares.map(p => [p.local_place_id, p])),
+    nombresZona: new Map(zonasFisicas.map(z => [z.id, z.nombre])) });
+  return { recinto };
+}
+function resolverEventoDeRecinto(recinto, dato) {
+  const fisico = RECINTOS_PREPARADOS.get(recinto);
+  if (!fisico) return { errores: ['el recinto no fue preparado por el selector'] };
+  const { catalogo, zonasFisicas, indices, referencias, catalogoPorId, nombresZona } = fisico;
   const r = catalogo.revision;
   const error = (mensaje) => ({ errores: [mensaje] });
-  if (r.estado !== 'publicada') return error('el evento requiere una revisión física publicada');
   if (!dato || dato.formato !== 'sintaquilla/evento-asientos' || ![1, 2].includes(dato.version)) return error('formato de evento no compatible');
   const e = dato.evento;
   if (!e || !idDeEventoValido(e.id) || typeof e.nombre !== 'string' || !e.nombre.trim() || e.nombre.length > 180 ||
@@ -3920,14 +3965,6 @@ function resolverEventoDeMapa(datoMapa, dato) {
         c.nombre.length > 80 || typeof c.activa !== 'boolean' || !esEntero(c.precioCentavos, 0, PRECIO_MAXIMO)) return error('categoría o precio del evento inválido');
     categorias.set(c.id, { id: c.id, nombre: c.nombre, activa: c.activa, precioCentavos: c.precioCentavos });
   }
-  const indices = Object.fromEntries(TIPOS_REFERENCIA_EVENTO.map((t) => [t, new Set()]));
-  for (const p of catalogo.lugares) for (const [t, id] of Object.entries(referenciasDeLugar(p))) if (id) indices[t].add(id);
-  // Tambien se pueden cerrar grupos o zonas vacios, sin fabricar lugares.
-  for (const z of datoMapa.zonas) indices.zona.add(z.id);
-  for (const n of catalogo.niveles) indices.nivel.add(n.id);
-  for (const s of catalogo.sectores) indices.sector.add(s.id);
-  for (const f of catalogo.filas) indices.fila.add(f.id);
-  for (const g of catalogo.grupos) indices.grupo.add(g.id);
   const exclusiones = Object.create(null);
   for (const t of TIPOS_REFERENCIA_EVENTO) {
     const v = dato.exclusiones?.[t];
@@ -3944,18 +3981,17 @@ function resolverEventoDeMapa(datoMapa, dato) {
   const idsPublicos = new Set();
   const zonasEvento = new Map();
   if (dato.version === 2) {
-    if (!lista(dato.zonas, datoMapa.zonas.length) || dato.zonas.length !== datoMapa.zonas.length) return error('faltan modalidades de zonas del evento');
+    if (!lista(dato.zonas, zonasFisicas.length) || dato.zonas.length !== zonasFisicas.length) return error('faltan modalidades de zonas del evento');
     for (const z of dato.zonas) {
       if (!z || !indices.zona.has(z.id) || zonasEvento.has(z.id) || !['asignada','general'].includes(z.modalidad)) return error('modalidad de zona inválida o repetida');
       if (z.modalidad === 'general' && (!idDeEventoValido(z.event_zone_id) || idsPublicos.has(z.event_zone_id) ||
           !categorias.has(z.categoriaId) || !esEntero(z.cupo,0,BUTACAS_MAXIMAS) ||
           !(z.disponibles === null || esEntero(z.disponibles,0,z.cupo)))) return error('cupo, tarifa o identidad general inválidos');
       if (z.modalidad === 'general') idsPublicos.add(z.event_zone_id);
-      zonasEvento.set(z.id, { ...z, nombre: datoMapa.zonas.find(f => f.id === z.id).nombre });
+      zonasEvento.set(z.id, { ...z, nombre: nombresZona.get(z.id) });
     }
   }
   const esGeneral = (p) => zonasEvento.get(p.physical_zone.id)?.modalidad === 'general';
-  const catalogoPorId = new Map(catalogo.lugares.map(p => [p.local_place_id, p]));
   if (catalogo.lugares.some(p => esGeneral(p) && p.physical_group)) return error('acceso general no admite mesas o palcos físicos en esta versión');
   for (const g of dato.grupos) {
     if (!g || !indices.grupo.has(g.id) || grupos.has(g.id) || !idDeEventoValido(g.event_group_id) ||
@@ -3975,7 +4011,7 @@ function resolverEventoDeMapa(datoMapa, dato) {
   if (estados.size !== catalogo.lugares.filter(p => !esGeneral(p)).length) return error('faltan identidades de lugares del evento');
   const lugares = new Map();
   for (const p of catalogo.lugares) {
-    const refs = referenciasDeLugar(p);
+    const refs = referencias.get(p.local_place_id);
     const excluido = Object.entries(refs).some(([t, id]) => exclusiones[t].has(id));
     const tarifas = new Set(Object.entries(refs).map(([t, id]) => asignaciones[t].get(id)).filter(Boolean));
     if (tarifas.size > 1) return error('tarifas contradictorias para ' + p.label);
@@ -4087,7 +4123,7 @@ function solicitudDeSeleccionEvento(ids, evento, cantidades = new Map()) {
     if (!p?.comprable) return { errores: ['la selección incluye un lugar no comprable'] };
     const g = evento.grupos.get(p.physical_group?.id);
     if (g?.modalidad === 'completa') {
-      if (!g.requeridos.every((x) => ids.has(x))) return { errores: ['la selección contiene un conjunto parcial'] };
+      if (!grupos.has(g.event_group_id) && !g.requeridos.every((x) => ids.has(x))) return { errores: ['la selección contiene un conjunto parcial'] };
       grupos.add(g.event_group_id);
     } else lugares.push(p.event_place_id);
     totalCentavos += p.categoria.precioCentavos;

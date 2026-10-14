@@ -4,7 +4,26 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Reservas pendientes por sesión
+## Sin publicar — Catálogo preparado e índices de grupos
+
+Rama `claude/rendimiento-conector`.
+
+- Valida el recinto publicado una vez por carga y conserva un catálogo físico inmutable con
+  índices privados; las actualizaciones siguen validando tarifas, exclusiones, IDs y revisión.
+- Agrupa lugares una vez al generar, completar y dibujar mesas; comprueba los requeridos de
+  cada conjunto completo una vez por solicitud. Los índices del visor se renuevan por dibujo.
+- Añade medición reproducible del motor y marcado de tableros sin DOM ni red.
+- Verificado: 228 pruebas de lógica, 43 de navegador, 1.400 casos equivalentes y siete
+  mutaciones detectadas. Los 41 recorridos anteriores pasan sobre main y esta versión.
+- Medición reproducible: actualizaciones de 18.720 lugares 1.343,8 → 347,3 ms;
+  300 mesas 1.618,0 → 41,6 ms y tres generaciones → ninguna. Regenerar y completar mesas:
+  1.440.000 visitas por mesa sustituidas por 4.800 visitas de índices. Véase el documento de
+  medición para condiciones, carga fría y marcado de tableros sin pintura SVG.
+
+## 2026-10-14 — PR #64: Reservas pendientes por sesión
+
+[PR #64](https://github.com/jonathancr29/selector-asientos/pull/64), fusionado en `main` con el
+commit `61f73ec`.
 
 Rama `claude/reservas-por-sesion`.
 

@@ -39,6 +39,7 @@ en el propio archivo.
 | `src/conector.js`, `integracion/` | API de eventos y entrega generada con HTML/CSS/JS externos para CSP; no editar los archivos generados. |
 | `docs/INTEGRACION_EVENTOS_SINTAQUILLA.md` | Snapshot comercial, API pública, transporte y trabajo pendiente de servidor. |
 | `medir-render.mjs` | Medición local reproducible del plano de 18.720 butacas en Chrome o Edge; no bloquea la CI. |
+| `medir-conector.mjs` | Medición del motor comercial y grupos con fuentes actuales o referencia Git; sin DOM ni red y sin umbrales de CI. |
 | `pruebas.mjs` | Pruebas con `node:test` de la parte del script que no usa el DOM, y dos que vigilan que estos documentos sigan describiendo el código. |
 | `pruebas-navegador.mjs` | Recorridos de la interfaz en Chrome o Edge: guardado, recarga, importación, grupo, teclado y accesibilidad. |
 | `README.md` | Qué resuelve, modelo de datos, rejilla, accesibilidad, modo editor. |
@@ -343,6 +344,13 @@ comentarios `// ----`.
   sesión y su `finally` libera únicamente su propio token. Una reserva anterior bloqueaba un
   evento nuevo (pasó); liberar sin comparar identidad permitiría duplicar el POST de la nueva
   sesión. Cerrar el visor no confirma cancelación en servidor; el anfitrión conserva la clave.
+  `prepararRecintoEvento` valida la revisión publicada y crea un token opaco con catálogo
+  inmutable e índices privados. Cada carga crea otro token y cerrar lo descarta; no cachear
+  mapas arbitrarios por nombre o huella. `actualizarEvento` valida el snapshot con ese recinto,
+  sin generar geometría; el evaluador del anfitrión siempre valida el mapa que recibe.
+  Los índices de mesas y grupos se reconstruyen al dibujar, después de aplicar el evento.
+  Los índices del visor apuntan a los objetos vigentes, no a copias de disponibilidad;
+  no conservarlos después de generar otro nivel ni cachear comercio en el catálogo físico.
 - **Entrega con CSP:** `construir.mjs` genera también `integracion/index.html`, CSS y JS externos;
   `--check` comprueba las cuatro salidas. No introducir scripts/estilos inline en la entrega externa.
 - **Una mesa redonda solo guarda sus lugares** (un número par de 2 a 16); el diámetro sale de
