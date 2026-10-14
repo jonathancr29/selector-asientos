@@ -69,6 +69,7 @@ const esEntero = (v, min, max) => Number.isInteger(v) && v >= min && v <= max;
 // Aforo maximo de un plano: mas butacas hacen lento el dibujo (varios nodos SVG por
 // butaca). Lo aplican validarMapa y el editor, asi que ningun mapa guardado lo supera.
 const BUTACAS_MAXIMAS = 20000;
+const ELEMENTOS_MAPA_MAXIMOS = 22000;
 const numeroConMiles = (n) => n.toLocaleString('es-MX');
 const motivoDeAforo = (n) => (n > BUTACAS_MAXIMAS
   ? 'la sala tendría ' + numeroConMiles(n) + ' butacas y el máximo es ' + numeroConMiles(BUTACAS_MAXIMAS) : null);
@@ -2400,11 +2401,51 @@ function nombreDeArchivo(nombre) {
 // es el orden en que salen los errores.
 
 // Lo que impide siquiera mirar el archivo. Devuelve el motivo, o null si se puede seguir.
+function motivoRecursosMapa(dato) {
+  let elementos = 0;
+  const contar = (lista) => {
+    if (!Array.isArray(lista)) return false;
+    elementos += lista.length;
+    return elementos > ELEMENTOS_MAPA_MAXIMOS;
+  };
+  const niveles = Array.isArray(dato.niveles) ? dato.niveles : [];
+  if (niveles.length > 12) return 'se requieren de 1 a 12 niveles';
+  for (const plano of [dato, ...niveles.slice(1).map((n) => n?.plano)]) {
+    if (!plano || typeof plano !== 'object') continue;
+    for (const campo of ['bandas', 'mesas', 'bloquesFilas', 'formas', 'butacasSueltas', 'regionesLibres']) {
+      if (contar(plano[campo])) return 'el mapa supera el máximo de ' + ELEMENTOS_MAPA_MAXIMOS + ' elementos de dibujo';
+    }
+    for (const b of Array.isArray(plano.bandas) ? plano.bandas : []) {
+      if (contar(b?.verticales)) return 'el mapa supera el máximo de ' + ELEMENTOS_MAPA_MAXIMOS + ' elementos de dibujo';
+      for (const v of Array.isArray(b?.verticales) ? b.verticales : []) {
+        if (contar(v?.bandas)) return 'el mapa supera el máximo de ' + ELEMENTOS_MAPA_MAXIMOS + ' elementos de dibujo';
+      }
+    }
+  }
+  return null;
+}
+
+// Validar no debe sustituir los objetos a los que apuntan el SVG y porId.
+function conservarEscenaGenerada(calcular) {
+  const listas = [butacas, muebles, mesas, bloquesFilas, formas, butacasSueltas];
+  const anteriores = listas.map((lista) => lista.slice());
+  const indice = { ...zonas }, referencia = { ...escenario }, nivel = nivelGenerado;
+  try { return calcular(); }
+  finally {
+    listas.forEach((lista, i) => { lista.length = 0; for (const elemento of anteriores[i]) lista.push(elemento); });
+    for (const k of Object.keys(zonas)) delete zonas[k];
+    Object.assign(zonas, indice);
+    for (const k of Object.keys(escenario)) delete escenario[k];
+    Object.assign(escenario, referencia);
+    nivelGenerado = nivel;
+  }
+}
+
 function motivoDeCabecera(dato) {
   if (!dato || typeof dato !== 'object' || Array.isArray(dato)) return 'el archivo no contiene un mapa';
   if (dato.formato !== FORMATO_MAPA) return 'no es un mapa de este selector de asientos';
   if (![1, 2, 3, 4, 5, 6, 7, VERSION_MAPA].includes(dato.version)) return 'versión de mapa no compatible (' + dato.version + ')';
-  return null;
+  return motivoRecursosMapa(dato);
 }
 
 // Recorre una lista de piezas del mapa: comprueba el id contra su patron, aparta los
@@ -2825,6 +2866,8 @@ function validarMapaNiveles(dato) {
     if (resultado.errores) { errores.push(...resultado.errores.map((e) => dato.niveles.length > 1 ? n.nombre + ': ' + e : e)); continue; }
     const m = resultado.mapa;
     m.regionesLibres = regionesDeMapa(local.regionesLibres, new Set(m.zonas.map((z) => z.id)), errores);
+    const aforoAcumulado = motivoDeAforo(Object.keys(identidad).length + Object.keys(m.identidadFisica).length);
+    if (aforoAcumulado) return { errores: [aforoAcumulado] };
     for (const p of m.bloquesFilas) {
       if (p.region && !m.regionesLibres.some((r) => r.id === p.region)) errores.push('región desconocida de ' + p.id);
       for (const [clave, a] of Object.entries(p.ajustes || {})) if (m.identidadFisica[p.id + '-' + clave]?.id !== a.id) errores.push('corrección de un ID retirado o distinto');
@@ -2997,7 +3040,7 @@ function validarMapaBase(dato) {
   if (errores.length) return { errores };
 
   // Los contadores nunca por debajo de lo que ya existe: un id no se reutiliza.
-  const maximo = (ids, patron) => Math.max(0, ...[...ids].map((id) => Number((id.match(patron) || [])[1]) || 0));
+  const maximo = (ids, patron) => [...ids].reduce((mayor, id) => Math.max(mayor, Number((id.match(patron) || [])[1]) || 0), 0);
   const contador = (valor, ids, patron) =>
     Math.max(esEntero(valor, 1, 1e6) ? valor : 1, maximo(ids, patron) + 1);
   const mapa = {
@@ -3022,6 +3065,16 @@ function validarMapaBase(dato) {
       modoNumeracion: dato.modoNumeracion, revisionFisica: { recintoId: dato.revisionFisica.recintoId, numero: dato.revisionFisica.numero, estado: dato.revisionFisica.estado,
         ...(dato.revisionFisica.estado === 'publicada' ? { huella: dato.revisionFisica.huella } : {}) } } : {}),
   };
+  // Contar con las medidas limpias antes de crear miles de objetos de butaca.
+  const rejilla = rejillaDeBloques(distribucion);
+  const dispuesta = disponerBandas(bandas, rejilla.ancho);
+  const aforoPrevio = hojasDe(dispuesta.colocadas).reduce((n, b) => n + (b.tipo === 'filas'
+    ? b.filas * columnasDeBanda(rejilla, b).length : 0), 0)
+    + bloquesLimpios.reduce((n, b) => n + b.ancho * b.filas, 0)
+    + mesasLimpias.reduce((n, m) => n + (esMesaRedonda(m) ? m.lugares : m.largo * (m.unLado ? 1 : 2) + (m.cabeceras ? 2 : 0)), 0)
+    + butacasLimpias.length;
+  const exceso = motivoDeAforo(aforoPrevio);
+  if (exceso) return { errores: [exceso] };
   const sala = generarPlano(definicionDeMapa(mapa));
   const aforo = motivoDeAforo(butacas.length);
   if (aforo) return { errores: [aforo] };
@@ -7880,8 +7933,7 @@ function exportarCatalogoLugares() {
   anunciar('Catálogo de ' + catalogo.lugares.length + ' lugares validado y exportado.');
 }
 
-// Un mapa real ocupa pocos KB: un archivo mayor no se lee, para no bloquear la pestaña
-// leyendo y validando algo que no es un mapa razonable.
+// El limite de bytes complementa los limites de elementos y aforo del modelo.
 const ARCHIVO_MAXIMO = 8 * 1024 * 1024;
 
 async function importarMapa(archivo) {
@@ -7896,10 +7948,10 @@ async function importarMapa(archivo) {
     anunciar('No se pudo importar ' + archivo.name + ': no es un JSON válido.');
     return;
   }
-  const { mapa, errores } = validarMapa(dato);
-  // validarMapa genero su propia sala para comprobarla: se vuelve a dibujar la actual.
-  salaActual = generarPlano(tipoActual, planos[tipoActual]);
-  dibujarTodo();
+  let resultado;
+  try { resultado = conservarEscenaGenerada(() => validarMapa(dato)); }
+  catch { anunciar('No se pudo importar ' + archivo.name + ': no se pudo validar el mapa.'); return; }
+  const { mapa, errores } = resultado;
   if (errores) {
     anunciar('No se pudo importar ' + archivo.name + ': ' + errores.slice(0, 3).join('; ') +
              (errores.length > 3 ? '…' : '') + '.');
@@ -7965,7 +8017,9 @@ const almacenInicial = leerAlmacen();
 // sin tocar, pero no se cargan, y se avisa de cuales son.
 const mapasDescartados = [];
 for (const [nombre, dato] of Object.entries(almacenInicial || {})) {
-  const { mapa } = validarMapa(dato);
+  let mapa;
+  try { ({ mapa } = conservarEscenaGenerada(() => validarMapa(dato))); }
+  catch { mapasDescartados.push(nombre); continue; }
   if (mapa) registrarMapa(mapa);
   else mapasDescartados.push(nombre);
 }
@@ -8022,10 +8076,7 @@ function seleccionDelEvento() {
 }
 
 function validarDatosEvento(mapa, dato) {
-  let r;
-  // La validacion fisica usa los generadores globales; siempre reponer la vista actual.
-  try { r = resolverEventoDeMapa(mapa, dato); }
-  finally { if (salaActual) { salaActual = generarPlano(tipoActual, planos[tipoActual]); if (eventoConectado) aplicarEventoAButacas(); } }
+  const r = conservarEscenaGenerada(() => resolverEventoDeMapa(mapa, dato));
   if (r.errores) throw new Error(r.errores.join('; '));
   return r.evento;
 }

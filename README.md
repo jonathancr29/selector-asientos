@@ -745,6 +745,9 @@ butacas bloqueadas, **zonas físicas con sus nombres** y los contadores de ids. 
 sueltas). Más harían lento el dibujo del plano. El editor no aplica un cambio que pase de ahí (agregar
 o alargar bandas, piezas, columnas, duplicar) y lo explica; un mapa importado o guardado que lo supere
 no se carga. Un archivo de más de **8 MB** no se importa; el inventario físico agrega un registro por lugar.
+El documento admite hasta **22.000 elementos de dibujo** entre sus niveles: bandas, verticales,
+mesas, bloques, formas, butacas sueltas y regiones. El aforo se comprueba antes de generar butacas.
+Un error de importación conserva el mapa y su navegación; no se guarda el archivo rechazado.
 
 ```json
 {
