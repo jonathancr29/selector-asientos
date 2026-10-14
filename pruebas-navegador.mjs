@@ -212,6 +212,22 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       assert.equal(await protocolo.evaluar('!!JSON.parse(localStorage.getItem("selector-asientos:mapas"))["Mapa importado"]'), true);
     });
 
+    await t.test('importacion masiva y fallo inesperado conservan mapa, escena y teclado', async () => {
+      await protocolo.evaluar(`(async()=>{window.__tipoImportacion=tipoActual;window.__butacasImportacion=butacas.slice();
+        document.querySelector('.butaca').focus();window.__focoImportacion=document.activeElement;
+        const m=conservarEscenaGenerada(()=>mapaDesdePlano('Excesivo',planoEditable(),null));
+        m.bandas=Array.from({length:150000},(_,i)=>({id:'b'+i,tipo:'espacio',alto:1}));
+        await importarMapa(new File([JSON.stringify(m)],'excesivo.json'));})()`);
+      assert.match(await protocolo.evaluar('document.getElementById("estado").textContent'), /elementos de dibujo/);
+      assert.equal(await protocolo.evaluar('tipoActual===__tipoImportacion&&butacas.every((b,i)=>b===__butacasImportacion[i])&&document.activeElement===__focoImportacion'), true);
+      await protocolo.evaluar(`(async()=>{const validarOriginal=validarMapa;validarMapa=()=>{generarPlano('mixta-ambos');throw new Error('fallo simulado')};
+        try{await importarMapa(new File(['{}'],'fallido.json'))}finally{validarMapa=validarOriginal}})()`);
+      assert.match(await protocolo.evaluar('document.getElementById("estado").textContent'), /no se pudo validar/);
+      assert.equal(await protocolo.evaluar('tipoActual===__tipoImportacion&&butacas.every((b,i)=>b===__butacasImportacion[i]&&!!b.nodo)'), true);
+      await protocolo.tecla('ArrowRight','ArrowRight',39);
+      assert.notEqual(await protocolo.evaluar('document.activeElement.dataset.id'), await protocolo.evaluar('__focoImportacion.dataset.id'));
+    });
+
     await t.test('exportar lugares pide confirmar la zona fisica heredada', async () => {
       await protocolo.evaluar(`(() => {
         document.querySelector('#modo-editor').click();
@@ -774,6 +790,26 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       assert.match(await protocolo.evaluar('document.querySelector("#resumen-zona").textContent'), /No habilitada para esta función/);
       assert.ok(await protocolo.evaluar('capaRealceZona.children.length') > 0);
       await protocolo.evaluar('SelectorAsientos.cerrarEvento();SelectorAsientos.cargarEvento({...__fixtureEvento,alSeleccionar:s=>__cambiosEvento.push(s)})');
+    });
+
+    await t.test('conector: validar y actualizar sin cambios conserva nodos, foco y teclado', async () => {
+      await protocolo.evaluar(`window.__escenaAntes=butacas.slice();window.__nivelAntes=salaActual.nivel;
+        document.querySelector('.butaca[data-id="F1-1-1"]').focus();window.__focoAntes=document.activeElement;
+        SelectorAsientos.actualizarEvento(__fixtureEvento.evento);
+        SelectorAsientos.evaluarConfiguracion(__fixtureEvento.mapa,__fixtureEvento.evento);`);
+      assert.equal(await protocolo.evaluar('butacas.every((b,i)=>b===__escenaAntes[i])&&butacasVisibles().every(b=>b.nodo===porId.get(b.id).nodo)'), true);
+      assert.equal(await protocolo.evaluar('document.activeElement===__focoAntes&&salaActual.nivel===__nivelAntes'), true);
+      await protocolo.tecla('ArrowRight','ArrowRight',39);
+      assert.notEqual(await protocolo.evaluar('document.activeElement.dataset.id'), 'F1-1-1');
+      await protocolo.evaluar(`const invalido=structuredClone(__fixtureEvento.evento);invalido.evento.id='otro_evento';
+        try{SelectorAsientos.actualizarEvento(invalido)}catch{};
+        try{SelectorAsientos.evaluarConfiguracion(__fixtureEvento.mapa,{})}catch{};`);
+      assert.equal(await protocolo.evaluar('butacas.every((b,i)=>b===__escenaAntes[i])&&butacasVisibles().every(b=>!!b.nodo)'), true);
+      await protocolo.tecla('ArrowLeft','ArrowLeft',37);
+      assert.equal(await protocolo.evaluar('document.activeElement.dataset.id'), 'F1-1-1');
+      await protocolo.tecla('Enter','Enter',13);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'), 1);
+      await protocolo.tecla('Enter','Enter',13);
     });
 
     await t.test('conector: teclado selecciona palco completo y conserva compra entre niveles', async () => {

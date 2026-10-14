@@ -35,10 +35,7 @@ function seleccionDelEvento() {
 }
 
 function validarDatosEvento(mapa, dato) {
-  let r;
-  // La validacion fisica usa los generadores globales; siempre reponer la vista actual.
-  try { r = resolverEventoDeMapa(mapa, dato); }
-  finally { if (salaActual) { salaActual = generarPlano(tipoActual, planos[tipoActual]); if (eventoConectado) aplicarEventoAButacas(); } }
+  const r = conservarEscenaGenerada(() => resolverEventoDeMapa(mapa, dato));
   if (r.errores) throw new Error(r.errores.join('; '));
   return r.evento;
 }

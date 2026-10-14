@@ -54,6 +54,69 @@ const cargar = () => new Function(fuente + '\nreturn { ' + declarados.join(', ')
 const ejemploConector = () => JSON.parse(readFileSync(new URL('./docs/ejemplo-conector-evento.json', import.meta.url), 'utf8'));
 const ejemploGeneral = () => JSON.parse(readFileSync(new URL('./docs/ejemplo-conector-general.json', import.meta.url), 'utf8'));
 
+test('validacion conserva objetos, referencias de escena y nivel, tambien al fallar', () => {
+  const a = cargar();
+  a.generarPlano('mixta-ambos');
+  const listas = [a.butacas, a.muebles, a.mesas, a.bloquesFilas, a.formas, a.butacasSueltas];
+  const anteriores = listas.map(l => l.slice());
+  const zonas = { ...a.zonas }, escenario = { ...a.escenario };
+  const comprobar = () => {
+    listas.forEach((l, i) => { assert.equal(l.length, anteriores[i].length); l.forEach((p, k) => assert.equal(p, anteriores[i][k])); });
+    assert.deepEqual(a.zonas, zonas); assert.deepEqual(a.escenario, escenario);
+    assert.equal(a.butacasVisibles().length, anteriores[0].length);
+  };
+  const f = ejemploConector();
+  assert.ok(a.conservarEscenaGenerada(() => a.resolverEventoDeMapa(f.mapa, f.evento)).evento);
+  comprobar();
+  assert.throws(() => a.conservarEscenaGenerada(() => { a.generarPlano(a.definicionDeMapa(f.mapa)); throw new Error('fallo'); }), /fallo/);
+  comprobar();
+  a.conservarEscenaGenerada(() => a.generarPlano(a.definicionDeMapa(f.mapa), { ...f.mapa, nivelEnEdicion: 'n2' }));
+  comprobar();
+});
+
+test('importacion rechaza listas masivas antes de recorrerlas o generar butacas', () => {
+  const a = cargar(), f = ejemploConector();
+  const m = { ...f.mapa, version: 4, bandas: Array.from({ length: 150000 }, (_, i) => ({ id: 'b' + i, tipo: 'espacio', alto: 1 })) };
+  assert.ok(Buffer.byteLength(JSON.stringify(m)) < 8 * 1024 * 1024);
+  assert.match(a.validarMapa(m).errores[0], /elementos de dibujo/);
+  for (const campo of ['mesas', 'bloquesFilas', 'formas', 'butacasSueltas', 'regionesLibres']) {
+    assert.match(a.validarMapa({ ...f.mapa, [campo]: new Array(a.ELEMENTOS_MAPA_MAXIMOS + 1).fill(null) }).errores[0], /elementos de dibujo/);
+  }
+  const n = structuredClone(f.mapa);
+  n.niveles[1].plano.bandas = [{ id: 'division', tipo: 'division', verticales: [{ bandas: new Array(a.ELEMENTOS_MAPA_MAXIMOS).fill(null) }] }];
+  assert.match(a.validarMapa(n).errores[0], /elementos de dibujo/);
+});
+
+test('el aforo se comprueba antes de generar filas, bloques y mesas', () => {
+  const a = cargar(); a.generarPlano('mixta-ambos');
+  const antes = a.butacas.slice();
+  const comprobarButacas = () => {
+    assert.equal(a.butacas.length, antes.length);
+    assert.ok(a.butacas.every((b, i) => b === antes[i]));
+  };
+  const base = { ...ejemploConector().mapa, version: 4, distribucion: { bloques: [60], pasillos: [] },
+    bandas: Array.from({ length: Math.ceil(20001 / (60 * a.FILAS_MAXIMAS)) }, (_, i) => ({ id: 'b' + i, tipo: 'filas', zona: 'luneta', filas: a.FILAS_MAXIMAS })),
+    bloquesFilas: [], mesas: [], formas: [], butacasSueltas: [], escenario: null, bloqueadas: [], zonasDeAsiento: {}, zonasFisicasConfirmadas: {} };
+  assert.match(a.validarMapa(base).errores[0], /máximo.*20/);
+  comprobarButacas();
+  const bloques = { ...base, bandas: [{ id: 'espacio', tipo: 'espacio', alto: 40 }], bloquesFilas: Array.from({ length: Math.ceil(20001 / (40 * a.FILAS_MAXIMAS)) }, (_, i) =>
+    ({ id: 'F' + (i + 1), x: 1, y: 1, ancho: 40, filas: a.FILAS_MAXIMAS, giro: 0, zona: 'luneta' })) };
+  assert.match(a.validarMapa(bloques).errores[0], /máximo.*20/);
+  comprobarButacas();
+  const mesas = { ...bloques, bloquesFilas: [], mesas: Array.from({ length: 1400 }, (_, i) => ({ id: 'M' + (i + 1), tipo: 'redonda', lugares: 16, x: 1, y: 1, giro: 0 })) };
+  assert.match(a.validarMapa(mesas).errores[0], /máximo.*20/);
+  comprobarButacas();
+  const medio = { ...base, bandas: Array.from({ length: 9 }, (_, i) => ({ id: 'b' + i, tipo: 'filas', zona: 'luneta', filas: a.FILAS_MAXIMAS })) };
+  const primero = a.validarMapa(medio).mapa;
+  const segundo = a.validarMapa({ ...medio, bandas: medio.bandas.map(b => ({ ...b, id: 'c' + b.id })) }).mapa;
+  primero.niveles.push({ id: 'n2', nombre: 'Segundo', plano: a.geometriaDeNivel(segundo) },
+    { id: 'n3', nombre: 'No debe generarse', plano: { ...a.geometriaDeNivel(segundo), escenario: { x: -1 } } });
+  primero.siguienteNivel = 4;
+  Object.assign(primero.identidadFisica, Object.fromEntries(Object.entries(segundo.identidadFisica).map(([k, f]) => [k, { ...f, nivel: 'n2' }])));
+  primero.siguienteLugar = Math.max(primero.siguienteLugar, segundo.siguienteLugar);
+  assert.match(a.validarMapa(primero).errores[0], /máximo.*20/);
+});
+
 test('acceso general: inventario intacto, cupo y disponibilidad independientes, sin IDs de venta por butaca', () => {
   const a = cargar(), f = ejemploGeneral(), antes = JSON.stringify(f.mapa);
   const r = a.resolverEventoDeMapa(f.mapa, f.evento);

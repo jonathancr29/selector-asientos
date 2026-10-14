@@ -4,7 +4,23 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Acceso general por cantidad en selector y conector
+## Sin publicar — Validación segura de mapas y escena conectada
+
+Rama `claude/validacion-segura`.
+
+- Conserva objetos, referencias SVG, nivel y foco al validar eventos, incluso sin cambios,
+  ante respuestas rechazadas o al evaluar configuración para el anfitrión.
+- Limita el documento a 22.000 elementos de dibujo y comprueba el aforo antes de generar
+  butacas; los errores inesperados de importación o almacenamiento no interrumpen el visor.
+- Verificado: 224 pruebas de lógica y 37 de navegador, 12 mutaciones detectadas,
+  los 35 recorridos anteriores sobre main y la corrección, 705 casos de validación equivalentes,
+  entrega autónoma y CSP sincronizadas.
+  Sin cambios en los mapas locales ni en Sin Taquilla.
+
+## 2026-10-06 — PR #61: Acceso general por cantidad en selector y conector
+
+[PR #61](https://github.com/jonathancr29/selector-asientos/pull/61), fusionado en `main` con el
+commit `79df35a`.
 
 Rama `claude/acceso-general`.
 

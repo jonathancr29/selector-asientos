@@ -336,7 +336,7 @@ comentarios `// ----`.
   en el editor; el evento fija tarifas y modalidad. El servidor aún debe reservar atómicamente.
 - **Conector de evento:** `eventoConectado` y sus datos no se guardan en el mapa ni localStorage.
   La revisión publicada y los IDs de evento permanecen fijos. Estado ausente significa desconocido.
-  Al validar una respuesta se reponen los generadores y estados comerciales de la vista, incluso
+  Al validar una respuesta se conservan los objetos generados y sus referencias al SVG, incluso
   cuando se rechaza. Un fallo de consulta suspende disponibilidad; una respuesta tardía no altera
   otra sesión ni una versión más reciente. La selección envía solo IDs opacos, nunca precio.
 - **Entrega con CSP:** `construir.mjs` genera también `integracion/index.html`, CSS y JS externos;
@@ -558,7 +558,11 @@ comentarios `// ----`.
   `aplicarBandas` lo trata como un error de bandas y revierte; los cambios de piezas (agregar,
   transformar, duplicar) pasan por `conTopeDeAforo`, que copia el plano antes y lo restaura si se
   pasa. Si añades una acción que agrega butacas, envuélvela igual. `importarMapa` rechaza archivos de
-  más de `ARCHIVO_MAXIMO` (8 MB) antes de leerlos.
+  más de `ARCHIVO_MAXIMO` (8 MB) antes de leerlos. `ELEMENTOS_MAPA_MAXIMOS` (22.000) limita el
+  dibujo completo, incluidos los niveles y las verticales, antes de recorrer listas masivas.
+  El aforo se cuenta con medidas limpias antes de generar y se acumula entre niveles.
+  `conservarEscenaGenerada` restaura referencias, zonas, escenario y piso incluso ante excepciones;
+  regenerar después de validar dejaba butacas sin nodo al recibir la misma versión (pasó).
 - **Nada de recorridos anidados sobre todas las butacas** en lo que corre al generar (`generarPlano`,
   `numerarFilas`): agrupa antes con un `Map`. Filtrar la lista dentro de otro recorrido llegó a tardar
   6 s con 100.000 butacas; hay una prueba de tiempo que lo detecta.

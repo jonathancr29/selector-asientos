@@ -296,8 +296,7 @@ function exportarCatalogoLugares() {
   anunciar('Catálogo de ' + catalogo.lugares.length + ' lugares validado y exportado.');
 }
 
-// Un mapa real ocupa pocos KB: un archivo mayor no se lee, para no bloquear la pestaña
-// leyendo y validando algo que no es un mapa razonable.
+// El limite de bytes complementa los limites de elementos y aforo del modelo.
 const ARCHIVO_MAXIMO = 8 * 1024 * 1024;
 
 async function importarMapa(archivo) {
@@ -312,10 +311,10 @@ async function importarMapa(archivo) {
     anunciar('No se pudo importar ' + archivo.name + ': no es un JSON válido.');
     return;
   }
-  const { mapa, errores } = validarMapa(dato);
-  // validarMapa genero su propia sala para comprobarla: se vuelve a dibujar la actual.
-  salaActual = generarPlano(tipoActual, planos[tipoActual]);
-  dibujarTodo();
+  let resultado;
+  try { resultado = conservarEscenaGenerada(() => validarMapa(dato)); }
+  catch { anunciar('No se pudo importar ' + archivo.name + ': no se pudo validar el mapa.'); return; }
+  const { mapa, errores } = resultado;
   if (errores) {
     anunciar('No se pudo importar ' + archivo.name + ': ' + errores.slice(0, 3).join('; ') +
              (errores.length > 3 ? '…' : '') + '.');
@@ -381,7 +380,9 @@ const almacenInicial = leerAlmacen();
 // sin tocar, pero no se cargan, y se avisa de cuales son.
 const mapasDescartados = [];
 for (const [nombre, dato] of Object.entries(almacenInicial || {})) {
-  const { mapa } = validarMapa(dato);
+  let mapa;
+  try { ({ mapa } = conservarEscenaGenerada(() => validarMapa(dato))); }
+  catch { mapasDescartados.push(nombre); continue; }
   if (mapa) registrarMapa(mapa);
   else mapasDescartados.push(nombre);
 }
