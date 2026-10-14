@@ -380,7 +380,6 @@
   /* Mesa completa elegida: el tablero se marca junto con sus lugares. */
   .mueble.elegida { fill: rgba(59, 130, 246, .22); stroke: var(--acento); stroke-width: 1.2; }
   .mueble.completa { cursor: pointer; }
-  .lateral .ancho-completo { width: 100%; margin-bottom: 8px; }
   /* Formas: la pista con cuadros suaves, la barra como un mostrador macizo. */
   .forma-pista { fill: url(#cuadros-pista); stroke: #8b7fc4; stroke-width: .6; }
   .forma-barra { fill: #4a3b2c; stroke: #a0805c; stroke-width: .8; }
@@ -934,9 +933,6 @@ function distribucionDePasillos(pasillos = 'ninguno', ancho = ANCHO_SALA) {
 
   return { bloques: tamanos, pasillos: Array(huecos).fill(1) };
 }
-
-const rejillaDeSala = ({ ancho, pasillos = 'ninguno' }) =>
-  rejillaDeBloques(distribucionDePasillos(pasillos, ancho));
 
 // La rejilla desde una distribucion libre: { bloques: [4, 6, 4], pasillos: [1, 2] }
 // son tres bloques de 4, 6 y 4 butacas separados por pasillos de 1 y 2 columnas.
@@ -3087,16 +3083,6 @@ function editarEtiquetaOficial(plano, id, valores) {
   return nuevo;
 }
 
-function reasignarZonaFisica(plano, ids, zona) {
-  if (!zonasDe(plano).some((z) => z.id === zona)) return { motivo: 'zona física desconocida' };
-  const nuevo = copiarPlano(plano);
-  const elegidos = new Set(ids);
-  for (const f of Object.values(nuevo.identidadFisica || {})) if (elegidos.has(f.id)) {
-    fijarZonaInventario(nuevo, f, zona);
-  }
-  return nuevo;
-}
-
 function fijarZonaInventario(plano, f, zona) {
   f.zona = zona;
   for (const [tipo,t] of Object.entries(TIPOS_FISICOS)) if (f[t.campo] && entidadFisicaDe(plano,tipo,f[t.campo])?.zona !== zona) {
@@ -4132,19 +4118,6 @@ function cambiarZonaBanda(plano, id, zona) {
   return nuevo;
 }
 
-// La zona que una banda tiene para ella sola: nadie mas la usa, ni otra banda ni una
-// pieza con zona propia. Es la que se puede renombrar desde la fila de la banda, porque
-// renombrarla no cambia el precio de nada mas.
-function zonaExclusivaDeBanda(plano, id) {
-  const banda = nodosDeBandas(plano.bandas).find((b) => b.id === id);
-  const zona = banda && zonaDeBanda(banda);
-  if (!zona) return null;
-  const otras = nodosDeBandas(plano.bandas).filter((b) => b.id !== id && zonaDeBanda(b) === zona);
-  const piezas = [...(plano.mesas || []), ...(plano.bloquesFilas || []), ...(plano.butacasSueltas || [])]
-    .filter((p) => p.zona === zona);
-  return otras.length || piezas.length ? null : zona;
-}
-
 // Crear una zona explicitamente no cambia el nombre propio de la banda.
 // El hueco de una zona nueva: el primer id «zonaN» libre y un nombre que no choque,
 // numerado a partir del que se pida («General 2»). No toca el plano, lo devuelve, y es
@@ -4159,16 +4132,10 @@ function zonaNueva(lista, siguiente, nombreBase) {
 }
 
 function zonaNuevaParaBanda(plano, id, nombre) {
-  const nuevo = copiarPlano(plano);
-  const u = ubicar(nuevo.bandas, id);
-  if (!u) return { motivo: 'esa banda ya no existe' };
-  const lista = copiarZonas(zonasDe(nuevo));
-  if (lista.length >= ZONAS_MAXIMAS) return { motivo: 'ya hay el máximo de zonas (' + ZONAS_MAXIMAS + ')' };
-  const { zona, siguiente } = zonaNueva(lista, nuevo.siguienteZona, nombre);
-  lista.push(zona);
-  nuevo.zonas = lista;
-  nuevo.siguienteZona = siguiente;
-  u.item.zona = zona.id;
+  if (!ubicar(plano.bandas, id)) return { motivo: 'esa banda ya no existe' };
+  const nuevo = agregarZona(plano, nombre);
+  if (nuevo.motivo) return nuevo;
+  ubicar(nuevo.bandas, id).item.zona = nuevo.zonas.at(-1).id;
   return nuevo;
 }
 
@@ -4433,6 +4400,8 @@ function aplicarConfigs(plano, sala, configs) {
   return { motivo };
 }
 
+// Un palco organiza lugares, pero su geometria sigue siendo la del bloque o butaca.
+const piezaDeButaca = (b) => b.grupo?.tipo === 'palco' ? b.bloque || b.suelta : b.grupo?.id || b.bloque || b.suelta;
 // La zona propia de varias piezas: sin zona ('' o null) vuelven a heredar la de su banda.
 function cambiarZonaDePiezas(plano, ids, zona) {
   const nuevo = copiarPlano(plano);
@@ -4448,9 +4417,9 @@ function cambiarZonaDePiezas(plano, ids, zona) {
     const p = configEnPlano(nuevo, id);
     return [id, zona || (p && zonaEnCelda(disposicion, p.x, p.y)) || zonaParaFilas(zonasDe(nuevo))];
   }));
-  for (const b of butacas) if (elegidas.has(b.grupo?.tipo === 'palco' ? b.bloque || b.suelta : b.grupo?.id || b.bloque || b.suelta)) {
+  for (const b of butacas) if (elegidas.has(piezaDeButaca(b))) {
     const f = nuevo.identidadFisica?.[b.claveDiseno || b.id];
-    if (f) fijarZonaInventario(nuevo, f, destinos.get(b.grupo?.tipo === 'palco' ? b.bloque || b.suelta : b.grupo?.id || b.bloque || b.suelta));
+    if (f) fijarZonaInventario(nuevo, f, destinos.get(piezaDeButaca(b)));
   }
   return nuevo;
 }
@@ -4572,13 +4541,13 @@ function usosDeZona(plano, id) {
   return entidades + bandas + piezas + otrasPiezas + regiones + asientos + (fisicos && !bandas && !piezas && !asientos ? 1 : 0);
 }
 
-// Agrega una zona fisica suelta, «Zona» y las siguientes numeradas al final de
-// la lista. No la ata a ninguna banda: para eso esta zonaNuevaParaBanda.
-function agregarZona(plano) {
+// Agrega una zona fisica con nombre unico, por defecto «Zona», al final de la lista.
+// No la ata a ninguna banda: para eso esta zonaNuevaParaBanda, que delega aqui.
+function agregarZona(plano, nombre = 'Zona') {
   const nuevo = copiarPlano(plano);
   const lista = copiarZonas(zonasDe(nuevo));
   if (lista.length >= ZONAS_MAXIMAS) return { motivo: 'ya hay el máximo de zonas (' + ZONAS_MAXIMAS + ')' };
-  const { zona, siguiente } = zonaNueva(lista, nuevo.siguienteZona, 'Zona');
+  const { zona, siguiente } = zonaNueva(lista, nuevo.siguienteZona, nombre);
   lista.push(zona);
   nuevo.zonas = lista;
   nuevo.siguienteZona = siguiente;
@@ -4640,20 +4609,12 @@ function fijarZonasSueltas(plano, sala) {
   return { plano: nuevo, fijadas, zona };
 }
 
-// Lee un precio escrito en pesos («350», «350.50», «$1,200.00») y lo da en centavos, o null.
-function leerPrecio(texto) {
-  const limpio = String(texto).replace(/[$\s,]/g, '');
-  if (!/^\d+(\.\d{1,2})?$/.test(limpio)) return null;
-  const centavos = Math.round(Number(limpio) * 100);
-  return centavos <= PRECIO_MAXIMO ? centavos : null;
-}
-
 // ---------------------------------------------------------------------------
 // Mesas completas.
 //
-// El organizador decide mesa por mesa si se vende completa (un solo control, que
-// elige todos sus lugares a la vez) o lugar por lugar. El precio de una mesa completa
-// es la suma de sus lugares libres, cada uno al de su zona; los bloqueados no se venden.
+// Compatibilidad de mapas autonomos: conservan 'completa' y la seleccion conjunta
+// historica. En eventos conectados, Sin Taquilla decide modalidad y tarifas;
+// alternarLugarEvento exige el conjunto utilizable completo, sin recortarlo.
 // ---------------------------------------------------------------------------
 // Marca o desmarca una mesa como completa. Devuelve el plano nuevo o { motivo }.
 function marcarMesaCompleta(plano, id, completa) {
@@ -8549,7 +8510,7 @@ document.getElementById('formulario-entidad-fisica').addEventListener('submit', 
 document.getElementById('eliminar-entidad-fisica').addEventListener('click', () => aplicarResultadoFisico(eliminarEntidadFisica(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('entidad-fisica').value),'Entidad vacía eliminada; su ID queda retirado.'));
 document.getElementById('herramienta-fisica').addEventListener('click', () => cambiarHerramienta(herramienta === 'fisica' ? 'mesas' : 'fisica'));
 document.getElementById('fisica-desde-piezas').addEventListener('click', () => {
-  const ids = butacasVisibles().filter((b) => piezasActivas.has(b.grupo?.tipo === 'palco' ? b.bloque || b.suelta : b.grupo?.id || b.bloque || b.suelta)).map((b) => b.id);
+  const ids = butacasVisibles().filter((b) => piezasActivas.has(piezaDeButaca(b))).map((b) => b.id);
   seleccionFisica.clear(); ids.forEach((id) => seleccionFisica.add(id)); cambiarHerramienta('fisica');
 });
 document.getElementById('fisica-miembros').addEventListener('click', () => {

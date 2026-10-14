@@ -51,6 +51,18 @@ assert.ok(!conComa, 'la parte sin DOM declara varios nombres en una sentencia:\n
 
 const cargar = () => new Function(fuente + '\nreturn { ' + declarados.join(', ') + ' };')();
 
+// Preparacion de casos: estos atajos no forman parte de la aplicacion entregada.
+const rejillaDePrueba = (api, { ancho, pasillos = 'ninguno' }) =>
+  api.rejillaDeBloques(api.distribucionDePasillos(pasillos, ancho));
+function zonaDePrueba(api, plano, ids, zona) {
+  const nuevo = api.copiarPlano(plano);
+  const elegidos = new Set(ids);
+  for (const f of Object.values(nuevo.identidadFisica || {})) if (elegidos.has(f.id)) {
+    api.fijarZonaInventario(nuevo, f, zona);
+  }
+  return nuevo;
+}
+
 const ejemploConector = () => JSON.parse(readFileSync(new URL('./docs/ejemplo-conector-evento.json', import.meta.url), 'utf8'));
 const ejemploGeneral = () => JSON.parse(readFileSync(new URL('./docs/ejemplo-conector-general.json', import.meta.url), 'utf8'));
 
@@ -909,7 +921,7 @@ test('fase 5: guardar, publicar y reabrir conservan estructura; revision publica
 
 test('fase 5: zona y nivel no dejan referencias colgantes; mesas mantienen su grupo', () => {
   const api=cargar(); let p=recintoFisico(api);
-  const cambio=api.reasignarZonaFisica(p,['F3-1-1'],'general');
+  const cambio=zonaDePrueba(api,p,['F3-1-1'],'general');
   assert.equal(cambio.identidadFisica['F3-1-1'].grupoId,undefined);
   assert.equal(cambio.identidadFisica['F3-1-1'].numeroGrupo,undefined);
   assert.equal(api.miembrosFisicos(cambio,'palco','palco1').length,2);
@@ -1176,7 +1188,7 @@ test('fase 3: mover conserva zona fisica y reasignar cambia solo los lugares ped
   movido.mesas[0].y += 1;
   api.generarPlano('mixta-ambos', movido);
   assert.equal(api.butacas.find((b) => b.id === 'M1-N1').zona, 'mesas');
-  const nuevo = api.reasignarZonaFisica(movido, ['M1-N1'], 'general');
+  const nuevo = zonaDePrueba(api, movido, ['M1-N1'], 'general');
   api.generarPlano('mixta-ambos', nuevo);
   assert.equal(api.butacas.find((b) => b.id === 'M1-N1').zona, 'general');
   assert.equal(api.butacas.find((b) => b.id === 'M1-N2').zona, 'mesas');
@@ -1382,10 +1394,11 @@ const DISPOSICIONES = ['ninguno', 'izquierda', 'derecha', 'ambos'];
 const rango = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
 
 test('columnas de pasillo de la sala de ejemplo', () => {
-  const { rejillaDeSala, ANCHO_SALA } = cargar();
+  const api = cargar();
+  const { ANCHO_SALA } = api;
   const esperado = { ninguno: [], izquierda: [5], derecha: [10], ambos: [5, 10] };
   for (const pasillos of DISPOSICIONES) {
-    const { columnas } = rejillaDeSala({ ancho: ANCHO_SALA, pasillos });
+    const { columnas } = rejillaDePrueba(api, { ancho: ANCHO_SALA, pasillos });
     const vacias = rango(1, ANCHO_SALA).filter((c) => !columnas.includes(c));
     assert.deepEqual(vacias, esperado[pasillos], pasillos);
   }
@@ -1401,10 +1414,10 @@ test('aforo de la sala de ejemplo (tabla del README)', () => {
 });
 
 test('la rejilla es valida para cualquier ancho', () => {
-  const { rejillaDeSala } = cargar();
+  const api = cargar();
   for (let ancho = 6; ancho <= 40; ancho++) {
     for (const pasillos of DISPOSICIONES) {
-      const { bloques, columnas } = rejillaDeSala({ ancho, pasillos });
+      const { bloques, columnas } = rejillaDePrueba(api, { ancho, pasillos });
       const caso = `${pasillos}, ancho ${ancho}`;
       assert.equal(columnas.length, ancho - (bloques.length - 1), caso);
       assert.ok(columnas.every((c, i) => c >= 1 && c <= ancho && (i === 0 || c > columnas[i - 1])), caso);
@@ -1418,15 +1431,16 @@ test('la rejilla es valida para cualquier ancho', () => {
 });
 
 test('disposicion desconocida lanza error', () => {
-  const { rejillaDeSala } = cargar();
-  assert.throws(() => rejillaDeSala({ ancho: 14, pasillos: 'centro' }), /Disposicion desconocida/);
+  const api = cargar();
+  assert.throws(() => rejillaDePrueba(api, { ancho: 14, pasillos: 'centro' }), /Disposicion desconocida/);
 });
 
 test('las mesas caben en su bloque, no cruzan pasillos y no se solapan', () => {
-  const { rejillaDeSala, repartirMesas } = cargar();
+  const api = cargar();
+  const { repartirMesas } = api;
   for (let ancho = 6; ancho <= 40; ancho++) {
     for (const pasillos of DISPOSICIONES) {
-      const sala = rejillaDeSala({ ancho, pasillos });
+      const sala = rejillaDePrueba(api, { ancho, pasillos });
       for (let cuantas = 0; cuantas <= 12; cuantas++) {
         const caso = `${pasillos}, ancho ${ancho}, ${cuantas} mesas`;
         const arranques = repartirMesas(sala, cuantas);
@@ -2029,13 +2043,13 @@ test('rejillaDeBloques: bloques separados por pasillos del ancho que se pida', (
   assert.deepEqual(rejillaDeBloques({ bloques: [10], pasillos: [] }).ancho, 10);
 });
 
-test('las plantillas con pasillos por nombre dan la misma rejilla que antes', () => {
-  const { rejillaDeSala, rejillaDeBloques, distribucionDePasillos } = cargar();
+test('las plantillas con pasillos por nombre conservan ancho y aforo', () => {
+  const { rejillaDeBloques, distribucionDePasillos } = cargar();
   for (const pasillos of DISPOSICIONES) {
     for (let ancho = 6; ancho <= 30; ancho++) {
       const d = distribucionDePasillos(pasillos, ancho);
       assert.ok(d.pasillos.every((a) => a === 1), pasillos);
-      assert.deepEqual(rejillaDeBloques(d), rejillaDeSala({ ancho, pasillos }), pasillos + ' ' + ancho);
+      assert.equal(rejillaDeBloques(d).columnas.length, ancho - d.pasillos.length, pasillos + ' ' + ancho);
       assert.equal(rejillaDeBloques(d).ancho, ancho);
     }
   }
@@ -3158,7 +3172,7 @@ test('agregar y eliminar zonas: las nuevas sirven para filas, las usadas no se e
   // vuelta a crear): el id salta los que ya existen en vez de repetir uno vivo.
   const atrasado = api.agregarZona({ ...conVip, siguienteZona: 1 });
   assert.deepEqual(atrasado.zonas.map((z) => z.id).filter((id) => id.startsWith('zona')), ['zona1', 'zona2']);
-  const vip = api.reasignarZonaFisica(api.cambiarZonaBanda(conVip, 'luneta', 'zona1'),
+  const vip = zonaDePrueba(api, api.cambiarZonaBanda(conVip, 'luneta', 'zona1'),
     api.butacas.filter((b) => b.banda === 'luneta').map((b) => b.id), 'zona1');
   api.generarPlano('mixta-ambos', vip);
   assert.equal(etiqueta(api, 'luneta-C12'), 'VIP C12');
@@ -3170,7 +3184,7 @@ test('agregar y eliminar zonas: las nuevas sirven para filas, las usadas no se e
   // Cuentan tambien las bandas dentro de verticales, los bloques y las butacas sueltas.
   assert.match(api.eliminarZona({ ...vip, bloquesFilas: [bloque('F1', 1, 14, { zona: 'luneta' })] }, 'luneta').motivo, /en uso/);
   assert.match(api.eliminarZona({ ...vip, butacasSueltas: [{ id: 'B1', tipo: 'butaca', x: 1, y: 14, zona: 'luneta', giro: 0 }] }, 'luneta').motivo, /en uso/);
-  const todoGeneral = api.reasignarZonaFisica(api.cambiarZonaBanda(plano, 'luneta', 'general'),
+  const todoGeneral = zonaDePrueba(api, api.cambiarZonaBanda(plano, 'luneta', 'general'),
     Object.values(plano.identidadFisica).filter((f) => f.zona === 'luneta').map((f) => f.id), 'general');
   const soloGeneral = api.eliminarZona(api.eliminarZona(todoGeneral, 'luneta'), 'general');
   // La ultima zona de filas no se elimina (aunque ademas este en uso).
@@ -3636,23 +3650,7 @@ test('mapas version 4: la zona de una mesa y la de una banda de mesas son opcion
   assert.equal(api.butacas.find((b) => b.id === 'M1-N1').zona, 'mesas');
 });
 
-// --- Un solo panel: la banda lleva su zona y su precio -------------------------------
-
-test('una banda tiene su zona para ella sola hasta que otra banda o pieza la usa', () => {
-  const api = cargar();
-  const { plano } = planoDe(api, 'mixta-ambos');
-  assert.equal(api.zonaExclusivaDeBanda(plano, 'luneta'), 'luneta');
-  assert.equal(api.zonaExclusivaDeBanda(plano, 'mesas'), 'mesas');   // la zona de mesas, tambien
-  // Otra banda con la misma zona: ya no es de nadie en exclusiva.
-  const compartida = api.cambiarZonaBanda(plano, 'general', 'luneta');
-  assert.equal(api.zonaExclusivaDeBanda(compartida, 'luneta'), null);
-  // Una pieza con esa zona propia cuenta igual.
-  const conPieza = { ...plano, bloquesFilas: [bloque('F1', 1, 20, { zona: 'luneta' })] };
-  assert.equal(api.zonaExclusivaDeBanda(conPieza, 'luneta'), null);
-  // Una banda sin zona (un espacio) no tiene ninguna.
-  const { plano: lienzo } = conLienzo(api);
-  assert.equal(api.zonaExclusivaDeBanda(lienzo, 'espacio'), null);
-});
+// --- Zonas fisicas independientes de bandas y tarifas -------------------------------
 
 test('zonaNuevaParaBanda le da a la banda una zona propia con su nombre', () => {
   const api = cargar();
@@ -3664,14 +3662,52 @@ test('zonaNuevaParaBanda le da a la banda una zona propia con su nombre', () => 
   const sala = api.generarPlano('mixta-ambos', propia);
   assert.equal(sala.bandas.at(-1).nombre, 'Luneta 2');
   assert.equal(api.butacas.find((b) => b.id === 'general-A1').zona, 'general');
-  assert.equal(api.zonaExclusivaDeBanda(propia, 'general'), 'zona1');
-  // El nombre puesto a mano se va: ahora el nombre vive en la zona.
+  assert.equal(propia.bandas.at(-1).zona, 'zona1');
+  // El nombre propio de la banda se conserva al crear una zona.
   const conNombre = api.renombrarBanda(compartida, 'general', 'Balcón');
   assert.equal(api.zonaNuevaParaBanda(conNombre, 'general', 'Balcón').bandas.at(-1).nombre, 'Balcón');
   assert.deepEqual(api.zonaNuevaParaBanda(plano, 'fantasma', 'X'), { motivo: 'esa banda ya no existe' });
   let lleno = plano;
   for (let i = 0; i < 37; i++) lleno = api.agregarZona(lleno);
   assert.deepEqual(api.zonaNuevaParaBanda(lleno, 'general', 'X'), { motivo: 'ya hay el máximo de zonas (40)' });
+});
+
+test('pieza geometrica de una butaca distingue mesa, bloque, suelta y palco fisico', () => {
+  const api = cargar();
+  for (const [b, esperado] of [
+    [{ grupo: { id: 'M1' } }, 'M1'],
+    [{ bloque: 'F1' }, 'F1'],
+    [{ suelta: 'B1' }, 'B1'],
+    [{ grupo: { id: 'palco1', tipo: 'palco' }, bloque: 'F1' }, 'F1'],
+    [{ grupo: { id: 'palco1', tipo: 'palco' }, suelta: 'B1' }, 'B1'],
+    [{ grupo: { id: 'palco1', tipo: 'palco' } }, undefined],
+    [{ banda: 'luneta' }, undefined],
+  ]) assert.equal(api.piezaDeButaca(b), esperado);
+});
+
+test('crear zonas comparte limites y contadores sin cambiar banda, inventario ni original', () => {
+  const api = cargar();
+  const { plano } = planoDe(api, 'mixta-ambos');
+  const inicial = api.agregarZona(plano);
+  inicial.siguienteZona = 1; // un contador antiguo no autoriza reutilizar zona1
+  const foto = JSON.stringify(inicial);
+  const suelta = api.agregarZona(inicial, 'Luneta');
+  const ligada = api.zonaNuevaParaBanda(inicial, 'general', 'Luneta');
+  assert.equal(JSON.stringify(inicial), foto);
+  assert.deepEqual(suelta.zonas, ligada.zonas);
+  assert.equal(suelta.siguienteZona, 3);
+  assert.equal(ligada.siguienteZona, 3);
+  assert.deepEqual(ligada.zonas.at(-1), { id: 'zona2', nombre: 'Luneta 2' });
+  assert.deepEqual(suelta.bandas, inicial.bandas);
+  assert.equal(ligada.bandas.at(-1).zona, 'zona2');
+  assert.deepEqual(ligada.identidadFisica, inicial.identidadFisica);
+  assert.equal(ligada.bandas.at(-1).nombre, inicial.bandas.at(-1).nombre);
+  let lleno = inicial;
+  while (lleno.zonas.length < api.ZONAS_MAXIMAS) lleno = api.agregarZona(lleno);
+  const alLimite = JSON.stringify(lleno);
+  assert.deepEqual(api.agregarZona(lleno), api.zonaNuevaParaBanda(lleno, 'general', 'Zona'));
+  assert.deepEqual(api.zonaNuevaParaBanda(lleno, 'fantasma', 'Zona'), { motivo: 'esa banda ya no existe' });
+  assert.equal(JSON.stringify(lleno), alLimite);
 });
 
 test('una banda que no es de filas se puede quedar sin zona', () => {

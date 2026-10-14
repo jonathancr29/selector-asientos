@@ -1546,7 +1546,7 @@ document.getElementById('formulario-entidad-fisica').addEventListener('submit', 
 document.getElementById('eliminar-entidad-fisica').addEventListener('click', () => aplicarResultadoFisico(eliminarEntidadFisica(planoEditable(),document.getElementById('tipo-fisico').value,document.getElementById('entidad-fisica').value),'Entidad vacía eliminada; su ID queda retirado.'));
 document.getElementById('herramienta-fisica').addEventListener('click', () => cambiarHerramienta(herramienta === 'fisica' ? 'mesas' : 'fisica'));
 document.getElementById('fisica-desde-piezas').addEventListener('click', () => {
-  const ids = butacasVisibles().filter((b) => piezasActivas.has(b.grupo?.tipo === 'palco' ? b.bloque || b.suelta : b.grupo?.id || b.bloque || b.suelta)).map((b) => b.id);
+  const ids = butacasVisibles().filter((b) => piezasActivas.has(piezaDeButaca(b))).map((b) => b.id);
   seleccionFisica.clear(); ids.forEach((id) => seleccionFisica.add(id)); cambiarHerramienta('fisica');
 });
 document.getElementById('fisica-miembros').addEventListener('click', () => {

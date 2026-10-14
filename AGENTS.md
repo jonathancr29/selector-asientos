@@ -138,7 +138,7 @@ comentarios `// ----`.
 1. **Constantes:** `PASO` (12 unidades del viewBox por celda), `GLIFO`, `ANCHO_SALA` (14 columnas).
 2. **Rejilla:** `rejillaDeBloques({ bloques, pasillos })` devuelve `ancho`, `bloques` y `columnas`. Es
    la **única fuente de verdad** de las columnas. `distribucionDePasillos` convierte las disposiciones
-   con nombre de las plantillas ('ambos'...) y `rejillaDeSala` es el atajo para ellas;
+   con nombre de las plantillas ('ambos'...) para pasarlas a `rejillaDeBloques`;
    `distribucionDeSala` hace el camino inverso. `motivoDistribucion` y `leerDistribucion` validan y
    leen lo que se escribe en el editor. `repartirMesas` coloca mesas dentro de los bloques.
 3. **Datos y tipos de sala:** `zonas` (índice de la sala generada), `ZONAS_POR_DEFECTO`, `usarZonas`,
@@ -159,7 +159,7 @@ comentarios `// ----`.
    devuelven configuraciones de pieza (mesa `{ id, x, y, largo, cabeceras, unLado, giro }` o bloque
    `{ id, tipo: 'filas', x, y, ancho, filas, zona, giro, nombre? }`); nunca modifican la actual.
    **Bandas y columnas:** `planoDesdeSala`, `cambiarDistribucion`, `redimensionarBanda`, `moverBanda`, `eliminarBanda`, `agregarBanda`,
-   `cambiarZonaBanda`, `zonaExclusivaDeBanda`, `zonaNueva`, `zonaNuevaParaBanda`, `agregarZona`, `editarZona`, `eliminarZona`, `usosDeZona`, `leerPrecio`, `agregarVertical`, `cambiarAnchoVertical`, `agregarBandaEnVertical`,
+   `cambiarZonaBanda`, `zonaNueva`, `zonaNuevaParaBanda`, `agregarZona`, `editarZona`, `eliminarZona`, `usosDeZona`, `agregarVertical`, `cambiarAnchoVertical`, `agregarBandaEnVertical`,
    `renombrarBanda`, `duplicarBanda` y `duplicarPieza`. Devuelven un plano nuevo o `{ motivo }`.
    **Butacas sueltas y formas:** `agregarButacaSuelta`, `configDeButaca`, `agregarForma`,
    `configDeForma`, `cambiarTamanoForma` y `FORMAS`. `LISTAS_DE_PIEZAS` (lista, prefijo y contador de
@@ -172,7 +172,7 @@ comentarios `// ----`.
    `hojasDe`, `ubicar`, `idsDentro`, `copiarBandas`, `columnasDeBanda` y `reanclarPiezas`.
    **Varias piezas:** `piezasEnMarco` (la regla de la mitad), `cajaDePiezas`, `moverPiezas` (todo o
    nada), `duplicarPiezas` (conserva las distancias), `eliminarPiezas`, `aplicarConfigs` (transformar
-   varias, con desplazamiento comun si hace falta), `cambiarZonaDePiezas` y `marcarVentaDeMesas`.
+   varias, con desplazamiento comun si hace falta), `piezaDeButaca`, `cambiarZonaDePiezas` y `marcarVentaDeMesas`.
    **Tiradores:** `tiradoresDeSala` (donde va cada agarre) y `redimensionarConTirador` (aplica el
    alto de la banda y el ancho de su vertical de una vez, o ninguno).
    **Areas:** `areaDeCeldas` (rectangulo con las esquinas en cualquier orden), `butacasEnArea`,
@@ -331,6 +331,9 @@ comentarios `// ----`.
   no crea ni elimina zonas; agregar zona no crea espacio. La herencia se materializa al crear;
   mover conserva pertenencias y reasignar es explícito. No reintroducir precios en el editor.
 - **Venta agrupada:** los ayudantes históricos de mesas se conservan para mapas autónomos.
+  Aunque no tengan controles en el editor, `marcarMesaCompleta`, `marcarTodasLasMesas`,
+  `marcarMesasDeBanda` y `marcarVentaDeMesas` conservan sus pruebas y comparten `marcarVenta`.
+  Los atajos que solo preparan casos de prueba viven en `pruebas.mjs`, fuera de la entrega.
   Un evento usa `alternarLugarEvento` y `conciliarSeleccionEvento`: mesas y palcos requieren
   todos sus lugares físicamente utilizables, sin recortar por exclusiones ni disponibilidad.
   Una selección parcial se suelta, nunca se completa automáticamente. No hay controles comerciales
@@ -552,8 +555,9 @@ comentarios `// ----`.
   no forman parte de las versiones. Guardar o exportar marca la versión actual como guardada.
 - **Una zona nueva se estrena en un solo sitio:** `zonaNueva(lista, siguiente, nombreBase)` decide el
   id (`zonaN`, saltando los que ya existen aunque el contador se haya quedado corto) y el nombre
-  (numerado si choca: «General 2»), y no toca el plano. Lo usan `agregarZona` (una zona suelta) y
-  `zonaNuevaParaBanda` (la que nace atada a una banda).
+  (numerado si choca: «General 2»), y no toca el plano. Lo usa `agregarZona` (una zona suelta).
+  `zonaNuevaParaBanda` (la que nace atada a una banda) pasa por `agregarZona`, que comparte
+  límite, copia y contador. Crear una zona para banda conserva nombres y pertenencias existentes.
 - **Crear zona es explícito:** las bandas de filas nuevas usan una zona existente; las de mesas
   conservan su zona efectiva de mesas. Eliminar una banda conserva el catálogo físico.
 - **El color es de la zona:** `colorDeCapa` indexa la paleta por la zona de la banda, y solo cae al
@@ -626,6 +630,8 @@ comentarios `// ----`.
 - **Palco no es mesa ni fila:** el grupo se resuelve después de generar todos los niveles. Conserva
   `numeroGrupo` explícito por ID; no necesita fila ficticia. Sus butacas siguen colisionando y sus
   piezas geométricas siguen siendo editables. El contorno es una referencia sin área sensible.
+  `piezaDeButaca` resuelve el bloque o butaca suelta que lo dibuja; úsalo para seleccionar
+  lugares desde piezas y para reasignar sus zonas, sin confundir el ID del palco con una pieza.
 
 ## Trampas conocidas
 

@@ -150,7 +150,9 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       if (proceso.exitCode !== null) throw new Error('Chrome termino: ' + errorChrome);
       try { return (await readFile(join(perfil, 'DevToolsActivePort'), 'utf8')).split('\n')[0]; }
       catch { return null; }
-    }, 'el puerto de Chrome');
+    }, 'el puerto de Chrome', 30000).catch((error) => {
+      throw new Error(error.message + (errorChrome ? '\n' + errorChrome : ''), { cause: error });
+    });
     const url = `http://127.0.0.1:${puertoWeb}/index.html`;
     const objetivo = await (await fetch(`http://127.0.0.1:${puerto}/json/new?${encodeURIComponent(url)}`, {
       method: 'PUT',
@@ -647,6 +649,8 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       await protocolo.evaluar(`redibujar('mapa:Palco navegador'); cambiarModo('editor'); document.querySelector('#grupo-estructura').open=true;`);
       assert.equal(await protocolo.evaluar('planoEditable().palcos[0].nombre'),'B');
       assert.ok(await protocolo.evaluar('butacas.some(b=>b.grupo?.tipo==="palco"&&b.numero==="07")'));
+      await protocolo.evaluar(`cambiarHerramienta('mesas');marcarActiva('F1');document.querySelector('#fisica-desde-piezas').click();`);
+      assert.deepEqual(await protocolo.evaluar('[...seleccionFisica].sort()'), await protocolo.evaluar('butacasVisibles().filter(b=>b.bloque==="F1").map(b=>b.id).sort()'));
       await protocolo.evaluar(`(() => { const tipo=document.querySelector('#tipo-fisico'); tipo.value='palco'; tipo.dispatchEvent(new Event('change')); const sel=document.querySelector('#entidad-fisica'); sel.value='palco1'; sel.dispatchEvent(new Event('change')); document.querySelector('#fisica-miembros').click(); })()`);
       assert.equal(await protocolo.evaluar('seleccionFisica.size'),2);
       assert.equal(await protocolo.evaluar('elegidas.size'),0);
