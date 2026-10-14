@@ -901,6 +901,97 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       await protocolo.evaluar('window.fetch=__fetchOriginal;SelectorAsientos.cerrarEvento()');
     });
 
+    await t.test('reservas: una sesion nueva compra y la respuesta anterior no libera su bloqueo', async () => {
+      await protocolo.evaluar(`window.__fetchReservas=window.fetch;window.__pendientesReservas=[];
+        window.fetch=(url,opciones)=>new Promise((resolve,reject)=>__pendientesReservas.push({resolve,reject,opciones}));
+        SelectorAsientos.cargarEvento(__fixtureEvento);alternar(document.querySelector('.butaca[data-id="F1-1-1"]'));
+        window.__reservaA=SelectorAsientos.reservar({url:'/reserva',csrf:'csrf_a',requestKey:'reserva_sesion_a_123'}).then(()=>({ok:true}),e=>({error:e.message}));
+        const eventoB=structuredClone(__fixtureEvento.evento);eventoB.evento.id='evt_reserva_b';
+        SelectorAsientos.cargarEvento({mapa:__fixtureEvento.mapa,evento:eventoB});
+        alternar(document.querySelector('.butaca[data-id="F1-1-1"]'));
+        window.__reservaB=SelectorAsientos.reservar({url:'/reserva',csrf:'csrf_b',requestKey:'reserva_sesion_b_123'}).then(r=>({ok:true,resultado:r.resultado}),e=>({error:e.message}));
+        window.__eventoRespuestaB=eventoB;`);
+      assert.equal(await protocolo.evaluar('__pendientesReservas.length'), 2);
+      assert.deepEqual(await protocolo.evaluar('__pendientesReservas.map(p=>JSON.parse(p.opciones.body).event_id)'), ['evt_ejemplo','evt_reserva_b']);
+      await protocolo.evaluar(`__pendientesReservas[0].resolve({ok:true,json:async()=>({evento:__fixtureEvento.evento})});`);
+      assert.match((await protocolo.evaluar('__reservaA')).error, /cerrar o cambiar/);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().solicitud.event_id'), 'evt_reserva_b');
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'), 1);
+      assert.match(await protocolo.evaluar(`SelectorAsientos.reservar({url:'/reserva',csrf:'csrf_b'}).then(()=>'',e=>e.message)`), /reserva en curso/);
+      assert.equal(await protocolo.evaluar('__pendientesReservas.length'), 2);
+      await protocolo.evaluar(`__eventoRespuestaB.evento.versionEstado++;
+        __eventoRespuestaB.lugares.find(p=>p.local_place_id==='F1-1-1').estado='reservado';
+        __pendientesReservas[1].resolve({ok:true,json:async()=>({evento:__eventoRespuestaB,resultado:{reserva:'res_b'}})});`);
+      assert.deepEqual(await protocolo.evaluar('__reservaB'), {ok:true,resultado:{reserva:'res_b'}});
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'), 0);
+      await protocolo.evaluar('window.fetch=__fetchReservas;SelectorAsientos.cerrarEvento()');
+    });
+
+    await t.test('reservas: fallo o cancelacion tardia no afecta la sesion reabierta del mismo evento', async () => {
+      await protocolo.evaluar(`window.__fetchReservas=window.fetch;window.__pendientesReservas=[];
+        window.fetch=(url,opciones)=>new Promise((resolve,reject)=>{
+          __pendientesReservas.push({resolve,reject,opciones});
+          opciones.signal?.addEventListener('abort',()=>reject(opciones.signal.reason),{once:true});
+        });`);
+      for (const fallo of ['red', 'cancelacion']) {
+        await protocolo.evaluar(`SelectorAsientos.cargarEvento(__fixtureEvento);alternar(document.querySelector('.butaca[data-id="F1-1-1"]'));
+          window.__controlA=new AbortController();
+          window.__reservaA=SelectorAsientos.reservar({url:'/reserva',csrf:'csrf_a',signal:__controlA.signal}).then(()=>'',e=>e.name);
+          SelectorAsientos.cerrarEvento();SelectorAsientos.cargarEvento(__fixtureEvento);
+          alternar(document.querySelector('.butaca[data-id="F1-1-1"]'));
+          window.__reservaB=SelectorAsientos.reservar({url:'/reserva',csrf:'csrf_b'}).then(()=>'',e=>e.name);void 0;`);
+        assert.equal(await protocolo.evaluar('__pendientesReservas.length'), 2);
+        await protocolo.evaluar(fallo === 'red' ? `__pendientesReservas[0].reject(new TypeError('fallo de red'));` : `__controlA.abort();`);
+        assert.equal(await protocolo.evaluar('__reservaA'), fallo === 'red' ? 'TypeError' : 'AbortError');
+        assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'), 1);
+        assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().conteos.comprables'), 11);
+        assert.match(await protocolo.evaluar(`SelectorAsientos.reservar({url:'/reserva',csrf:'csrf_b'}).then(()=>'',e=>e.message)`), /reserva en curso/);
+        await protocolo.evaluar(`__pendientesReservas[1].resolve({ok:true,json:async()=>({evento:__fixtureEvento.evento,resultado:{reserva:'res_b'}})});`);
+        assert.equal(await protocolo.evaluar('__reservaB'), '');
+        await protocolo.evaluar('SelectorAsientos.cerrarEvento();__pendientesReservas=[]');
+      }
+      await protocolo.evaluar('window.fetch=__fetchReservas');
+    });
+
+    await t.test('reservas: JSON tardio de otra sesion no libera la operacion actual', async () => {
+      await protocolo.evaluar(`window.__fetchReservas=window.fetch;window.__pendientesReservas=[];
+        window.fetch=(url,opciones)=>new Promise(resolve=>__pendientesReservas.push({resolve,opciones}));
+        SelectorAsientos.cargarEvento(__fixtureEvento);alternar(document.querySelector('.butaca[data-id="F1-1-1"]'));
+        window.__reservaA=SelectorAsientos.reservar({url:'/reserva',csrf:'csrf_a'}).then(()=>'',e=>e.message);
+        __pendientesReservas[0].resolve({ok:true,json:()=>new Promise(resolve=>window.__resolverJsonReserva=resolve)});`);
+      await esperar(() => protocolo.evaluar('typeof __resolverJsonReserva === "function"'), 'el JSON de la reserva');
+      await protocolo.evaluar(`SelectorAsientos.cerrarEvento();SelectorAsientos.cargarEvento(__fixtureEvento);
+        alternar(document.querySelector('.butaca[data-id="F1-1-1"]'));
+        window.__reservaB=SelectorAsientos.reservar({url:'/reserva',csrf:'csrf_b'});
+        __resolverJsonReserva({evento:__fixtureEvento.evento});`);
+      assert.match(await protocolo.evaluar('__reservaA'), /sesión anterior/);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'), 1);
+      assert.match(await protocolo.evaluar(`SelectorAsientos.reservar({url:'/reserva',csrf:'csrf_b'}).then(()=>'',e=>e.message)`), /reserva en curso/);
+      await protocolo.evaluar(`__pendientesReservas[1].resolve({ok:true,json:async()=>({evento:__fixtureEvento.evento,resultado:{reserva:'res_b'}})});`);
+      assert.equal((await protocolo.evaluar('__reservaB')).resultado.reserva, 'res_b');
+      await protocolo.evaluar('window.fetch=__fetchReservas;SelectorAsientos.cerrarEvento()');
+    });
+
+    await t.test('reservas: cancelacion actual libera solo su operacion y permite recuperar disponibilidad', async () => {
+      await protocolo.evaluar(`SelectorAsientos.cargarEvento(__fixtureEvento);alternar(document.querySelector('.butaca[data-id="F1-1-1"]'));
+        window.__fetchReservas=window.fetch;window.__controlReserva=new AbortController();window.__llamadasReserva=0;
+        window.fetch=(url,opciones)=>{__llamadasReserva++;return new Promise((resolve,reject)=>{
+          opciones.signal.addEventListener('abort',()=>reject(opciones.signal.reason),{once:true});
+        })};window.__reservaCancelada=SelectorAsientos.reservar({url:'/reserva',csrf:'csrf_a',signal:__controlReserva.signal}).then(()=>'',e=>e.name);void 0;`);
+      assert.match(await protocolo.evaluar(`SelectorAsientos.reservar({url:'/reserva',csrf:'csrf_a'}).then(()=>'',e=>e.message)`), /reserva en curso/);
+      assert.equal(await protocolo.evaluar('__llamadasReserva'), 1);
+      await protocolo.evaluar('__controlReserva.abort()');
+      assert.equal(await protocolo.evaluar('__reservaCancelada'), 'AbortError');
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().conteos.comprables'), 0);
+      await protocolo.evaluar(`window.fetch=async()=>({ok:true,json:async()=>({evento:__fixtureEvento.evento})});`);
+      await protocolo.evaluar(`SelectorAsientos.refrescar({url:'/evento'})`);
+      await protocolo.evaluar(`alternar(document.querySelector('.butaca[data-id="F1-1-1"]'));
+        window.fetch=async()=>({ok:true,json:async()=>({evento:__fixtureEvento.evento,resultado:{reserva:'res_recuperada'}})});`);
+      const respuesta = await protocolo.evaluar(`SelectorAsientos.reservar({url:'/reserva',csrf:'csrf_a'})`);
+      assert.equal(respuesta.resultado.reserva, 'res_recuperada');
+      await protocolo.evaluar('window.fetch=__fetchReservas;SelectorAsientos.cerrarEvento()');
+    });
+
     await t.test('acceso general: visor por cantidad, compra mixta, niveles y etiquetas sin butaca', async () => {
       await protocolo.evaluar(`window.__general=${JSON.stringify(ejemploGeneral)};
         __general.mapa.revisionFisica.estado='borrador';delete __general.mapa.revisionFisica.huella;
