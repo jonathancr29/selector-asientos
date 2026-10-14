@@ -1081,11 +1081,11 @@ function alternar(elemento) {
     if (grupo?.modalidad === 'completa') marcarTableroElegido(grupo.id, elegida);
     actualizarResumen(); notificarSeleccionEvento(); return;
   }
-  const elegida = alternarEleccion(elegidas, b, butacas);
+  const elegida = alternarEleccion(elegidas, b, butacas, lugaresPorGrupo);
   if (elegida === null) return;
   // El DOM refleja el dato; nunca se lee de vuelta. En una mesa completa cambian todos
   // sus lugares y el tablero.
-  const afectadas = b.grupo && b.grupo.completa ? lugaresDeMesa(b.grupo.id, butacas).filter((x) => x.estado === 'libre') : [b];
+  const afectadas = b.grupo && b.grupo.completa ? lugaresDeMesa(b.grupo.id, butacas, lugaresPorGrupo).filter((x) => x.estado === 'libre') : [b];
   for (const x of afectadas) {
     // La palomita de una butaca libre no existe hasta que se elige.
     if (elegida) ponerMarca(x);
@@ -1102,7 +1102,7 @@ function marcarTableroElegido(id, elegida) {
 
 // Clic en el tablero de una mesa completa: la elige como si fuera uno de sus lugares.
 function alternarMesaPorTablero(id) {
-  const primera = butacas.find((b) => b.grupo && b.grupo.id === id && b.grupo.completa && b.estado === 'libre');
+  const primera = (lugaresPorGrupo.get(id) || []).find(b => b.grupo.completa && b.estado === 'libre');
   if (primera) alternar(primera.nodo);
 }
 

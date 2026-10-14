@@ -992,6 +992,47 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       await protocolo.evaluar('window.fetch=__fetchReservas;SelectorAsientos.cerrarEvento()');
     });
 
+    await t.test('rendimiento: actualizaciones validas y rechazadas no generan geometria ni comparten mapas externos', async () => {
+      await protocolo.evaluar(`(()=>{window.__externo=structuredClone(__fixtureEvento);SelectorAsientos.cargarEvento(__externo);
+        window.__tokenFisico=recintoDelEvento;__externo.mapa.zonas[0].nombre='Alterado';
+        alternar(document.querySelector('.butaca[data-id="F1-1-1"]'));alternarMesaPorTablero('M1');
+        window.__generadorOriginal=generarPlano;window.__generacionesActualizacion=0;
+        generarPlano=(...args)=>{__generacionesActualizacion++;return __generadorOriginal(...args)};
+        window.__comercio=structuredClone(__fixtureEvento.evento);__comercio.evento.versionEstado++;
+        __comercio.categorias.find(c=>c.id==='ett_luneta').precioCentavos=35001;
+        __comercio.lugares.find(p=>p.local_place_id==='M1-N1').estado='reservado';
+        SelectorAsientos.actualizarEvento(__comercio);SelectorAsientos.actualizarEvento(__comercio);
+        const invalido=structuredClone(__comercio);invalido.evento.revision.huella='otra';
+        try{SelectorAsientos.actualizarEvento(invalido)}catch{};})()`);
+      assert.equal(await protocolo.evaluar('__generacionesActualizacion'),0);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'),1);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().totalCentavos'),35001);
+      assert.equal(await protocolo.evaluar('recintoDelEvento===__tokenFisico'),true);
+      assert.equal(await protocolo.evaluar('eventoConectado.catalogo.lugares.find(p=>p.local_place_id==="F1-1-1").physical_zone.name'),'Luneta');
+      await protocolo.evaluar(`generarPlano=__generadorOriginal;
+        try{SelectorAsientos.evaluarConfiguracion(__externo.mapa,__comercio);window.__rechazoMapa=false}catch{window.__rechazoMapa=true};
+        SelectorAsientos.cerrarEvento();`);
+      assert.equal(await protocolo.evaluar('__rechazoMapa'),true);
+      assert.equal(await protocolo.evaluar('recintoDelEvento===null'),true);
+    });
+
+    await t.test('rendimiento: indices de mesas y grupos se renuevan por nivel, modalidad y recinto', async () => {
+      await protocolo.evaluar(`SelectorAsientos.cargarEvento(__fixtureEvento);window.__mesaIndexada=mesasPorId.get('M1');alternarMesaPorTablero('M1');`);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'),4);
+      assert.equal(await protocolo.evaluar('lugaresPorGrupo.get("M1").length'),4);
+      await protocolo.evaluar(`cambiarNivelVista('n2')`);
+      assert.equal(await protocolo.evaluar('mesasPorId.has("M1")||lugaresPorGrupo.has("M1")'),false);
+      await protocolo.evaluar(`cambiarNivelVista('n1');alternarMesaPorTablero('M1');
+        const individual=structuredClone(__fixtureEvento.evento);individual.evento.versionEstado++;
+        individual.grupos.find(g=>g.id==='M1').modalidad='individual';SelectorAsientos.actualizarEvento(individual);`);
+      assert.equal(await protocolo.evaluar('SelectorAsientos.seleccion().cantidad'),0);
+      assert.equal(await protocolo.evaluar('lugaresPorGrupo.get("M1").every(b=>!b.grupo.completa)'),true);
+      await protocolo.evaluar(`SelectorAsientos.cargarEvento(${JSON.stringify(ejemploGeneral)});`);
+      assert.equal(await protocolo.evaluar('mesasPorId.get("M1")!==__mesaIndexada'),true);
+      assert.equal(await protocolo.evaluar('[...lugaresPorGrupo.values()].flat().every(b=>butacasVisibles().includes(b))'),true);
+      await protocolo.evaluar('SelectorAsientos.cerrarEvento()');
+    });
+
     await t.test('acceso general: visor por cantidad, compra mixta, niveles y etiquetas sin butaca', async () => {
       await protocolo.evaluar(`window.__general=${JSON.stringify(ejemploGeneral)};
         __general.mapa.revisionFisica.estado='borrador';delete __general.mapa.revisionFisica.huella;

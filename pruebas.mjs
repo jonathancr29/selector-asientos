@@ -54,6 +54,79 @@ const cargar = () => new Function(fuente + '\nreturn { ' + declarados.join(', ')
 const ejemploConector = () => JSON.parse(readFileSync(new URL('./docs/ejemplo-conector-evento.json', import.meta.url), 'utf8'));
 const ejemploGeneral = () => JSON.parse(readFileSync(new URL('./docs/ejemplo-conector-general.json', import.meta.url), 'utf8'));
 
+test('recinto preparado: actualiza comercio sin generar geometria ni cambiar la escena', () => {
+  for (const f of [ejemploConector(), ejemploGeneral()]) {
+    const a = cargar();
+    const preparado = a.prepararRecintoEvento(f.mapa);
+    assert.ok(preparado.recinto);
+    const antes = a.butacas.slice();
+    for (const cambio of [f.evento, { ...f.evento, categorias: [] }, { ...f.evento, lugares: [] }, { ...f.evento, formato: 'otro' }]) {
+      const rapido = a.resolverEventoDeRecinto(preparado.recinto, cambio);
+      assert.equal(a.butacas.length, antes.length);
+      assert.ok(a.butacas.every((b,i) => b === antes[i]));
+      assert.deepEqual(rapido, a.conservarEscenaGenerada(() => a.resolverEventoDeMapa(f.mapa, cambio)));
+    }
+    const cambiado = structuredClone(f.evento);
+    cambiado.evento.versionEstado++;
+    cambiado.categorias[0].precioCentavos++;
+    cambiado.lugares[0].estado = 'reservado';
+    assert.deepEqual(a.resolverEventoDeRecinto(preparado.recinto, cambiado), a.resolverEventoDeMapa(f.mapa, cambiado));
+  }
+});
+
+test('recinto preparado: token opaco, catalogo inmutable y ninguna confianza en mapas ajenos', () => {
+  const a = cargar(), f = ejemploConector();
+  const p = a.prepararRecintoEvento(f.mapa);
+  assert.deepEqual(Object.keys(p.recinto), []);
+  assert.ok(a.resolverEventoDeRecinto({}, f.evento).errores);
+  const e = a.resolverEventoDeRecinto(p.recinto, f.evento).evento;
+  assert.throws(() => { e.catalogo.lugares[0].level.id = 'otro'; }, TypeError);
+  assert.throws(() => { e.lugares.values().next().value.physical_zone.name = 'Otro'; }, TypeError);
+  f.mapa.zonas[0].nombre = 'Otro';
+  assert.ok(a.prepararRecintoEvento(f.mapa).errores);
+  assert.equal(a.resolverEventoDeRecinto(p.recinto, f.evento).evento.catalogo, e.catalogo);
+  const otro = ejemploConector(); otro.mapa.revisionFisica.estado = 'borrador';
+  assert.ok(a.prepararRecintoEvento(otro.mapa).errores);
+  const ajeno = structuredClone(f.evento); ajeno.evento.revision.huella = 'otra';
+  assert.ok(a.resolverEventoDeRecinto(p.recinto, ajeno).errores);
+});
+
+test('indice de grupos: completar mesas recorre lugares linealmente y conserva orden y estados', () => {
+  const a = cargar(); let visitas = 0;
+  const lista = Array.from({length:2400},(_,i)=>{
+    const grupo = {id:'M'+Math.floor(i/8),nombre:'Mesa '+Math.floor(i/8),completa:true};
+    const b = {id:'p'+i,estado:i%8===7?'bloqueada':'libre'};
+    Object.defineProperty(b,'grupo',{get(){visitas++;return grupo;}}); return b;
+  });
+  const indice = a.agruparLugaresPorGrupo(lista);
+  assert.equal(indice.size,300);
+  assert.deepEqual(a.lugaresDeMesa('M0',lista,indice).map(b=>b.id),lista.slice(0,8).map(b=>b.id));
+  const ids = new Set(lista.filter((b,i)=>i%8===0).map(b=>b.id));
+  visitas = 0;
+  assert.equal(a.completarMesasElegidas(ids,lista).length,300);
+  assert.equal(ids.size,2100);
+  assert.ok(visitas <= lista.length * 10, 'no buscar cada mesa recorriendo toda la sala');
+  assert.ok(!ids.has('p7'));
+  a.alternarEleccion(ids,lista[0],lista,indice);
+  assert.ok(lista.slice(0,8).every(b=>!ids.has(b.id)));
+});
+
+test('conjunto grande: la solicitud comprueba todos los requeridos una sola vez', () => {
+  const a = cargar();
+  class SeleccionMedida extends Set { busquedas = 0; has(id) { this.busquedas++; return super.has(id); } }
+  const requeridos = Array.from({length:2000},(_,i)=>'p'+i);
+  const ids = new SeleccionMedida(requeridos);
+  const evento = {version:1,cabecera:{id:'evt_prueba',revision:{}},generales:new Map(),
+    grupos:new Map([['palco1',{modalidad:'completa',event_group_id:'eg_palco',requeridos}]]),
+    lugares:new Map(requeridos.map(id=>[id,{comprable:true,physical_group:{id:'palco1'},categoria:{precioCentavos:10}}]))};
+  const s = a.solicitudDeSeleccionEvento(ids,evento);
+  assert.equal(s.cantidad,2000); assert.equal(s.totalCentavos,20000);
+  assert.deepEqual(s.solicitud.event_group_ids,['eg_palco']);
+  assert.equal(ids.busquedas,2000);
+  ids.delete('p1999');
+  assert.ok(a.solicitudDeSeleccionEvento(ids,evento).errores);
+});
+
 test('validacion conserva objetos, referencias de escena y nivel, tambien al fallar', () => {
   const a = cargar();
   a.generarPlano('mixta-ambos');

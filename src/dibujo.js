@@ -13,6 +13,8 @@ const capaRotuloSeleccion = document.getElementById('rotulo-seleccion');
 const formatoDinero = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 const dinero = (centavos) => formatoDinero.format(centavos / 100);
 const porId = new Map();   // id -> butaca, para no recorrer la lista en cada interaccion
+let mesasPorId = new Map();
+let lugaresPorGrupo = new Map();
 // La zona abre la etiqueta, como saldra en el boleto; el id queda aparte.
 const etiquetaDe = (b) => b.accesoGeneral ? zonas[b.zona].nombre + ', acceso general, sin asiento asignado' : ((salaActual?.niveles?.length > 1 ? b.nombreNivel + ', ' : '') + (b.sectorFisico ? b.sectorFisico.nombre + ', ' : '') + (b.grupo?.tipo === 'palco' ? zonas[b.zona].nombre + ', ' + b.grupo.nombre + ', lugar ' + b.numero : b.grupo ? zonas[b.zona].nombre + ', mesa ' + b.numeroMesa +
   (b.grupo.completa ? ' completa' : '') + ', lugar ' + b.numero
@@ -33,19 +35,16 @@ function texto(clase, x, y, contenido) {
 // Un tablero de mesa completa: se puede tocar (en Previsualizar) y se marca elegido
 // cuando sus lugares lo estan.
 function marcarTableroDeMesa(tablero, id) {
-  const mesa = mesas.find((m) => m.id === id);
+  const mesa = mesasPorId.get(id);
   if (!mesa || !mesa.completa) return;
   tablero.classList.add('completa');
-  const libres = butacas.filter((b) => b.grupo && b.grupo.id === id && b.estado === 'libre');
+  const libres = (lugaresPorGrupo.get(id) || []).filter(b => b.estado === 'libre');
   if (libres.length && libres.every((b) => elegidas.has(b.id))) tablero.classList.add('elegida');
 }
 
 function dibujarMuebles() {
   const palcos = new Map();
-  for (const b of butacasVisibles()) if (b.grupo?.tipo === 'palco') {
-    if (!palcos.has(b.grupo.id)) palcos.set(b.grupo.id, []);
-    palcos.get(b.grupo.id).push(b);
-  }
+  for (const [id, lista] of lugaresPorGrupo) if (lista[0].grupo?.tipo === 'palco') palcos.set(id, lista);
   const zonasPalco = new Map();
   for (const lista of palcos.values()) {
     const zona = lista[0].zona;
@@ -391,6 +390,8 @@ function dibujarPiezas() {
 
 function dibujarTodo() {
   if (eventoConectado) aplicarEventoAButacas();
+  mesasPorId = new Map(mesas.map(m => [m.id, m]));
+  lugaresPorGrupo = agruparLugaresPorGrupo(butacasVisibles());
   if (herramienta === 'zona') llenarPincel();
   capaMuebles.textContent = '';
   capaSubtitulos.textContent = '';

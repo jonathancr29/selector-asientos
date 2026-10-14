@@ -80,6 +80,12 @@ El servidor debe implementar su idempotencia: el navegador no evita compras dupl
 
 ## Snapshot completo, versión 1
 
+Al cargar un evento, el selector valida el mapa publicado y prepara su catálogo físico e
+índices privados. Las actualizaciones reutilizan esa revisión y validan íntegramente el snapshot
+comercial; no vuelven a generar el plano. Cerrar o cargar otro evento descarta el contexto.
+`evaluarConfiguracion` valida siempre el mapa recibido, incluso si hay un evento conectado.
+No cambia el contrato ni permite actualizar geometría dentro de una sesión de compra.
+
 [Ejemplo ejecutable](ejemplo-conector-evento.json): recinto ficticio de tres niveles, fila entre
 sectores, mesa y palco. Sus IDs públicos son datos de prueba, no identificadores de producción.
 Incluye mapa v8 publicado y esta estructura comercial independiente:

@@ -1,6 +1,7 @@
 // El anfitrion suministra datos; no se buscan eventos ni credenciales en la URL.
 // Esta API comparte el motor con la entrega autonoma y con los archivos para CSP.
 let mapaDelEvento = null;
+let recintoDelEvento = null;
 let contextoAntesDelEvento = null;
 let alSeleccionarEvento = null;
 let sesionDelConector = 0;
@@ -34,19 +35,23 @@ function seleccionDelEvento() {
   return copiarDatos({ ...s, conteos: conteosDeEvento(eventoConectado) });
 }
 
-function validarDatosEvento(mapa, dato) {
-  const r = conservarEscenaGenerada(() => resolverEventoDeMapa(mapa, dato));
+function validarDatosEvento(mapa, dato, recinto = null) {
+  const r = recinto ? resolverEventoDeRecinto(recinto, dato)
+    : conservarEscenaGenerada(() => resolverEventoDeMapa(mapa, dato));
   if (r.errores) throw new Error(r.errores.join('; '));
   return r.evento;
 }
 
 function cargarEvento({ mapa, evento, alSeleccionar } = {}) {
   if (alSeleccionar !== undefined && typeof alSeleccionar !== 'function') throw new Error('El callback de selección no es válido.');
-  const resuelto = validarDatosEvento(mapa, evento);
+  const preparado = conservarEscenaGenerada(() => prepararRecintoEvento(mapa));
+  if (preparado.errores) throw new Error(preparado.errores.join('; '));
+  const resuelto = validarDatosEvento(mapa, evento, preparado.recinto);
   if (eventoConectado) cerrarEvento();
   contextoAntesDelEvento = { tipo: tipoActual, elegidas: [...elegidas] };
   cambiarModo('vista'); elegidas.clear(); cantidadesGenerales.clear();
   mapaDelEvento = copiarDatos(mapa);
+  recintoDelEvento = preparado.recinto;
   const clave = 'evento:' + resuelto.cabecera.id;
   TIPOS_DE_SALA[clave] = definicionDeMapa(mapaDelEvento);
   construirSelector(clave); redibujar(clave);
@@ -63,7 +68,7 @@ function cargarEvento({ mapa, evento, alSeleccionar } = {}) {
 
 function actualizarEvento(dato) {
   if (!eventoConectado) throw new Error('No hay un evento conectado.');
-  const nuevo = validarDatosEvento(mapaDelEvento, dato);
+  const nuevo = validarDatosEvento(mapaDelEvento, dato, recintoDelEvento);
   const motivo = motivoCambioDeEvento(eventoConectado, nuevo);
   if (motivo) throw new Error(motivo);
   if (nuevo.cabecera.versionEstado < eventoConectado.cabecera.versionEstado) throw new Error('La respuesta de disponibilidad no es más reciente.');
@@ -84,7 +89,7 @@ function actualizarEvento(dato) {
 function cerrarEvento() {
   if (!eventoConectado) return;
   const clave = tipoActual;
-  eventoConectado = null; mapaDelEvento = null; alSeleccionarEvento = null;
+  eventoConectado = null; mapaDelEvento = null; recintoDelEvento = null; alSeleccionarEvento = null;
   disponibilidadPerdida = false; sesionDelConector++;
   delete TIPOS_DE_SALA[clave]; delete planos[clave]; delete historiales[clave];
   elegidas.clear(); cantidadesGenerales.clear();

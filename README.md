@@ -1078,6 +1078,12 @@ El anfitrión recibe selecciones por callback o evento DOM, consulta y reserva m
 mismo origen con CSRF. Las peticiones envían IDs opacos del evento; el importe mostrado no autoriza
 una venta. Errores de consulta suspenden la compra hasta confirmar de nuevo disponibilidad.
 Actualizaciones validan revisión, identidades y versión, y avisan al soltar selecciones afectadas.
+El recinto publicado se valida una vez por carga. Las actualizaciones reutilizan su catálogo
+físico inmutable y siguen validando todos los datos comerciales, sin regenerar la geometría.
+El evaluador de configuración valida cada mapa recibido; cerrar y cargar otro evento descarta
+el catálogo anterior. Los índices de mesas y grupos se renuevan al dibujar el nivel visible.
+La [medición del conector y grupos](docs/MEDICION_CONECTOR_GRUPOS.md) contiene tiempos, conteos
+de recorridos y comandos para comparar las fuentes actuales con una referencia Git.
 Solo se admite una reserva pendiente por sesión del visor. Cerrar y cargar un evento, incluso
 el mismo, permite iniciar la nueva operación; respuestas o cancelaciones anteriores no cambian
 esa sesión ni liberan su reserva. Cerrar el visor no cancela una reserva en Sin Taquilla:
