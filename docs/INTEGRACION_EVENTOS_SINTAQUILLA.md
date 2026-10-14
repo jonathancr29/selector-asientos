@@ -69,7 +69,11 @@ SelectorAsientos.cargarEvento({
 Las rutas del ejemplo no existen todavía. No hay consulta automática de red ni evento deducido
 de parámetros de URL. El anfitrión asigna endpoints y suministra el CSRF de su sesión en la
 cabecera `X-CSRF-Token`. El transporte rechaza otro origen, credenciales en URL, fragmentos y
-redirecciones; usa `credentials: 'same-origin'`. Permite un POST de reserva en curso a la vez.
+redirecciones; usa `credentials: 'same-origin'`. Permite un POST de reserva en curso por sesión.
+Cerrar y cargar otro evento, o reabrir el mismo, crea una sesión independiente: una petición
+anterior pendiente no la bloquea y su finalización no libera la operación nueva. Sus respuestas
+y errores se descartan para la vista actual. Esto no cancela una reserva del servidor; conservar
+la clave de la operación anterior para consultar su resultado antes de reintentar esa compra.
 Pasar `signal` para cancelar o limitar el tiempo desde el anfitrión. Generar/conservar
 `requestKey` para reintentos de la misma operación; si se omite se genera un UUID por llamada.
 El servidor debe implementar su idempotencia: el navegador no evita compras duplicadas por sí solo.

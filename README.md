@@ -1078,6 +1078,10 @@ El anfitrión recibe selecciones por callback o evento DOM, consulta y reserva m
 mismo origen con CSRF. Las peticiones envían IDs opacos del evento; el importe mostrado no autoriza
 una venta. Errores de consulta suspenden la compra hasta confirmar de nuevo disponibilidad.
 Actualizaciones validan revisión, identidades y versión, y avisan al soltar selecciones afectadas.
+Solo se admite una reserva pendiente por sesión del visor. Cerrar y cargar un evento, incluso
+el mismo, permite iniciar la nueva operación; respuestas o cancelaciones anteriores no cambian
+esa sesión ni liberan su reserva. Cerrar el visor no cancela una reserva en Sin Taquilla:
+el anfitrión conserva su clave de operación para consultar o recuperar el resultado.
 
 ### Acceso general por evento
 

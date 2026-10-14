@@ -339,6 +339,10 @@ comentarios `// ----`.
   Al validar una respuesta se conservan los objetos generados y sus referencias al SVG, incluso
   cuando se rechaza. Un fallo de consulta suspende disponibilidad; una respuesta tardía no altera
   otra sesión ni una versión más reciente. La selección envía solo IDs opacos, nunca precio.
+  La reserva pendiente lleva sesión e identidad de operación: solo bloquea otra reserva de esa
+  sesión y su `finally` libera únicamente su propio token. Una reserva anterior bloqueaba un
+  evento nuevo (pasó); liberar sin comparar identidad permitiría duplicar el POST de la nueva
+  sesión. Cerrar el visor no confirma cancelación en servidor; el anfitrión conserva la clave.
 - **Entrega con CSP:** `construir.mjs` genera también `integracion/index.html`, CSS y JS externos;
   `--check` comprueba las cuatro salidas. No introducir scripts/estilos inline en la entrega externa.
 - **Una mesa redonda solo guarda sus lugares** (un número par de 2 a 16); el diámetro sale de

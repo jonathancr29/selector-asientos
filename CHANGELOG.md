@@ -4,7 +4,22 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Validación segura de mapas y escena conectada
+## Sin publicar — Reservas pendientes por sesión
+
+Rama `claude/reservas-por-sesion`.
+
+- Una reserva pendiente pertenece a la sesión que la inició y no bloquea cargar otro evento
+  ni reabrir el mismo. Sus respuestas, errores o cancelaciones no liberan una operación nueva.
+- Conserva un POST de reserva a la vez por sesión y la recuperación de disponibilidad tras
+  cancelar. No cancela reservas en servidor ni cambia las claves de idempotencia.
+- Verificado: 224 pruebas de lógica y 41 de navegador; los 37 recorridos anteriores pasan
+  sobre main y esta versión. Tres mutaciones detectadas en bloqueo por sesión, propiedad de
+  operación y liberación. Entrega autónoma y CSP sincronizadas; sin cambios en mapas locales.
+
+## 2026-10-14 — PR #63: Validación segura de mapas y escena conectada
+
+[PR #63](https://github.com/jonathancr29/selector-asientos/pull/63), fusionado en `main` con el
+commit `72e885d`.
 
 Rama `claude/validacion-segura`.
 

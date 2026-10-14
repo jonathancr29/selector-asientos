@@ -4,7 +4,7 @@ let mapaDelEvento = null;
 let contextoAntesDelEvento = null;
 let alSeleccionarEvento = null;
 let sesionDelConector = 0;
-let reservaEnCurso = false;
+let reservaEnCurso = null; // identidad de la operacion y sesion propietaria
 let disponibilidadPerdida = false;
 
 function aplicarEventoAButacas() {
@@ -121,18 +121,19 @@ async function intercambiarEvento({ url, csrf, signal, requestKey } = {}, reserv
   if (!eventoConectado) throw new Error('No hay un evento conectado.');
   const destino = urlDelConector(url);
   if (reservar && (typeof csrf !== 'string' || !csrf.trim())) throw new Error('Falta el token CSRF proporcionado por Sin Taquilla.');
-  if (reservar && reservaEnCurso) throw new Error('Ya hay una reserva en curso.');
+  if (reservar && reservaEnCurso?.sesion === sesionDelConector) throw new Error('Ya hay una reserva en curso.');
   const seleccion = seleccionDelEvento();
   if (reservar && !seleccion.cantidad) throw new Error('Selecciona lugares antes de reservar.');
   if (reservar && requestKey !== undefined && (typeof requestKey !== 'string' || !/^[A-Za-z0-9_-]{16,100}$/.test(requestKey))) throw new Error('La clave de solicitud no es válida.');
   const sesion = sesionDelConector;
   const version = eventoConectado.cabecera.versionEstado;
   const headers = { Accept: 'application/json' };
+  const operacion = reservar ? { sesion } : null;
   let body;
   if (reservar) {
     headers['Content-Type'] = 'application/json'; headers['X-CSRF-Token'] = csrf;
     body = JSON.stringify({ ...seleccion.solicitud, request_key: requestKey || crypto.randomUUID() });
-    reservaEnCurso = true;
+    reservaEnCurso = operacion;
   }
   try {
     const respuesta = await fetch(destino, { method: reservar ? 'POST' : 'GET', credentials: 'same-origin',
@@ -155,7 +156,10 @@ async function intercambiarEvento({ url, csrf, signal, requestKey } = {}, reserv
   } catch (error) {
     if (sesion === sesionDelConector && eventoConectado.cabecera.versionEstado === version) perderDisponibilidadEvento('Disponibilidad sin confirmar.');
     throw error;
-  } finally { if (reservar) reservaEnCurso = false; }
+  } finally {
+    // Una respuesta anterior nunca libera la reserva que ya inicio otra sesion.
+    if (reservar && reservaEnCurso === operacion) reservaEnCurso = null;
+  }
 }
 
 // Proyeccion para el formulario del anfitrion; no guarda precios en el recinto.
