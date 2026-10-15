@@ -7,7 +7,9 @@ const base = new URL('.', import.meta.url);
 const referencia = process.argv[2];
 const leer = archivo => referencia ? execFileSync('git', ['show', referencia + ':' + archivo],
   { cwd: fileURLToPath(base), encoding: 'utf8', windowsHide: true }) : readFileSync(new URL(archivo, base), 'utf8');
-let fuente = leer('src/modelo.js').split('// === Fin de la parte sin DOM')[0];
+// Leer la entrega permite medir tambien referencias Git anteriores a separar el modelo.
+const html = leer('index.html');
+let fuente = html.slice(html.indexOf('<script>') + '<script>'.length).split('// === Fin de la parte sin DOM')[0];
 const cuentas = { generaciones: 0, visitasMesas: 0, visitasIndice: 0, consultasMesa: 0, consultasButaca: 0 };
 const instrumentar = (texto, de, por, obligatoria = false) => {
   const n = texto.split(de).length - 1;

@@ -7,6 +7,11 @@ const leer = (nombre) => readFileSync(new URL(nombre, base), 'utf8');
 const partes = [
   ['{{ESTILOS}}', 'src/estilos.css'],
   ['{{MODELO}}', 'src/modelo.js'],
+  ['{{MAPAS}}', 'src/mapas.js'],
+  ['{{OPERACIONES_PLANO}}', 'src/operaciones-plano.js'],
+  ['{{HISTORIAL}}', 'src/historial.js'],
+  ['{{EVENTOS}}', 'src/eventos.js'],
+  ['{{EXPLORACION}}', 'src/exploracion.js'],
   ['{{DIBUJO}}', 'src/dibujo.js'],
   ['{{INTERFAZ}}', 'src/interfaz.js'],
   ['{{EDITOR}}', 'src/editor.js'],

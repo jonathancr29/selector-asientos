@@ -1378,6 +1378,89 @@ test('historial: una edición tras deshacer descarta el rehacer y respeta el lí
   assert.equal(h.puedeDeshacer(), false);
 });
 
+test('historial: presupuesto de texto incluye guardado y conserva el limite exacto', () => {
+  const api = cargar();
+  const estado = (n) => ({ plano: 'x'.repeat(9), firma: String(n) });
+  const h = api.crearHistorial(estado(0), 51, 62);
+  h.registrar(estado(1)); h.registrar(estado(2));
+  assert.deepEqual(h.medidas(), { estados: 3, bytes: 62, maximo: 51, maxBytes: 62, excedido: false });
+  h.registrar(estado(3));
+  assert.equal(h.medidas().bytes, 62);
+  assert.equal(h.deshacer().firma, '2');
+  assert.equal(h.deshacer().firma, '1');
+  assert.equal(h.deshacer(), null);
+  assert.equal(h.tieneCambios(), true); // el guardado retirado no se convierte en otro estado
+  h.marcarGuardado();
+  assert.equal(h.tieneCambios(), false);
+  h.registrar(estado(4));
+  assert.equal(h.puedeRehacer(), false);
+  assert.equal(h.medidas().bytes, 42);
+  assert.equal(h.deshacer().firma, '1');
+  assert.equal(h.tieneCambios(), false);
+});
+
+test('historial: actualizar en medio retira extremos sin perder actual ni saltar el rehacer', () => {
+  const { crearHistorial } = cargar();
+  const e = (firma, largo = 9) => ({ plano: 'x'.repeat(largo), firma });
+  const h = crearHistorial(e('0'), 51, 82);
+  h.registrar(e('1')); h.registrar(e('2')); h.registrar(e('3'));
+  h.deshacer(); h.deshacer();
+  const actual = e('A', 29);
+  h.actualizarActual(actual);
+  assert.equal(h.medidas().bytes, 82);
+  assert.equal(h.medidas().estados, 2);
+  assert.equal(h.puedeDeshacer(), false);
+  assert.equal(h.rehacer().firma, '2'); // se retira 3, el futuro mas lejano
+  assert.equal(h.deshacer(), actual);
+  const masGrande = e('B', 39);
+  h.actualizarActual(masGrande);
+  assert.equal(h.medidas().bytes, 82);
+  assert.equal(h.medidas().estados, 1);
+  assert.equal(h.puedeRehacer(), false);
+  assert.equal(h.puedeDeshacer(), false);
+});
+
+test('historial: un actual grande sobrevive y la memoria liberada se recupera', () => {
+  const { crearHistorial, bytesDeEstadoHistorial } = cargar();
+  const inicial = { plano: null, firma: '0' };
+  const h = crearHistorial(inicial, 51, 50);
+  const grande = { plano: 'x'.repeat(100), firma: '1' };
+  assert.equal(bytesDeEstadoHistorial(inicial), 2);
+  h.registrar(grande);
+  assert.deepEqual(h.medidas(), { estados: 1, bytes: 204, maximo: 51, maxBytes: 50, excedido: true });
+  assert.equal(h.registrar({ ...grande }), false);
+  assert.equal(h.puedeDeshacer(), false);
+  h.registrar({ plano: '2', firma: '2' });
+  assert.equal(h.medidas().bytes, 6);
+  assert.equal(h.medidas().excedido, false);
+  h.registrar(inicial);
+  assert.equal(h.tieneCambios(), false);
+  h.marcarGuardado();
+  assert.equal(h.medidas().bytes, 8);
+});
+
+test('historial: guardar una firma larga cuenta su referencia y conserva el actual', () => {
+  const { crearHistorial } = cargar();
+  const h = crearHistorial({ plano: null, firma: '0' }, 51, 62);
+  h.registrar({ plano: null, firma: 'x'.repeat(20) });
+  assert.equal(h.medidas().estados, 2);
+  h.marcarGuardado();
+  assert.deepEqual(h.medidas(), { estados: 1, bytes: 80, maximo: 51, maxBytes: 62, excedido: true });
+  assert.equal(h.tieneCambios(), false);
+});
+
+test('fuentes puras: la entrega conserva el orden de responsabilidades y una sola marca DOM', () => {
+  const nombres = ['modelo', 'mapas', 'operaciones-plano', 'historial', 'eventos', 'exploracion'];
+  let posicion = -1;
+  for (const nombre of nombres) {
+    const texto = readFileSync(new URL('./src/' + nombre + '.js', import.meta.url), 'utf8');
+    const siguiente = html.indexOf(texto, posicion + 1);
+    assert.ok(siguiente > posicion, nombre + ' ausente o fuera de orden');
+    posicion = siguiente;
+  }
+  assert.equal(html.split('// === Fin de la parte sin DOM').length, 2);
+});
+
 test('la API de las pruebas se escanea sola, sin lista que mantener', () => {
   assert.equal(new Set(declarados).size, declarados.length, 'hay nombres repetidos en el escaneo');
   const api = cargar();
@@ -4173,6 +4256,8 @@ test('los documentos citan los topes que de verdad tiene el codigo', () => {
     ['BUTACAS_POR_BLOQUE', '1 a ' + api.BUTACAS_POR_BLOQUE + ' butacas'],
     ['BLOQUES_MAXIMOS', '1 a ' + api.BLOQUES_MAXIMOS + ' bloques'],
     ['VERSION_MAPA', 'versión ' + api.VERSION_MAPA],
+    ['HISTORIAL_ESTADOS_MAXIMOS', api.HISTORIAL_ESTADOS_MAXIMOS + ' estados'],
+    ['HISTORIAL_BYTES_MAXIMOS', (api.HISTORIAL_BYTES_MAXIMOS / 1024 / 1024) + ' MiB'],
   ];
   for (const [constante, comoSeEscribe] of topes) {
     assert.ok(todo.includes(comoSeEscribe),
