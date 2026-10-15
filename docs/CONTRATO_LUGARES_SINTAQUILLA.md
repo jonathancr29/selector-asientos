@@ -2,7 +2,8 @@
 
 La fase 5 del plan revisado añade mapa v8 y catálogo v5, con sectores, filas físicas y palcos,
 sobre los niveles y geometría libre de fase 4. La fase 6 implementa el conector del selector;
-la integración de servidor sigue pendiente. Ver [guía de entrega](INTEGRACION_EVENTOS_SINTAQUILLA.md).
+la integración de servidor pertenece al otro proyecto y no se revalida aquí. Ver
+[guía de entrega](INTEGRACION_EVENTOS_SINTAQUILLA.md).
 
 Las decisiones nuevas de separación física/comercial y venta agrupada se recogen en
 [Contrato de recinto, evento y conector](CONTRATO_RECINTO_EVENTO.md), que prevalece en esas
@@ -12,16 +13,18 @@ materias. Las secciones siguientes conservan el contexto histórico de la integr
 con ubicación completa, grupos físicos, geometría libre, identidad, numeración y revisiones.
 Precios y venta completa anteriores son antecedentes de
 migración, no políticas activas. El conector admite tarifas externas, aforo parcial y grupos;
-todavía no hay integración ni migración de datos en Sin Taquilla.
+su implementación de servidor y migración de datos deben verificarse en Sin Taquilla.
 Las secciones numeradas siguientes describen el contrato histórico; para las decisiones vigentes,
 incluidas mesas y palcos completos, consultar el contrato de recinto, evento y conector.
-**Revisado contra:** este selector en `f9be0cb` y la copia local de Sin Taquilla en
+**Base histórica, no estado actual del servidor:** este selector en `f9be0cb` y la copia local de Sin Taquilla en
 `cac1455a` (rama `docs/variantes-selector-asientos`, 25 de septiembre de 2026).
 
-Este contrato complementa la propuesta vigente de Sin Taquilla en
+Este contrato complementó la propuesta de Sin Taquilla en
 `php-app/docs/ARQUITECTURA_SELECCION_ASIENTOS.md`. Conserva su decisión de vender por **cupo o por
 lugar según la categoría**, con una sola transacción de venta para web y taquilla. Define los datos
 que faltaban para conectar este plano: zonas, mesas, identidad estable y boletos históricos.
+La [guía vigente](INTEGRACION_EVENTOS_SINTAQUILLA.md) documenta API cliente v2 y snapshots v1/v2;
+el [cierre de la auditoría](CIERRE_AUDITORIA.md) registra el alcance verificado del selector.
 
 ## 1. Situación comprobada al redactar el contrato, antes de la fase 6
 

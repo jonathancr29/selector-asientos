@@ -221,8 +221,8 @@ Las usadas no se eliminan, y se conservan la zona de mesas y al menos una zona p
 
 El mapa físico no configura precios ni venta completa. Sin un evento conectado, el resumen
 muestra **Precio no disponible**. Cero no se inventa: los importes llegarán desde Sin Taquilla.
-Las herramientas de venta agrupada siguen como base interna para fases posteriores, sin controles
-comerciales en el editor. El conector de fase 6 recibe la política desde el evento;
+Los ayudantes históricos de mesas completas se conservan para compatibilidad, sin controles
+comerciales en el editor. El conector recibe la política desde el evento;
 su [guía de integración](docs/INTEGRACION_EVENTOS_SINTAQUILLA.md) define el intercambio.
 
 ### La zona se hereda de la banda
@@ -887,7 +887,7 @@ El catálogo incluye `sector`, `physical_row`, `physical_group` y `group_place_n
 y listas de sectores, filas y grupos con integrantes identificados individualmente. Las mesas
 conservan su ID de pieza como ID de grupo; los palcos tienen ID físico propio. Cada lugar cuenta
 una sola vez. Precios, habilitación por evento y venta conjunta siguen a cargo de Sin Taquilla;
-esta fase no activa venta completa ni implementa el conector. Los mapas v1–v7 se migran sin
+el conector aplica esa política comercial separada del editor. Los mapas v1–v7 se migran sin
 inventar sectores, filas físicas o palcos a partir de su geometría o etiquetas.
 
 ## Niveles, regiones y filas libres (fase 4)
@@ -1013,7 +1013,9 @@ node --test pruebas-navegador.mjs
 
 Cubren la rejilla, el reparto de mesas, el aforo de la tabla anterior, la conciliación de la
 selección al cambiar de sala, los tipos de sala y las bandas, y las reglas del editor: geometría de las mesas, hacia dónde
-mira cada silla, dónde caben, girar, alargar, cabeceras, un solo lado y sitio para mesas nuevas; también el mapa en blanco (lienzo, espacios, guías, escenario opcional y mapas versión 7), butacas sueltas y formas, duplicar piezas y bandas, renombrar bandas, subtítulos y selección de bandas por clic. No hay copia del código: `pruebas.mjs` lee `index.html` y
+mira cada silla, dónde caben, girar, alargar, cabeceras, un solo lado y sitio para mesas nuevas;
+también mapas versión 8, migración de versiones anteriores, niveles, identidad física, eventos,
+historial, palcos, butacas sueltas, formas y selección de bandas y piezas. `pruebas.mjs` lee `index.html` y
 evalúa la parte del script anterior a la marca *«Fin de la parte sin DOM»*, así que se prueba el
 HTML que se entrega, y la API que ven las pruebas se escanea del propio archivo: una
 función nueva se prueba sin tocar el arnés. Requiere Node 18 o posterior.
@@ -1031,20 +1033,24 @@ queda describiendo una versión anterior sin que nadie se entere.
 Se ejecutan solas en cada pull request y en cada empujón a `main`
 (`.github/workflows/pruebas.yml`).
 
+La prueba masiva de numeración verifica etiquetas y limita accesos a los datos, sin umbral de
+milisegundos. Usa 104.000 lugares sintéticos solo para probar el algoritmo; importar o editar
+sigue limitado a 20.000. Los tiempos se estudian con las herramientas de medición, fuera de CI.
+El [cierre de la auditoría](docs/CIERRE_AUDITORIA.md) reúne correcciones, evidencias y pendientes.
+
 ## Qué aguanta
 
-Arena de 249 columnas con 18.720 butacas. Las cifras de generación son de la medición anterior;
-el redibujado se volvió a medir con Chrome sin interfaz el 26 de septiembre de 2026, comparando
-ambas versiones en el mismo equipo:
+Límites actuales y una referencia histórica de redibujado. La comparación de Chrome sin interfaz
+del 26 de septiembre de 2026 usó una arena de 249 columnas y 18.720 butacas; no representa tiempos
+actuales del modelo con inventario físico ni una garantía para otros equipos:
 
 | | |
 |---|---:|
 | Aforo máximo | **20.000 lugares** |
 | Ancho de la sala | **300 columnas** |
-| Generar el plano | ~20 ms |
-| Redibujarlo tras editar | ~625 ms de mediana; antes ~1.119 ms |
-| **Elegir una butaca** | **menos de 1 ms** |
-| Zoom y desplazamiento | imperceptible |
+| Redibujado histórico, 26-09-2026 | ~625 ms de mediana; antes ~1.119 ms |
+| Elegir una butaca | actualiza el nodo existente |
+| Zoom y desplazamiento | modifican el viewBox |
 | Tamaño del mapa guardado | crece con el inventario físico desde v6 |
 
 Puedes repetir la medición con `node medir-render.mjs` (Node 22 y Chrome o Edge). Informa la primera
@@ -1055,13 +1061,16 @@ la duración depende del equipo.
 conservan su nodo SVG, su foco y sus marcas; se actualizan únicamente los atributos y posiciones
 que cambiaron. El resto del plano todavía se rehace en cada acción.
 
-El mapa guardado es pequeño porque guarda **el diseño, no las butacas**: una banda de 26 filas
-ocupa tres líneas de JSON, genere 58 o 5.800 asientos.
+El JSON guarda diseño e inventario físico por lugar desde v6: su tamaño crece con el aforo.
+No incluye nodos SVG, historial, selección ni el snapshot comercial del evento. Las mediciones
+del [conector](docs/MEDICION_CONECTOR_GRUPOS.md) y del [historial](docs/MEDICION_HISTORIAL.md)
+documentan sus condiciones y distinguen tiempos del motor, renderizado y texto retenido.
 
 ## Qué no incluye
 
-Es la **capa visual**. No trae servidor, ni reserva, ni control de concurrencia, ni pasarela de
-pago. La ocupación del ejemplo está escrita en el archivo.
+Es la **capa visual con conector cliente**. Puede consultar disponibilidad y solicitar reservas
+al anfitrión; no implementa el servidor que las confirma, concurrencia, pagos ni emisión de boletos.
+La ocupación de las plantillas autónomas es un ejemplo, no disponibilidad comercial.
 
 Si lo conectas a un sistema real, el servidor es la autoridad: el plano consulta la ocupación al
 cargar y la vuelve a consultar antes de enviar la selección, y el servidor rechaza las butacas que
@@ -1071,8 +1080,9 @@ datos, nunca en el navegador.
 El [contrato de recinto y evento](docs/CONTRATO_RECINTO_EVENTO.md) define identidad física,
 numeración oficial, tarifas por evento, venta agrupada y revisiones. Complementa y actualiza
 el [contrato de lugares para Sin Taquilla](docs/CONTRATO_LUGARES_SINTAQUILLA.md).
-El conector del selector está implementado en fase 6. La administración, persistencia y venta real
-del lado de Sin Taquilla siguen pendientes; ver la [guía de entrega](docs/INTEGRACION_EVENTOS_SINTAQUILLA.md).
+El conector del selector está implementado. Administración, persistencia y venta real pertenecen
+a Sin Taquilla; su estado actual no se verifica en esta auditoría del selector. Ver la
+[guía de entrega](docs/INTEGRACION_EVENTOS_SINTAQUILLA.md).
 
 ### Conectar un evento (fase 6)
 
@@ -1130,9 +1140,9 @@ fila compartida, mesa y palco ficticios; no representa el Clavijero.
 ## Sobre three.js
 
 Se evaluó y se descartó. three.js dibuja en un `<canvas>`, que es **un solo nodo del DOM**: se
-pierden el clic por butaca, el recorrido con teclado, las etiquetas ARIA y los estados con CSS, y
-hay que reconstruirlos a mano. SVG los da gratis y aguanta salas de mil a dos mil butacas. Además
-son unos 600 KB de dependencia en algo que aquí pesa un archivo.
+pierden los nodos individuales por butaca, el recorrido con teclado, las etiquetas ARIA y los
+estados con CSS, y habría que reconstruirlos. SVG conserva esa semántica sin añadir una dependencia;
+los límites y las mediciones de este proyecto se describen arriba.
 
 ## Licencia
 

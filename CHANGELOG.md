@@ -4,7 +4,23 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Modelo separado e historial acotado por texto
+## Sin publicar — Documentación conciliada y cierre de auditoría
+
+Rama `claude/cierre-auditoria`.
+
+- Consolida los siete puntos, PRs, evidencias, límites y pendientes externos en el cierre técnico.
+- Actualiza README, AGENTS, contratos y guía: inventario en JSON, capacidades implementadas,
+  versiones vigentes, mediciones históricas y alcance del servidor sin revalidar Sin Taquilla.
+- La prueba de numeración masiva conserva etiquetas y limita accesos a los datos; elimina el
+  umbral temporal sensible a carga. El estrés de 104.000 lugares no cambia el tope de 20.000.
+- Verificado: 234 pruebas de lógica y 44 de navegador; tres regresiones deliberadas detectadas,
+  38 enlaces locales comprobados y 266 funciones puras sin cambios funcionales. Los comentarios
+  corregidos se incluyen en las entregas generadas; no se modifican mapas locales ni Sin Taquilla.
+
+## 2026-10-14 — PR #67: Modelo separado e historial acotado por texto
+
+[PR #67](https://github.com/jonathancr29/selector-asientos/pull/67), fusionado en `main` con el
+commit `ef98cfc`.
 
 Rama `claude/modelo-historial`.
 

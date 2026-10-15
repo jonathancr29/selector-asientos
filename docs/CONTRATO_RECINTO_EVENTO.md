@@ -1,9 +1,11 @@
 # Contrato de recinto, evento y conector
 
-Estado: contrato acordado en fase 1. Las fases 3 y 4 implementan identidad por lugar, numeracion
+Estado del selector revisado al cierre de la auditoría sobre `ef98cfc` (PR #67), más los ajustes
+documentales y de pruebas de esta rama. Las fases 3 y 4 implementaron identidad por lugar, numeracion
 explicita, revisiones locales, niveles, regiones y bloques rectos o en arco con correcciones.
 La fase 5 implementa sectores, entidades de fila y palcos; la fase 6 incorpora el conector cliente.
-La venta del servidor sigue en otro proyecto. Los vinculos graficos
+El cliente admite snapshots comerciales v1 y v2. La venta del servidor pertenece a otro proyecto,
+cuyo estado actual no se revalida aquí. Los vinculos graficos
 de region transforman bloques; no determinan pertenencias fisicas ni modalidades comerciales.
 Complementa el contrato de lugares para Sin Taquilla y prevalece sobre sus reglas comerciales
 anteriores cuando haya diferencias. Los nombres de campos siguientes son un contrato logico,
@@ -18,7 +20,7 @@ ambos por IDs y revision; no copia tarifas al mapa ni acepta importes del client
 | Entidad fisica | Funcion |
 | --- | --- |
 | Nivel | Piso, con coordenadas y vista propias. |
-| Zona | Ubicacion oficial, nombre y color; independiente de tarifa. |
+| Zona | Ubicacion oficial y nombre; el color es presentación, independiente de tarifa. |
 | Sector | Subdivision fisica; puede compartir zona con otros sectores. |
 | Fila | Agrupacion oficial de lugares, aunque atraviese sectores o bloques. |
 | Grupo | Mesa o palco con lugares individuales; no determina venta conjunta. |
@@ -48,10 +50,10 @@ migrar un evento con ventas. Cada boleto congela ubicacion completa y precio his
 ## 3. Herencia y geometria
 
 La herencia de zona ayuda a crear o reasignar: asiento, pieza, banda mas interna, asignacion
-explicita de respaldo con aviso. En el futuro movimiento visual conserva pertenencias oficiales;
+explicita de respaldo con aviso. El movimiento visual conserva pertenencias oficiales;
 reasignarlas es otra accion. Solo se avisa de contradicciones con regiones que tengan una relacion
 fisica definida. Desde fase 3 se materializa la zona inicial por lugar; mover conserva esa
-pertenencia y reasignarla es explicito. Las otras pertenencias se incorporaran con sus entidades.
+pertenencia y reasignarla es explicito. Sector, fila física y palco también se materializan por lugar.
 
 Cada nivel admite regiones independientes. Centro y laterales son accesos rapidos, no limites
 del formato. La geometria admite coordenadas fraccionarias, bloques con angulo, filas rectas y
@@ -100,8 +102,9 @@ Mesa y palco comparten mecanismo de seleccion, reserva y compra, pero tienen geo
 etiquetas propias. El mapa guarda integrantes; Sin Taquilla fija modalidad por evento.
 
 Individual: cada lugar habilitado se ofrece por separado. Completa: el conjunto requerido son
-todos los lugares fisicamente utilizables del grupo en la revision publicada. Si alguno esta
-excluido, bloqueado, reservado o vendido, no se ofrece el conjunto. No se recorta automaticamente.
+todos los lugares fisicamente utilizables del grupo en la revision publicada. Los fisicamente
+inutilizables no integran ese conjunto requerido. Si un requerido esta excluido, reservado,
+vendido o sin disponibilidad confirmada, no se ofrece el conjunto. No se recorta automaticamente.
 Precio es suma de tarifas autorizadas de integrantes requeridos; un boleto y QR por lugar.
 Servidor expande un ID opaco de grupo de evento y reserva atomica: falla uno, falla todo.
 Seleccion parcial se rechaza. Composiciones reducidas requieren otra politica explicita futura.
@@ -131,7 +134,8 @@ No fusionar zonas por compartir tarifa ni adivinar ubicacion desde precios.
 
 Fase 2 separa paneles y retira tarifas. Fase 3 añade etiquetas oficiales, identidad por lugar
 y revisiones locales. Fase 4 incorpora niveles y geometria libre; fase 5 incorpora sectores,
-filas fisicas y palcos. La venta integrada sigue pendiente. La ocupacion de ejemplo no es estado comercial real.
+filas fisicas y palcos. El conector cliente existe; la venta integrada debe verificarse en el
+proyecto anfitrión. La ocupacion de ejemplo no es estado comercial real.
 
 ### Implementacion fisica de fase 5
 
@@ -145,11 +149,11 @@ Duplicar piezas conserva sector y crea lugares nuevos sin asignarlos a la fila o
 IDs retirados y contadores se conservan al guardar y deshacer. La revision publicada incluye
 entidades y pertenencias, sin modalidades comerciales. La migracion no deduce estas entidades
 desde letras, coordenadas o bandas. Fase 6 aplica exclusiones y seleccion agrupada en el cliente;
-reservar en servidor sigue pendiente.
+la reserva atómica es responsabilidad del servidor y no se comprueba en este repositorio.
 
 ### Conector de fase 6
 
-Snapshot comercial version 1, separado del mapa v8 y catalogo v5. El cliente recibe revision
+Snapshots comerciales versiones 1 y 2, separados del mapa v8 y catalogo v5. El cliente recibe revision
 publicada, categorias y asignaciones, exclusiones por pertenencia, modalidad de grupos y
 correspondencia de IDs opacos de evento. Disponibilidad desconocida nunca se trata como libre.
 La union de exclusiones cierra exactamente sus integrantes; tarifas distintas sobre un lugar
@@ -160,17 +164,23 @@ Se entrega una API de navegador y recursos externos para CSP, con transporte del
 CSRF, version de estado e identidades estables. El importe es informativo; el servidor debe
 expandir grupos, calcular precios y validar/reservar atomico. No se modifico el servidor en esta
 fase. [Ejemplo importable y snapshot](ejemplo-conector-evento.json) con tres niveles ficticios,
-mesa, palco y fila compartida entre sectores. El Clavijero se construira aparte.
+mesa, palco y fila compartida entre sectores; no representan el plano del Clavijero.
+
+La versión 2 añade acceso general por zona y cantidades, compatible con lugares asignados.
+El [ejemplo mixto](ejemplo-conector-general.json) y la guía especifican cupo, saldo desconocido,
+solicitud de reserva e identidad de zona. No convierte grupos físicos en acceso general.
 
 ## 8. Casos de aceptacion
 
-El ejemplo JSON adjunto es una muestra de contrato futuro, no un mapa importable por el editor.
-Contiene tres niveles ficticios, fila compartida y palco. No prueba niveles reales del Clavijero.
+El [ejemplo inicial](ejemplo-recinto-evento.json) conserva el diseño lógico del contrato; no es
+importable. Los ejemplos de conector enlazados arriba contienen un mapa importable dentro de
+su campo `mapa` y un snapshot separado en `evento`. Son ficticios y no prueban el Clavijero.
 Comprobar referencias e IDs unicos, etiquetas por ubicacion y que excluir un sector elimina
 exactamente sus lugares. Un grupo con integrante excluido no es comprable completo.
 
-En las fases siguientes: mover conserva identidad y etiquetas oficiales; regenerar conserva
+Los recorridos actuales comprueban: mover conserva identidad y etiquetas oficiales; regenerar conserva
 correcciones; cambiar nivel conserva seleccion; guardar y abrir conserva diseno; reservas no
 cambian inventario; venta conjunta nunca omite integrantes fallidos. Probar tambien sala
 rectangular, regiones asimetricas, arcos y mesas en ambas modalidades. Aforo del Clavijero y
-distribucion se concilian con evidencia; 635 es un total reportado, pendiente de confirmar.
+distribucion se concilian por separado con evidencia; esta auditoría no certifica su inventario.
+El [cierre técnico](CIERRE_AUDITORIA.md) distingue pruebas del cliente y trabajo externo.
