@@ -34,12 +34,18 @@ en el propio archivo.
 |---|---|
 | `index.html` | Archivo autónomo generado para abrir directamente en el navegador. |
 | `src/plantilla.html`, `src/estilos.css` | Estructura y estilos fuente. |
-| `src/modelo.js`, `src/dibujo.js`, `src/interfaz.js`, `src/editor.js`, `src/persistencia.js` | Secciones fuente del script, unidas en ese orden. |
+| `src/modelo.js` | Rejilla, geometría, generación de sala y colisiones. |
+| `src/mapas.js` | Identidad física, revisiones, formato, validación, migración y catálogo. |
+| `src/operaciones-plano.js` | Bandas, zonas, duplicación, selección y compatibilidad de mesas. |
+| `src/historial.js` | Deshacer y rehacer, con límites de estados y texto retenido. |
+| `src/eventos.js`, `src/exploracion.js` | Motor comercial puro y proyecciones y contornos del visor. |
+| `src/dibujo.js`, `src/interfaz.js`, `src/editor.js`, `src/persistencia.js` | Fuentes con DOM, después de las seis partes puras. |
 | `construir.mjs` | Genera `index.html` y comprueba que esté sincronizado con `--check`. |
 | `src/conector.js`, `integracion/` | API de eventos y entrega generada con HTML/CSS/JS externos para CSP; no editar los archivos generados. |
 | `docs/INTEGRACION_EVENTOS_SINTAQUILLA.md` | Snapshot comercial, API pública, transporte y trabajo pendiente de servidor. |
 | `medir-render.mjs` | Medición local reproducible del plano de 18.720 butacas en Chrome o Edge; no bloquea la CI. |
 | `medir-conector.mjs` | Medición del motor comercial y grupos con fuentes actuales o referencia Git; sin DOM ni red y sin umbrales de CI. |
+| `medir-historial.mjs` | Conteo reproducible de texto retenido, con entrega actual o referencia Git; no mide heap. |
 | `pruebas.mjs` | Pruebas con `node:test` de la parte del script que no usa el DOM, y dos que vigilan que estos documentos sigan describiendo el código. |
 | `pruebas-navegador.mjs` | Recorridos de la interfaz en Chrome o Edge: guardado, recarga, importación, grupo, teclado y accesibilidad. |
 | `README.md` | Qué resuelve, modelo de datos, rejilla, accesibilidad, modo editor. |
@@ -105,9 +111,9 @@ publicar».
 
 ## Cómo editar las fuentes y el archivo generado
 
-Edita `src/`, no `index.html`: el generador sobrescribe este último. Las seis fuentes JavaScript
+Edita `src/`, no `index.html`: el generador sobrescribe este último. Las once fuentes JavaScript
 se concatenan en un único `<script>` clásico, sin `import` ni `export`, para conservar el ámbito y
-el orden de inicialización. `src/modelo.js` termina en la marca «Fin de la parte sin DOM», que usa
+el orden de inicialización. `src/exploracion.js` termina en la marca «Fin de la parte sin DOM», que usa
 `pruebas.mjs`. Ejecuta `node construir.mjs` después de cada cambio y confirma con `--check`.
 
 Si una sustitución extensa requiere un guion de Node, hazla en la fuente apropiada y exige una
@@ -131,8 +137,12 @@ t = t.replace(de, () => a);   // funcion, nunca cadena
 
 ## Cómo está organizado el script
 
-El `<script>` generado une `src/modelo.js`, `src/dibujo.js`, `src/interfaz.js`, `src/editor.js`,
-`src/persistencia.js` y `src/conector.js` en ese orden. Dentro de cada fuente, las secciones están separadas por
+El `<script>` generado une `src/modelo.js`, `src/mapas.js`, `src/operaciones-plano.js`,
+`src/historial.js`, `src/eventos.js` y `src/exploracion.js` antes del DOM. Después une
+`src/dibujo.js`, `src/interfaz.js`, `src/editor.js`, `src/persistencia.js` y `src/conector.js`,
+en ese orden. Las funciones puras comparten ámbito clásico; los archivos separan responsabilidades,
+sin importaciones en la aplicación. El generador y las mediciones se ejecutan en Node.
+Dentro de cada fuente, las secciones están separadas por
 comentarios `// ----`.
 
 1. **Constantes:** `PASO` (12 unidades del viewBox por celda), `GLIFO`, `ANCHO_SALA` (14 columnas).
@@ -553,6 +563,12 @@ comentarios `// ----`.
   deshacer restaura bloqueos, zonas e identidades anteriores; los contadores nunca retroceden y
   los IDs descartados permanecen retirados para impedir su reutilización. La selección de compra y el foco
   no forman parte de las versiones. Guardar o exportar marca la versión actual como guardada.
+  `HISTORIAL_ESTADOS_MAXIMOS` (51 estados, hasta 50 pasos) y `HISTORIAL_BYTES_MAXIMOS` (16 MiB)
+  se aplican también al actualizar el estado y marcar guardado. El presupuesto suma texto UTF-16
+  de estados y firma guardada, no heap real. Primero se retira el pasado más antiguo y después
+  el futuro más lejano, sin saltos entre versiones ni pérdida del actual. El actual y la referencia
+  de guardado pueden exceder solos el presupuesto; `medidas()` informa ese exceso. No recortar
+  identidades, contadores ni geometría para ajustar la memoria; los límites son por mapa.
 - **Una zona nueva se estrena en un solo sitio:** `zonaNueva(lista, siguiente, nombreBase)` decide el
   id (`zonaN`, saltando los que ya existen aunque el contador se haya quedado corto) y el nombre
   (numerado si choca: «General 2»), y no toca el plano. Lo usa `agregarZona` (una zona suelta).

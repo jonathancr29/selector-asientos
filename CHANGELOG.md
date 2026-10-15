@@ -4,7 +4,24 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Limpieza de utilidades y recorridos compartidos
+## Sin publicar — Modelo separado e historial acotado por texto
+
+Rama `claude/modelo-historial`.
+
+- Separa geometría, mapas e identidad, operaciones del plano, historial, eventos y exploración
+  en seis fuentes puras; conserva un único ámbito clásico y ambas entregas sin dependencias.
+- Conserva hasta 51 estados y añade presupuesto de 16 MiB de texto por mapa, incluyendo firma
+  guardada. Retira extremos antiguos sin perder el actual, IDs, contadores ni referencia de guardado.
+- Añade medición reproducible y reglas de recorte al actualizar después de deshacer.
+- Verificado: 234 pruebas de lógica y 44 de navegador; 264 funciones trasladadas sin cambios,
+  20.000 operaciones de historial comparadas y ocho mutaciones detectadas. Los 43 recorridos
+  anteriores pasan antes y después. Textos retenidos en 18.720 lugares: 202,88 → 13,79 MiB
+  tras 60 cambios; conserva 51 estados en el ejemplo pequeño. Véase la medición para sus límites.
+
+## 2026-10-14 — PR #66: Limpieza de utilidades y recorridos compartidos
+
+[PR #66](https://github.com/jonathancr29/selector-asientos/pull/66), fusionado en `main` con el
+commit `80ca772`.
 
 Rama `claude/limpieza-codigo`.
 

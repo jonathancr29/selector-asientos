@@ -1121,6 +1121,31 @@ test('interfaz: guardado, recarga, importacion, grupo, teclado y accesibilidad',
       await protocolo.evaluar('SelectorAsientos.cerrarEvento()');
     });
 
+    await t.test('historial: presupuesto limita pasos sin perder plano, identidad ni guardado', async () => {
+      await protocolo.evaluar(`(()=>{
+        redibujar('mixta-ambos');cambiarModo('editor');planoEditable();regenerar('');
+        const inicial=fotoDelPlano();window.__identidadHistorial=JSON.stringify(planoEditable().identidadFisica);
+        const presupuesto=bytesDeEstadoHistorial(inicial)*3+inicial.firma.length*2+500;
+        historiales[tipoActual]=crearHistorial(inicial,51,presupuesto);
+        for(let n=1;n<=6;n++)aplicarBandas(renombrarBanda(planoEditable(),'luneta','Memoria '+n),'');
+      })()`);
+      assert.equal(await protocolo.evaluar('historiales[tipoActual].medidas().estados'),3);
+      assert.equal(await protocolo.evaluar('historiales[tipoActual].medidas().excedido'),false);
+      assert.equal(await protocolo.evaluar('bandaDe(salaActual,"luneta").nombre'),'Memoria 6');
+      await protocolo.evaluar('historiales[tipoActual].marcarGuardado();restaurarEdicion("deshacer")');
+      assert.equal(await protocolo.evaluar('bandaDe(salaActual,"luneta").nombre'),'Memoria 5');
+      assert.equal(await protocolo.evaluar('historiales[tipoActual].tieneCambios()'),true);
+      await protocolo.evaluar('restaurarEdicion("rehacer")');
+      assert.equal(await protocolo.evaluar('bandaDe(salaActual,"luneta").nombre'),'Memoria 6');
+      assert.equal(await protocolo.evaluar('historiales[tipoActual].tieneCambios()'),false);
+      await protocolo.evaluar('restaurarEdicion("deshacer");restaurarEdicion("deshacer")');
+      assert.equal(await protocolo.evaluar('bandaDe(salaActual,"luneta").nombre'),'Memoria 4');
+      assert.equal(await protocolo.evaluar('document.getElementById("deshacer").disabled'),true);
+      assert.equal(await protocolo.evaluar('JSON.stringify(planoEditable().identidadFisica)===__identidadHistorial'),true);
+      await protocolo.evaluar(`aplicarBandas(renombrarBanda(planoEditable(),'luneta','Otra rama'),'')`);
+      assert.equal(await protocolo.evaluar('document.getElementById("rehacer").disabled'),true);
+    });
+
     assert.deepEqual(protocolo.excepciones, [], 'errores JavaScript en el navegador');
   } finally {
     protocolo?.socket.close();
