@@ -4,7 +4,25 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Catálogo preparado e índices de grupos
+## Sin publicar — Limpieza de utilidades y recorridos compartidos
+
+Rama `claude/limpieza-codigo`.
+
+- Retira utilidades internas de precios y exclusividad de zonas del antiguo panel; los atajos
+  usados solo para preparar casos viven ahora en las pruebas, fuera de la entrega.
+- Conserva los cuatro ayudantes históricos de marcado de mesas y la lectura de mapas antiguos.
+- Comparte creación de zonas y resolución de la pieza geométrica de mesas, bloques y palcos.
+- Elimina el estilo sin uso de ancho completo; conserva estilos de formas generados dinámicamente.
+- Verificado: 229 pruebas de lógica, 43 de navegador, 3.308 resultados equivalentes con main
+  y cinco mutaciones detectadas. Los 43 recorridos anteriores pasan sobre ambas versiones.
+  Formatos, API pública, IDs y mapas locales conservados; entregas autónoma y CSP sincronizadas.
+- El arranque del navegador de pruebas espera hasta 30 segundos y conserva stderr en el error;
+  la CI agotó dos veces los 10 segundos antes de abrir la aplicación. No omite recorridos.
+
+## 2026-10-14 — PR #65: Catálogo preparado e índices de grupos
+
+[PR #65](https://github.com/jonathancr29/selector-asientos/pull/65), fusionado en `main` con el
+commit `09bf695`.
 
 Rama `claude/rendimiento-conector`.
 

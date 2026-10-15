@@ -24,6 +24,10 @@ Si editas el proyecto, trabaja en `src/` y genera de nuevo el archivo autónomo 
 coinciden; la CI lo exige. También genera y comprueba HTML, CSS y JavaScript externos en
 `integracion/`, para Sin Taquilla. No hay instalación de paquetes.
 
+Los atajos que solo preparan casos de prueba permanecen en `pruebas.mjs`. La entrega conserva
+los ayudantes históricos de selección y marcado de mesas completas para mapas autónomos;
+en eventos conectados, la modalidad y las tarifas siguen procediendo de Sin Taquilla.
+
 ## Qué resuelve
 
 La forma habitual de montar estos planos es una rejilla de `<div>` con un `<svg>` por butaca. Se ve

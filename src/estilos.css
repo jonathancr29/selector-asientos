@@ -364,7 +364,6 @@
   /* Mesa completa elegida: el tablero se marca junto con sus lugares. */
   .mueble.elegida { fill: rgba(59, 130, 246, .22); stroke: var(--acento); stroke-width: 1.2; }
   .mueble.completa { cursor: pointer; }
-  .lateral .ancho-completo { width: 100%; margin-bottom: 8px; }
   /* Formas: la pista con cuadros suaves, la barra como un mostrador macizo. */
   .forma-pista { fill: url(#cuadros-pista); stroke: #8b7fc4; stroke-width: .6; }
   .forma-barra { fill: #4a3b2c; stroke: #a0805c; stroke-width: .8; }
