@@ -1,8 +1,9 @@
 # Conector de eventos: entrega para Sin Taquilla (fase 6)
 
 Esta fase implementa el lado del selector. No modifica Sin Taquilla, su base de datos ni sus
-ventas. El anfitrión aún debe implementar administración, endpoints, reservas transaccionales,
-caducidad y emisión de boletos. Una selección y su importe en pantalla no son una reserva.
+ventas. Administración, endpoints, reservas transaccionales, caducidad y emisión de boletos
+son responsabilidades del anfitrión. Su implementación actual no se revalida en esta auditoría
+del selector. Una selección y su importe en pantalla no son una reserva.
 El mapa físico se construye y conserva por separado de la configuración de cada evento.
 
 ## Entrega y seguridad
@@ -15,8 +16,8 @@ El documento incluye los controles del editor; al conectar un evento queda en co
 recinto fijo y editor deshabilitado. No es un componente que se monte varias veces en una página.
 
 No relajar `style-src 'self'` ni `script-src 'self'`. No se necesita `unsafe-inline`, `eval`,
-CDN ni dependencias. Usar una página propia: la política `frame-ancestors 'none'` de Sin Taquilla
-impide incrustarla en un iframe. Los recursos externos conservan el mismo motor que la entrega
+CDN ni dependencias. Usar una página propia; si el anfitrión declara `frame-ancestors 'none'`,
+no permite incrustarla en un iframe. Verificar su política al instalar. Los recursos externos conservan el mismo motor que la entrega
 autónoma. El anfitrión protege las rutas administrativas y las operaciones del servidor;
 deshabilitar controles en el navegador no sustituye permisos.
 
@@ -66,7 +67,7 @@ SelectorAsientos.cargarEvento({
 });
 ```
 
-Las rutas del ejemplo no existen todavía. No hay consulta automática de red ni evento deducido
+Las rutas del ejemplo son marcadores, no endpoints entregados aquí. No hay consulta automática de red ni evento deducido
 de parámetros de URL. El anfitrión asigna endpoints y suministra el CSRF de su sesión en la
 cabecera `X-CSRF-Token`. El transporte rechaza otro origen, credenciales en URL, fragmentos y
 redirecciones; usa `credentials: 'same-origin'`. Permite un POST de reserva en curso por sesión.
@@ -224,11 +225,13 @@ Una respuesta tardía de una sesión cerrada no modifica otra sesión. El anfitr
 de la promesa y ofrece reconsultar; no reintenta compras automáticamente. No devolver errores SQL,
 secretos o datos personales como mensajes públicos.
 
-## Trabajo del lado de Sin Taquilla
+## Responsabilidades y verificación en Sin Taquilla
 
-La lectura local fue de `docs/variantes-selector-asientos`, HEAD `cac1455a`, con cambios sin commit
+La lectura histórica fue de `docs/variantes-selector-asientos`, HEAD `cac1455a`, con cambios sin commit
 en eventos, ventas y esquema. No se tocaron esos archivos. Revisar su estado actual antes de aplicar
 esta guía; la propuesta anterior de filas/columnas no representa por sí sola los niveles y grupos v5.
+Los nombres de archivos y funciones de esta lista corresponden a aquella lectura; comprobarlos
+contra la revisión del servidor que se vaya a integrar. No describen su estado actual.
 
 1. En administración de eventos, seleccionar recinto y **revisión publicada**, recuperar catálogo
    y mostrar sus zonas/niveles/sectores/filas/grupos. Registrar el mapa y su catálogo en el servidor;
@@ -268,3 +271,7 @@ trabajo del otro proyecto; aquí se implementa únicamente su contrato y comport
 Las pruebas de este repositorio verifican el cliente con respuestas HTTP de ejemplo y CSP.
 **No demuestran atomicidad, autenticación ni venta real del servidor.** Esas pruebas pertenecen
 al proyecto Sin Taquilla y son necesarias antes de poner la integración en servicio.
+
+El [cierre de la auditoría del selector](CIERRE_AUDITORIA.md) reúne correcciones de validación,
+aislamiento de sesiones, coste de actualizaciones y evidencia de compatibilidad. No sustituye
+las pruebas del servidor descritas en esta sección.

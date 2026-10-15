@@ -1217,7 +1217,7 @@ function disponerBandas(bandas, anchoSala) {
     if (banda.nombre) return banda.nombre;
     if (banda.tipo === 'escenario') return 'Escenario';
     // Una banda con zona se llama como su zona: son la misma cosa. Las que no tienen
-    // (un espacio sin precio, una franja) toman el nombre de su tipo.
+    // (un espacio sin zona, una franja) toman el nombre de su tipo.
     const zona = zonaDeBanda(banda);
     const base = zona && zonas[zona] ? zonas[zona].nombre
       : banda.tipo === 'mesas' ? 'Zona de mesas' : banda.tipo === 'espacio' ? 'Espacio' : 'Franja dividida';
@@ -1268,8 +1268,8 @@ function disponerBandas(bandas, anchoSala) {
 }
 
 // La zona que se hereda en una celda: la de la banda mas interna que la cubre y
-// tiene zona, o null si ninguna la tiene (una mesa sobre un espacio sin precio).
-// Es lo que hace que todo lo que cae dentro de una banda cueste lo que ella.
+// tiene zona, o null si ninguna la tiene (una mesa sobre un espacio sin zona).
+// Es la referencia de herencia fisica inicial, no una asignacion de tarifa.
 // Gana la mas profunda, no la primera: el orden de 'regiones' es cosa de
 // disponerBandas y no debe decidir el precio de nadie.
 function zonaEnCelda(sala, x, y) {
@@ -2742,8 +2742,8 @@ const areaDeCeldas = (a, b) => ({ x1: Math.min(a.x, b.x), y1: Math.min(a.y, b.y)
 const butacasEnArea = (lista, area) => lista.filter((b) =>
   b.x >= area.x1 && b.x <= area.x2 && b.y >= area.y1 && b.y <= area.y2);
 
-// Las mesas que se venden completas y acaban con lugares de mas de una zona: su
-// precio deja de ser el de una sola zona, asi que hay que decirlo.
+// Mesas completas historicas con lugares de varias zonas: se devuelven sus nombres
+// para avisar de pertenencias fisicas mezcladas, sin deducir ninguna tarifa.
 function mesasConZonasMezcladas(plano, lista) {
   const porMesa = new Map();
   for (const b of lista) {

@@ -25,8 +25,9 @@ conviven en el mismo plano. Tiene dos modos: **Previsualizar** (elegir butacas, 
 y **Editar plano** (mover, girar, alargar, agregar y eliminar mesas, editar las bandas de la
 sala y bloquear butacas). Los diseños se guardan con nombre en el navegador o como archivos JSON. Hay salas mixtas, solo filas y solo mesas.
 
-Es solo la capa visual: no hay servidor, reservas ni pagos. La ocupación del ejemplo está escrita
-en el propio archivo.
+Es la capa visual con conector cliente: consulta disponibilidad y solicita reservas al anfitrión,
+pero no implementa su servidor, pagos ni emisión de boletos. La ocupación de las plantillas
+autónomas es un ejemplo escrito en el archivo, no disponibilidad comercial.
 
 ## Archivos
 
@@ -46,6 +47,7 @@ en el propio archivo.
 | `medir-render.mjs` | Medición local reproducible del plano de 18.720 butacas en Chrome o Edge; no bloquea la CI. |
 | `medir-conector.mjs` | Medición del motor comercial y grupos con fuentes actuales o referencia Git; sin DOM ni red y sin umbrales de CI. |
 | `medir-historial.mjs` | Conteo reproducible de texto retenido, con entrega actual o referencia Git; no mide heap. |
+| `docs/CIERRE_AUDITORIA.md` | Correcciones trazables, evidencia, límites de la revisión y pendientes. |
 | `pruebas.mjs` | Pruebas con `node:test` de la parte del script que no usa el DOM, y dos que vigilan que estos documentos sigan describiendo el código. |
 | `pruebas-navegador.mjs` | Recorridos de la interfaz en Chrome o Edge: guardado, recarga, importación, grupo, teclado y accesibilidad. |
 | `README.md` | Qué resuelve, modelo de datos, rejilla, accesibilidad, modo editor. |
@@ -216,7 +218,7 @@ comentarios `// ----`.
     `exportarMapa`, `importarMapa`, `eliminarMapa`, y la carga de mapas guardados al abrir.
 14. **Evento conectado:** motor puro `resolverEventoDeMapa`, `conteosDeEvento`,
     `alternarLugarEvento`, `conciliarSeleccionEvento`, `solicitudDeSeleccionEvento`,
-    `firmaDeEvento` y `motivoCambioDeEvento` en modelo; API y transporte en `src/conector.js`.
+    `firmaDeEvento` y `motivoCambioDeEvento` en `src/eventos.js`; API y transporte en `src/conector.js`.
 
 ## Reglas que no se deben romper
 
@@ -733,6 +735,12 @@ afectadas y además:
 
 Y en todos los casos, el repaso de siempre:
 
+La numeración masiva se protege con accesos contados a los datos y etiquetas esperadas,
+sin un umbral de milisegundos. Sus 104.000 lugares sintéticos prueban el algoritmo, no aumentan
+el aforo admitido. No sustituir esa comprobación por más tiempo de espera: al mutarla a una
+búsqueda completa por rótulo debe fallar por exceso de accesos. Los tiempos se miden
+con los guiones locales, fuera de CI.
+
 1. `node --test pruebas.mjs` y `node --test pruebas-navegador.mjs`: todas en verde. Añade pruebas
    si tocas la parte sin DOM o un recorrido de la interfaz.
 2. Abre `index.html` y comprueba, según lo que hayas tocado:
@@ -788,16 +796,14 @@ validación son históricas; el redibujado se comparó en Chrome sin interfaz el
 |---|---:|
 | Tope de aforo (`BUTACAS_MAXIMAS`) | 20.000 lugares |
 | Ancho de la sala (`ANCHO_MAXIMO`) | 300 columnas |
-| `generarPlano` con 18.720 butacas | ~20 ms |
-| `validarMapa` con 18.720 butacas | ~300 ms (solo al importar o abrir) |
-| `dibujarTodo` repetido con 18.720 butacas | mediana 1.119 → 625 ms, 56.160 nodos |
-| Elegir una butaca en Previsualizar | menos de 1 ms |
-| Zoom y desplazamiento | imperceptible (mueven el `viewBox`) |
+| Redibujado histórico, 26-09-2026 | mediana 1.119 → 625 ms, 56.160 nodos |
+| Elegir una butaca en Previsualizar | actualiza el nodo existente |
+| Zoom y desplazamiento | mueven el `viewBox` |
 | JSON de un mapa así | la medición anterior no incluía inventario; desde v6 crece por lugar |
 | Acercamiento máximo | ~40 px por butaca en cualquier recinto |
 
-Lo que hay que entender de esa tabla: **vender va instantáneo a cualquier aforo**, porque elegir una
-butaca conmuta clases sobre el nodo que ya existe y no redibuja nada. Cada acción del editor pasa
+Elegir una butaca actualiza el nodo existente sin redibujar el plano. Esto no incluye validación
+de selección, transporte ni venta en servidor. Cada acción del editor pasa
 por `regenerar` → `dibujarTodo`: ahora conserva los nodos de butacas con el mismo ID y solo rehace
 los otros elementos del plano. La primera pintura no se acelera. Desde v6 el JSON guarda diseño
 e identidad física por lugar; ya no tiene el tamaño de las bandas geométricas solamente.
@@ -809,11 +815,13 @@ redibujados y toma la mediana de estos últimos. La duración no bloquea CI porq
 
 Lo grande, por orden de valor:
 
-- **Integrar servidor Sin Taquilla**: el conector y la entrega externa ya existen; faltan formulario
-  de eventos, persistencia, endpoints, transacciones de reserva y boletos en aquel proyecto.
+- **Validar la integración en Sin Taquilla**: el conector y la entrega externa ya existen.
+  Formulario de eventos, persistencia, endpoints, reservas y boletos pertenecen al anfitrión;
+  comprobar su estado y sus pruebas en aquel proyecto antes de desplegar.
 - **Medir antes de otra optimización del SVG**: la reconciliación de butacas redujo el redibujado
   repetido aproximadamente un 44 % en la comparación de esta fase. El resto del plano aún se rehace.
 
+El [cierre de auditoría](docs/CIERRE_AUDITORIA.md) distingue correcciones y pendientes externos.
 Lo demás, sin prisa:
 
 - Probar el pellizco en un móvil o tablet real.
@@ -828,22 +836,22 @@ Lo demás, sin prisa:
 
 ## A dónde va esto
 
-El destino previsto es **Sin Taquilla**, un sistema de ticketing en PHP que ya tiene lo que este
-proyecto no: transacciones contra sobreventa, reservas que caducan, cobro y control de acceso. Lo
-que le falta es justo esto, el asiento identificado.
+El destino previsto es **Sin Taquilla**, el sistema anfitrión de ticketing. El selector entrega
+asientos identificados y solicitudes de reserva; transacciones, caducidad, cobro y control de
+acceso se verifican en ese proyecto, fuera de esta auditoría.
 
 La entrega externa de fase 6 resuelve el obstáculo técnico de sus recursos inline:
-la cabecera de seguridad de esa aplicación es
+la entrega se prueba con una política del mismo origen, como
 
 ```
 default-src 'self'; style-src 'self'; script-src 'self' 'nonce-…'
 ```
 
-`style-src 'self'` **sin** `'unsafe-inline'` y sin nonce: una etiqueta `<style>` en línea no se
-ejecuta, punto. El `<script>` podría salvarse con un nonce; la hoja de estilos no.
+`style-src 'self'` sin permiso para estilos en línea exige servir la hoja como recurso externo.
+La entrega de `integracion/` ya incluye CSS y JavaScript separados; el HTML autónomo conserva
+sus recursos en línea para abrirse sin servidor.
 
 Lo llamativo es que **todo lo demás ya es compatible**: cero `innerHTML`, cero `eval`, cero
 manejadores `onclick=` en el HTML, cero atributos `style=`, y las pocas escrituras a `.style` desde
-el script son CSSOM, que esa cabecera no bloquea. Separan el despliegue **exactamente dos bloques en
-línea**. Las fuentes separadas permiten preparar CSS y JavaScript externos para Sin Taquilla en la
-fase 6, en `integracion/`; el `index.html` autónomo sigue llevando ambos en línea.
+el script son CSSOM, que esa cabecera no bloquea. La suite de navegador comprueba la entrega
+externa bajo CSP; esto no verifica autenticación ni transacciones del servidor anfitrión.

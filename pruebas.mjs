@@ -3121,18 +3121,31 @@ const mapaDeFilas = (api, n) => {
   return mapa;
 };
 
-test('numerar 100.000 butacas no es cuadratico', () => {
+test('numeracion masiva conserva etiquetas con recorridos acotados', () => {
   const api = cargar();
   const mapa = mapaDeFilas(api, 100);
-  const t = performance.now();
   api.generarPlano({ ...mapa, bandas: mapa.bandas }, mapa);
-  const ms = performance.now() - t;
   assert.equal(api.butacas.length, 104000);
+  // Contar lecturas de los objetos reales detecta barridos completos por rotulo o fila,
+  // sin depender de CPU, carga concurrente ni duracion de generar la escena.
+  let lecturas = 0;
+  let midiendo = true;
+  const limite = api.butacas.length * 80;
+  for (let i = 0; i < api.butacas.length; i++) {
+    api.butacas[i].fila = '?'; api.butacas[i].numero = 0;
+    api.butacas[i] = new Proxy(api.butacas[i], {
+      get(objeto, clave, receptor) {
+        if (midiendo && ++lecturas > limite) throw new Error('La numeracion excede el limite de accesos: ' + limite);
+        return Reflect.get(objeto, clave, receptor);
+      },
+    });
+  }
+  api.numerarFilas();
+  midiendo = false;
   // La numeracion por zona sigue bien: 2.600 filas (A... CVZ) de 40 butacas.
   assert.deepEqual([etiqueta(api, 'b0-A1'), etiqueta(api, 'b99-Z40')], ['General A1', 'General CUZ40']);
-  // Con recorridos anidados tardaba unos 6 s; agrupado, menos de 100 ms. El margen es amplio
-  // para maquinas lentas, pero sigue muy por debajo del caso cuadratico.
-  assert.ok(ms < 1500, 'numerar 104.000 butacas tardo ' + Math.round(ms) + ' ms: ¿vuelve a ser cuadratico?');
+  assert.ok(lecturas > api.butacas.length, 'se midio la numeracion, no solo la preparacion');
+  assert.ok(lecturas <= limite);
 });
 
 test('un mapa no puede pasar de 20.000 butacas', () => {
