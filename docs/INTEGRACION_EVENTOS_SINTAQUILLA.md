@@ -1,9 +1,11 @@
 # Conector de eventos: entrega para Sin Taquilla (fase 6)
 
-Esta fase implementa el lado del selector. No modifica Sin Taquilla, su base de datos ni sus
-ventas. Administración, endpoints, reservas transaccionales, caducidad y emisión de boletos
-son responsabilidades del anfitrión. Su implementación actual no se revalida en esta auditoría
-del selector. Una selección y su importe en pantalla no son una reserva.
+Esta guía describe **la API y el transporte implementados por el selector**. La identidad física
+y las reglas de dominio están en el [contrato de recinto y evento](CONTRATO_RECINTO_EVENTO.md);
+el trabajo abierto se sigue en [Estado y pendientes](PENDIENTES.md). El selector no modifica
+Sin Taquilla, su base de datos ni sus ventas. Administración, endpoints, reservas transaccionales,
+caducidad y emisión de boletos pertenecen al anfitrión y no se revalidan aquí. Una selección
+y su importe en pantalla no son una reserva.
 El mapa físico se construye y conserva por separado de la configuración de cada evento.
 
 ## Entrega y seguridad
@@ -272,6 +274,6 @@ Las pruebas de este repositorio verifican el cliente con respuestas HTTP de ejem
 **No demuestran atomicidad, autenticación ni venta real del servidor.** Esas pruebas pertenecen
 al proyecto Sin Taquilla y son necesarias antes de poner la integración en servicio.
 
-El [cierre de la auditoría del selector](CIERRE_AUDITORIA.md) reúne correcciones de validación,
-aislamiento de sesiones, coste de actualizaciones y evidencia de compatibilidad. No sustituye
-las pruebas del servidor descritas en esta sección.
+El [cierre de la auditoría del selector](CIERRE_AUDITORIA.md) conserva evidencia de validación,
+sesiones y rendimiento del cliente. El [inventario de pendientes](PENDIENTES.md) mantiene las
+acciones necesarias antes de poner la integración en servicio.

@@ -4,7 +4,24 @@ Cambios notables del proyecto, del más reciente al más antiguo. El formato sig
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El proyecto aún no usa números de
 versión: cada entrada se identifica por fecha y pull request.
 
-## Sin publicar — Documentación conciliada y cierre de auditoría
+## Sin publicar — Documentación vigente y pendientes centralizados
+
+Rama `claude/documentacion-pendientes`.
+
+- Centraliza el trabajo pendiente con responsables y criterios de cierre; README, AGENTS y
+  cierre de auditoría enlazan el inventario sin mantener listas paralelas.
+- Separa el contrato vigente de recinto y la guía de API del contrato inicial, que queda como
+  índice histórico en su misma ruta. Aclara el alcance de cada documento y conserva los
+  ejemplos y mediciones como evidencia, no como estado del servidor.
+- Actualiza el prompt de diagnóstico de Sin Taquilla para mapa v8, catálogo v5 y conector v2.
+- Corrige la entrada del PR #68, ya fusionado en `main`.
+- Verificado: HTML autónomo y externo sincronizados, 234 pruebas de lógica, 44 de navegador,
+  60 enlaces locales y `git diff --check`; sin cambios de aplicación.
+
+## 2026-10-14 — PR #68: Documentación conciliada y cierre de auditoría
+
+[PR #68](https://github.com/jonathancr29/selector-asientos/pull/68), fusionado en `main` con el
+commit `b77e3d4`.
 
 Rama `claude/cierre-auditoria`.
 

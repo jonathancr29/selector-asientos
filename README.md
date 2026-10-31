@@ -1,12 +1,17 @@
 # Selector de asientos
 
-La evolución del recinto y la configuración por evento se define en
-[Contrato de recinto, evento y conector](docs/CONTRATO_RECINTO_EVENTO.md).
-Ese contrato distingue funciones actuales y fases pendientes; incluye un ejemplo ficticio
-de tres niveles, una fila compartida entre sectores y un palco.
+Documentación por propósito:
 
-Plano de butacas interactivo en SVG. Se entrega como **un solo archivo HTML** que se abre en el
-navegador tal cual. Las fuentes están separadas y se unen con Node, sin dependencias ni framework.
+- **Este README:** uso y comportamiento del editor y el visor.
+- **[Contrato de recinto y evento](docs/CONTRATO_RECINTO_EVENTO.md):** identidad física y reglas de venta.
+- **[Guía de integración](docs/INTEGRACION_EVENTOS_SINTAQUILLA.md):** API cliente, snapshots y transporte.
+- **[Estado y pendientes](docs/PENDIENTES.md):** trabajo por completar y criterios de cierre.
+- **[AGENTS.md](AGENTS.md):** fuentes, reglas de trabajo y verificación; el
+  [cierre de auditoría](docs/CIERRE_AUDITORIA.md) conserva la evidencia histórica.
+
+Plano de butacas interactivo en SVG. El editor autónomo se entrega como **un solo archivo HTML**
+que se abre en el navegador tal cual; la entrega para Sin Taquilla usa recursos externos.
+Las fuentes están separadas y se unen con Node, sin dependencias ni framework.
 
 Tres formas de venta pueden convivir en el mismo plano: filas numeradas, mesas con lugares
 agrupados y zonas de acceso general. Hay salas mixtas, solo de filas y solo de mesas.
@@ -761,6 +766,8 @@ El documento admite hasta **22.000 elementos de dibujo** entre sus niveles: band
 mesas, bloques, formas, butacas sueltas y regiones. El aforo se comprueba antes de generar butacas.
 Un error de importación conserva el mapa y su navegación; no se guarda el archivo rechazado.
 
+Ejemplo **histórico de un mapa v2**; el formato vigente es v8 y la importación conserva v1–v8:
+
 ```json
 {
   "formato": "selector-asientos/mapa",
@@ -840,14 +847,7 @@ seguir usando **Exportar JSON**. Si falla la escritura al eliminar un mapa, este
 lista y se muestra el error. Los nombres de mapa, incluido `__proto__`, se guardan como claves
 propias y se recuperan al recargar.
 
-### Posibles mejoras
-
-- **Guardar los mapas** en un servidor, en lugar de en el navegador.
-- **Desplazar el plano** solo al arrastrar una mesa hasta el borde con zoom.
-- **Comprobar que las piezas caben con menos recorridos:** hoy se recalculan las celdas ocupadas una
-  vez por pieza, lo que con muchísimas mesas y bloques en una sala grande sería cuadrático. Con el
-  aforo máximo actual no se nota.
-- **Más formas:** escenario secundario, cabina de DJ, columna u otros obstáculos del recinto.
+Las mejoras propuestas y sus criterios están en [Estado y pendientes](docs/PENDIENTES.md).
 
 ## Estructura física del recinto (fase 5)
 
@@ -1036,7 +1036,8 @@ Se ejecutan solas en cada pull request y en cada empujón a `main`
 La prueba masiva de numeración verifica etiquetas y limita accesos a los datos, sin umbral de
 milisegundos. Usa 104.000 lugares sintéticos solo para probar el algoritmo; importar o editar
 sigue limitado a 20.000. Los tiempos se estudian con las herramientas de medición, fuera de CI.
-El [cierre de la auditoría](docs/CIERRE_AUDITORIA.md) reúne correcciones, evidencias y pendientes.
+El [cierre de la auditoría](docs/CIERRE_AUDITORIA.md) conserva las correcciones y evidencias de
+aquella revisión; el trabajo vigente está en [Estado y pendientes](docs/PENDIENTES.md).
 
 ## Qué aguanta
 
@@ -1072,14 +1073,16 @@ Es la **capa visual con conector cliente**. Puede consultar disponibilidad y sol
 al anfitrión; no implementa el servidor que las confirma, concurrencia, pagos ni emisión de boletos.
 La ocupación de las plantillas autónomas es un ejemplo, no disponibilidad comercial.
 
-Si lo conectas a un sistema real, el servidor es la autoridad: el plano consulta la ocupación al
-cargar y la vuelve a consultar antes de enviar la selección, y el servidor rechaza las butacas que
-se hayan ocupado entre tanto. La comprobación contra sobreventa va en una transacción de base de
-datos, nunca en el navegador.
+Si lo conectas a un sistema real, el servidor es la autoridad. El anfitrión carga la disponibilidad
+y puede llamar a `refrescar` antes de `reservar`; el conector no hace esa consulta adicional por
+sí solo. Aun con una consulta reciente, el servidor debe rechazar los lugares que se hayan ocupado
+entre tanto. La comprobación contra sobreventa va en una transacción de base de datos, nunca en
+el navegador.
 
 El [contrato de recinto y evento](docs/CONTRATO_RECINTO_EVENTO.md) define identidad física,
-numeración oficial, tarifas por evento, venta agrupada y revisiones. Complementa y actualiza
-el [contrato de lugares para Sin Taquilla](docs/CONTRATO_LUGARES_SINTAQUILLA.md).
+numeración oficial, tarifas por evento, venta agrupada y revisiones. El
+[contrato inicial de lugares](docs/CONTRATO_LUGARES_SINTAQUILLA.md) se conserva solo como
+antecedente histórico.
 El conector del selector está implementado. Administración, persistencia y venta real pertenecen
 a Sin Taquilla; su estado actual no se verifica en esta auditoría del selector. Ver la
 [guía de entrega](docs/INTEGRACION_EVENTOS_SINTAQUILLA.md).
@@ -1104,8 +1107,8 @@ El recinto publicado se valida una vez por carga. Las actualizaciones reutilizan
 físico inmutable y siguen validando todos los datos comerciales, sin regenerar la geometría.
 El evaluador de configuración valida cada mapa recibido; cerrar y cargar otro evento descarta
 el catálogo anterior. Los índices de mesas y grupos se renuevan al dibujar el nivel visible.
-La [medición del conector y grupos](docs/MEDICION_CONECTOR_GRUPOS.md) contiene tiempos, conteos
-de recorridos y comandos para comparar las fuentes actuales con una referencia Git.
+La [medición del conector y grupos](docs/MEDICION_CONECTOR_GRUPOS.md) conserva tiempos y condiciones
+de aquella comparación.
 Solo se admite una reserva pendiente por sesión del visor. Cerrar y cargar un evento, incluso
 el mismo, permite iniciar la nueva operación; respuestas o cancelaciones anteriores no cambian
 esa sesión ni liberan su reserva. Cerrar el visor no cancela una reserva en Sin Taquilla:

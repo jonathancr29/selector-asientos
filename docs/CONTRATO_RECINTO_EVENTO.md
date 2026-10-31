@@ -1,15 +1,13 @@
-# Contrato de recinto, evento y conector
+# Contrato de recinto y evento
 
-Estado del selector revisado al cierre de la auditoría sobre `ef98cfc` (PR #67), más los ajustes
-documentales y de pruebas de esta rama. Las fases 3 y 4 implementaron identidad por lugar, numeracion
-explicita, revisiones locales, niveles, regiones y bloques rectos o en arco con correcciones.
-La fase 5 implementa sectores, entidades de fila y palcos; la fase 6 incorpora el conector cliente.
-El cliente admite snapshots comerciales v1 y v2. La venta del servidor pertenece a otro proyecto,
-cuyo estado actual no se revalida aquí. Los vinculos graficos
-de region transforman bloques; no determinan pertenencias fisicas ni modalidades comerciales.
-Complementa el contrato de lugares para Sin Taquilla y prevalece sobre sus reglas comerciales
-anteriores cuando haya diferencias. Los nombres de campos siguientes son un contrato logico,
-no tablas SQL ni endpoints definitivos.
+Este es el **contrato vigente de dominio** del selector: identidad física, revisiones y
+separación de la configuración comercial por evento. El mapa v8 y catálogo v5 incluyen niveles,
+sectores, filas físicas, mesas y palcos; el cliente admite snapshots comerciales v1 y v2.
+La [guía de integración](INTEGRACION_EVENTOS_SINTAQUILLA.md) contiene la API y el transporte
+concretos del selector. El [contrato inicial de lugares](CONTRATO_LUGARES_SINTAQUILLA.md)
+es solo un antecedente histórico. La venta del servidor pertenece a Sin Taquilla y su estado
+actual no se verifica en este repositorio. Los nombres de campos siguientes son un contrato
+lógico, no tablas SQL ni endpoints definitivos.
 
 ## 1. Dos documentos, dos autoridades
 
@@ -183,4 +181,5 @@ correcciones; cambiar nivel conserva seleccion; guardar y abrir conserva diseno;
 cambian inventario; venta conjunta nunca omite integrantes fallidos. Probar tambien sala
 rectangular, regiones asimetricas, arcos y mesas en ambas modalidades. Aforo del Clavijero y
 distribucion se concilian por separado con evidencia; esta auditoría no certifica su inventario.
-El [cierre técnico](CIERRE_AUDITORIA.md) distingue pruebas del cliente y trabajo externo.
+El [cierre técnico](CIERRE_AUDITORIA.md) conserva la evidencia del cliente; el
+[inventario de pendientes](PENDIENTES.md) contiene el trabajo externo y las decisiones abiertas.

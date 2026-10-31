@@ -10,8 +10,8 @@ Guía para asistentes de IA (y personas) que trabajen en este proyecto.
    son el listón que se espera; *Reglas que no se deben romper* y *Trampas conocidas* son la memoria
    de los errores ya cometidos, y cada una dice «pasó» cuando viene de uno real.
 3. **[CHANGELOG.md](CHANGELOG.md)**, las últimas entradas — por qué está el código como está.
-4. ***Qué aguanta, medido*** y ***Pendiente***, al final de este archivo: dónde está el proyecto y qué
-   es lo siguiente.
+4. ***Qué aguanta, medido***, al final de este archivo; y
+   **[Estado y pendientes](docs/PENDIENTES.md)** para el trabajo por completar.
 
 Y una advertencia que ahorra tiempo: **las pruebas comprueban también estos documentos** (que los
 topes que citan sean los del código y que no nombren funciones que ya no existen), así que si
@@ -19,8 +19,9 @@ renombras algo o cambias una constante, el texto va en el mismo commit o la CI s
 
 ## Qué es
 
-Un selector de asientos: plano de butacas interactivo en SVG, **entregado como un solo archivo HTML**,
-con fuentes separadas y un generador sin dependencias ni framework. Filas numeradas, mesas y zona general
+Un selector de asientos: plano de butacas interactivo en SVG, con **editor autónomo en un solo
+archivo HTML** y entrega externa para Sin Taquilla. Tiene fuentes separadas y un generador sin
+dependencias ni framework. Filas numeradas, mesas y zona general
 conviven en el mismo plano. Tiene dos modos: **Previsualizar** (elegir butacas, como quien compra)
 y **Editar plano** (mover, girar, alargar, agregar y eliminar mesas, editar las bandas de la
 sala y bloquear butacas). Los diseños se guardan con nombre en el navegador o como archivos JSON. Hay salas mixtas, solo filas y solo mesas.
@@ -43,15 +44,16 @@ autónomas es un ejemplo escrito en el archivo, no disponibilidad comercial.
 | `src/dibujo.js`, `src/interfaz.js`, `src/editor.js`, `src/persistencia.js` | Fuentes con DOM, después de las seis partes puras. |
 | `construir.mjs` | Genera `index.html` y comprueba que esté sincronizado con `--check`. |
 | `src/conector.js`, `integracion/` | API de eventos y entrega generada con HTML/CSS/JS externos para CSP; no editar los archivos generados. |
-| `docs/INTEGRACION_EVENTOS_SINTAQUILLA.md` | Snapshot comercial, API pública, transporte y trabajo pendiente de servidor. |
+| `docs/INTEGRACION_EVENTOS_SINTAQUILLA.md` | Snapshots comerciales, API pública, transporte y requisitos del anfitrión. |
+| `docs/PENDIENTES.md` | Inventario vigente de pendientes, responsables y criterios de cierre. |
 | `medir-render.mjs` | Medición local reproducible del plano de 18.720 butacas en Chrome o Edge; no bloquea la CI. |
 | `medir-conector.mjs` | Medición del motor comercial y grupos con fuentes actuales o referencia Git; sin DOM ni red y sin umbrales de CI. |
 | `medir-historial.mjs` | Conteo reproducible de texto retenido, con entrega actual o referencia Git; no mide heap. |
-| `docs/CIERRE_AUDITORIA.md` | Correcciones trazables, evidencia, límites de la revisión y pendientes. |
+| `docs/CIERRE_AUDITORIA.md` | Correcciones trazables, evidencia y límites de la revisión histórica. |
 | `pruebas.mjs` | Pruebas con `node:test` de la parte del script que no usa el DOM, y dos que vigilan que estos documentos sigan describiendo el código. |
 | `pruebas-navegador.mjs` | Recorridos de la interfaz en Chrome o Edge: guardado, recarga, importación, grupo, teclado y accesibilidad. |
 | `README.md` | Qué resuelve, modelo de datos, rejilla, accesibilidad, modo editor. |
-| `docs/CONTRATO_LUGARES_SINTAQUILLA.md` | Contrato de diseño con Sin Taquilla: identidad, ubicación, tarifa, venta e historial. |
+| `docs/CONTRATO_RECINTO_EVENTO.md` | Contrato vigente de identidad física, evento, revisiones y venta; el contrato inicial de lugares queda como antecedente histórico. |
 | `CHANGELOG.md` | Historial de cambios. |
 | `.github/workflows/pruebas.yml` | Pruebas de lógica y navegador en cada PR. |
 | `LICENSE`, `NOTICE` | MIT. El icono de butaca es de Material Icons (Apache 2.0). |
@@ -813,26 +815,9 @@ redibujados y toma la mediana de estos últimos. La duración no bloquea CI porq
 
 ## Pendiente
 
-Lo grande, por orden de valor:
-
-- **Validar la integración en Sin Taquilla**: el conector y la entrega externa ya existen.
-  Formulario de eventos, persistencia, endpoints, reservas y boletos pertenecen al anfitrión;
-  comprobar su estado y sus pruebas en aquel proyecto antes de desplegar.
-- **Medir antes de otra optimización del SVG**: la reconciliación de butacas redujo el redibujado
-  repetido aproximadamente un 44 % en la comparación de esta fase. El resto del plano aún se rehace.
-
-El [cierre de auditoría](docs/CIERRE_AUDITORIA.md) distingue correcciones y pendientes externos.
-Lo demás, sin prisa:
-
-- Probar el pellizco en un móvil o tablet real.
-- Guardar los mapas en un servidor: hoy se guardan en el navegador o como archivos JSON.
-- Desplazar el plano solo al arrastrar una mesa hasta el borde con zoom.
-- Decidir si una mesa con lugares ocupados se puede mover, acortar o eliminar (hoy sí, con aviso).
-- Más formas: escenario secundario, cabina de DJ, columna.
-- Comprobar que las piezas caben sin recalcular las celdas por cada pieza (cuadrático con muchas piezas).
-- `calcularEncuadre` usa cuatro `Math.min(...lista)` sobre todas las butacas. Con 20.000 va bien
-  (~9 ms) pero un `spread` de esa longitud está a un factor tres del límite de argumentos del motor:
-  si algún día sube `BUTACAS_MAXIMAS`, hay que pasarlo a un solo recorrido.
+El inventario vigente, con responsables y criterios de cierre, está en
+[Estado y pendientes](docs/PENDIENTES.md). El [cierre de auditoría](docs/CIERRE_AUDITORIA.md)
+documenta el alcance y la evidencia de la revisión histórica.
 
 ## A dónde va esto
 
